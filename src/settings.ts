@@ -6,6 +6,7 @@ export interface BlazeTrackerSettings {
   autoMode: 'none' | 'responses' | 'inputs' | 'both';
   lastXMessages: number;
   maxResponseTokens: number;
+  displayPosition: 'above' | 'below';
 }
 
 export const defaultSettings: BlazeTrackerSettings = {
@@ -13,6 +14,7 @@ export const defaultSettings: BlazeTrackerSettings = {
   autoMode: 'both',
   lastXMessages: 10,
   maxResponseTokens: 4000,
+  displayPosition: 'below',
 };
 
 export const settingsManager = new ExtensionSettingsManager<BlazeTrackerSettings>(

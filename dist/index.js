@@ -38332,6 +38332,7 @@ const defaultSettings = {
     autoMode: 'both',
     lastXMessages: 10,
     maxResponseTokens: 4000,
+    displayPosition: 'below',
 };
 const settingsManager = new sillytavern_utils_lib__WEBPACK_IMPORTED_MODULE_0__.ExtensionSettingsManager(_constants__WEBPACK_IMPORTED_MODULE_1__.EXTENSION_KEY, defaultSettings);
 
@@ -38713,6 +38714,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   initSettingsUI: () => (/* binding */ initSettingsUI)
 /* harmony export */ });
 /* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
+/* harmony import */ var _stateDisplay__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./stateDisplay */ "./src/ui/stateDisplay.tsx");
+
 
 // Get ST utilities from sillytavern-utils-lib
 // These components render native ST-styled UI elements
@@ -38790,6 +38793,17 @@ async function initSettingsUI() {
             <input type="number" id="blazetracker-maxtokens" class="text_pole" min="500" max="8000" step="100">
           </div>
 
+          <hr>
+
+          <div class="flex-container flexFlowColumn">
+            <label for="blazetracker-position">State Display Position</label>
+            <small>Show state block above or below the message</small>
+            <select id="blazetracker-position" class="text_pole">
+              <option value="below">Below message</option>
+              <option value="above">Above message</option>
+            </select>
+          </div>
+
         </div>
       </div>
     </div>
@@ -38865,6 +38879,14 @@ async function initSettingsUI() {
             updateSetting('maxResponseTokens', parseInt(maxTokensInput.value) || 2000);
         });
     }
+    const positionSelect = panel.querySelector('#blazetracker-position');
+    if (positionSelect) {
+        positionSelect.value = settings.displayPosition;
+        positionSelect.addEventListener('change', () => {
+            updateSetting('displayPosition', positionSelect.value);
+            setTimeout(() => (0,_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.renderAllStates)(), 100);
+        });
+    }
     console.log('[BlazeTracker] Settings UI initialized');
 }
 function updateSetting(key, value) {
@@ -38886,7 +38908,7 @@ function getSettings() {
   \*********************************/
 (module, __unused_webpack_exports, __webpack_require__) {
 
-module.exports = __webpack_require__.p + "22401629fec51df9fece.css";
+module.exports = __webpack_require__.p + "ce3a97fe9b2ce3bbe1b5.css";
 
 /***/ },
 
@@ -38914,6 +38936,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../utils/messageState */ "./src/utils/messageState.ts");
 /* harmony import */ var _stateEditor__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./stateEditor */ "./src/ui/stateEditor.tsx");
 /* harmony import */ var _injectors_injectState__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../injectors/injectState */ "./src/injectors/injectState.ts");
+/* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./settings */ "./src/ui/settings.ts");
+
 
 
 
@@ -39147,15 +39171,27 @@ function addMenuButton(messageId, messageElement) {
 // --- Internal render function (when we already have the element) ---
 function renderMessageStateInternal(messageId, messageElement, stateData, isExtracting) {
     addMenuButton(messageId, messageElement);
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_7__.getSettings)();
+    const isAbove = settings.displayPosition === 'above';
     let needsNewRoot = false;
     let container = messageElement.querySelector('.bt-state-root');
     if (!container) {
         container = document.createElement('div');
         container.className = 'bt-state-root';
-        // Append to mes_block instead of after mes_text
-        const mesBlock = messageElement.querySelector('.mes_block');
-        mesBlock?.appendChild(container);
-        needsNewRoot = true; // New container = old root is stale
+        needsNewRoot = true;
+    }
+    // Update position class
+    container.classList.toggle('bt-above', isAbove);
+    // Insert in correct position
+    const mesBlock = messageElement.querySelector('.mes_block');
+    const mesText = mesBlock?.querySelector('.mes_text');
+    if (needsNewRoot && mesBlock) {
+        if (isAbove && mesText) {
+            mesBlock.insertBefore(container, mesText);
+        }
+        else {
+            mesBlock.appendChild(container);
+        }
     }
     let root = roots.get(messageId);
     if (needsNewRoot && root) {

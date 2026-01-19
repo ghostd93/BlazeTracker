@@ -7,6 +7,7 @@ import { extractState } from '../extractors/extractState';
 import { getMessageState, setMessageState } from '../utils/messageState';
 import { openStateEditor } from './stateEditor';
 import { updateInjectionFromChat } from '../injectors/injectState';
+import { getSettings } from './settings';
 
 const EXTENSION_NAME = 'BlazeTracker';
 const EXTENSION_KEY = 'blazetracker';
@@ -449,16 +450,32 @@ function renderMessageStateInternal(
   isExtracting: boolean
 ) {
   addMenuButton(messageId, messageElement);
+
+  const settings = getSettings();
+  const isAbove = settings.displayPosition === 'above';
+
   let needsNewRoot = false;
 
   let container = messageElement.querySelector('.bt-state-root') as HTMLElement;
   if (!container) {
     container = document.createElement('div');
     container.className = 'bt-state-root';
-    // Append to mes_block instead of after mes_text
-    const mesBlock = messageElement.querySelector('.mes_block');
-    mesBlock?.appendChild(container);
-    needsNewRoot = true; // New container = old root is stale
+    needsNewRoot = true;
+  }
+
+  // Update position class
+  container.classList.toggle('bt-above', isAbove);
+
+  // Insert in correct position
+  const mesBlock = messageElement.querySelector('.mes_block');
+  const mesText = mesBlock?.querySelector('.mes_text');
+
+  if (needsNewRoot && mesBlock) {
+    if (isAbove && mesText) {
+      mesBlock.insertBefore(container, mesText);
+    } else {
+      mesBlock.appendChild(container);
+    }
   }
 
   let root = roots.get(messageId);

@@ -453,3 +453,18 @@
 .bt-edit-btn:hover {
     color: var(--SmartThemeEmColor, #8af);
 }
+
+.bt-state-root.bt-above {
+    margin-bottom: 10px;
+    margin-top: 0;
+}
+
+.bt-state-root.bt-above .bt-state-container {
+    border-left: none;
+    border-top: 3px solid var(--SmartThemeQuoteColor, #f80);
+    border-radius: 0 0 8px 8px;
+}
+
+.bt-state-root.bt-above .bt-state-container.bt-extracting {
+    border-top-color: var(--SmartThemeEmColor, #8af);
+}

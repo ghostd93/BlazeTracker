@@ -1,4 +1,5 @@
 import { settingsManager, BlazeTrackerSettings } from '../settings';
+import { renderAllStates } from './stateDisplay';
 
 // Get ST utilities from sillytavern-utils-lib
 // These components render native ST-styled UI elements
@@ -77,6 +78,17 @@ export async function initSettingsUI() {
             <label for="blazetracker-maxtokens">Max Response Tokens</label>
             <small>Maximum tokens for extraction response</small>
             <input type="number" id="blazetracker-maxtokens" class="text_pole" min="500" max="8000" step="100">
+          </div>
+
+          <hr>
+
+          <div class="flex-container flexFlowColumn">
+            <label for="blazetracker-position">State Display Position</label>
+            <small>Show state block above or below the message</small>
+            <select id="blazetracker-position" class="text_pole">
+              <option value="below">Below message</option>
+              <option value="above">Above message</option>
+            </select>
           </div>
 
         </div>
@@ -162,6 +174,15 @@ export async function initSettingsUI() {
     maxTokensInput.value = String(settings.maxResponseTokens);
     maxTokensInput.addEventListener('change', () => {
       updateSetting('maxResponseTokens', parseInt(maxTokensInput.value) || 2000);
+    });
+  }
+
+  const positionSelect = panel.querySelector('#blazetracker-position') as HTMLSelectElement;
+  if (positionSelect) {
+    positionSelect.value = settings.displayPosition;
+    positionSelect.addEventListener('change', () => {
+      updateSetting('displayPosition', positionSelect.value as 'above' | 'below');
+      setTimeout(() => renderAllStates(), 100);
     });
   }
 
