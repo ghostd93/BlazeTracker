@@ -7,11 +7,12 @@
 
 .bt-state-container {
     margin-top: 10px;
+    margin-right: 5%;
     padding: 0;
     background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.2));
     border-radius: 8px;
     font-size: 0.9em;
-    border-left: 3px solid var(--SmartThemeQuoteColor, #f80);
+    border-top: 3px solid var(--SmartThemeQuoteColor, #f80);
     overflow: hidden;
 }
 

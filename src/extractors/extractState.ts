@@ -21,6 +21,7 @@ const EXTRACTION_PROMPT = `Analyze this roleplay conversation and extract the cu
 </objective>
 <general>
 - The previous_state, if defined, is the state of the scene prior to the recent_messages.
+- The previous_state is a reference, you should consider every item and whether it still applies for the new state.
 - You must analyse the recent_messages, determine the changes to the previous_state, and return a complete JSON object with the fresh state.
 - Where information is not provided, infer reasonable defaults. For example, if a character is wearing a full set of outdoors clothes, it is reasonable to assume they are wearing socks & underwear.
 - Pruning out of date information is just as important as adding new information. For every field, consider what is no longer important. Respect 'max' in the schema.

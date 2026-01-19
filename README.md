@@ -93,9 +93,15 @@ Open the BlazeTracker settings panel in SillyTavern's Extensions menu.
 - **Inputs**: Auto-extract after your messages
 - **Both**: Auto-extract after all messages
 
-### Extraction Settings
-- **Temperature**: Controls creativity of extraction (default 0.4, lower = more deterministic)
-- **Model**: Override which model to use for extraction (optional)
+### Max messages to Include
+The extension will automatically include X most recent messages since the last state, this allows you to set a maximum.
+
+### Max Response Tokens
+Number of tokens for the state response, default is 4,000. A block with 2 characters is usually about 1000 tokens.
+
+### State Display Position
+- **Above message**: Show the state block above the message
+- **Below message**: Show the state block below the message
 
 ## Usage
 

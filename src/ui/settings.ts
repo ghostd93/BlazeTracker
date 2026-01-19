@@ -182,7 +182,8 @@ export async function initSettingsUI() {
     positionSelect.value = settings.displayPosition;
     positionSelect.addEventListener('change', () => {
       updateSetting('displayPosition', positionSelect.value as 'above' | 'below');
-      setTimeout(() => renderAllStates(), 100);
+      document.querySelectorAll('.bt-state-root').forEach(el => el.remove());
+      setTimeout(() => renderAllStates(), 200);
     });
   }
 
