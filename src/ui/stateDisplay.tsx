@@ -153,18 +153,25 @@ interface CharacterProps {
   character: TrackedState['characters'][0];
 }
 
+// Updated Character component for stateDisplay.tsx
+
+interface CharacterProps {
+  character: TrackedState['characters'][0];
+}
+
 function Character({ character }: CharacterProps) {
   const mood = character.mood?.join(', ') || 'unknown';
 
-  let dispositionText = '';
+  // Parse dispositions into array format
+  let dispositions: Array<{ toward: string; feelings: string[] }> = [];
   if (character.dispositions && typeof character.dispositions === 'object') {
-    const entries = Array.isArray(character.dispositions)
-      ? character.dispositions.map((d: any) => `${d.toward}: ${d.feelings.join(', ')}`)
-      : Object.entries(character.dispositions).map(([name, feelings]) =>
-        `${name}: ${(feelings as string[]).join(', ')}`
-      );
-    if (entries.length) {
-      dispositionText = entries.join('; ');
+    if (Array.isArray(character.dispositions)) {
+      dispositions = character.dispositions;
+    } else {
+      dispositions = Object.entries(character.dispositions).map(([name, feelings]) => ({
+        toward: name,
+        feelings: feelings as string[],
+      }));
     }
   }
 
@@ -174,21 +181,52 @@ function Character({ character }: CharacterProps) {
         <strong>{character.name}</strong>
         <span className="bt-char-mood">{mood}</span>
       </div>
-      <div className="bt-char-position">{character.position}</div>
-      {character.goals && character.goals.length > 0 && (
-        <div className="bt-char-goals">Goals: {character.goals.join(', ')}</div>
-      )}
-      {character.activity && (
-        <div className="bt-char-activity">Activity: {character.activity}</div>
-      )}
-      {character.physicalState && character.physicalState.length > 0 && (
-        <div className="bt-char-physical">Physical: {character.physicalState.join(', ')}</div>
-      )}
-      {character.outfit && (
-        <div className="bt-char-outfit">Outfit: {formatOutfit(character.outfit)}</div>
-      )}
-      {dispositionText && (
-        <div className="bt-char-dispositions">Feelings: {dispositionText}</div>
+
+      <div className="bt-char-position">
+        <i className="fa-solid fa-location-crosshairs" title="Position"></i>
+        <span>{character.position}</span>
+      </div>
+
+      <div className="bt-char-details">
+        {character.goals && character.goals.length > 0 && (
+          <div className="bt-char-row bt-char-goals">
+            <i className="fa-solid fa-bullseye" title="Goals"></i>
+            <span>{character.goals.join(', ')}</span>
+          </div>
+        )}
+
+        {character.activity && (
+          <div className="bt-char-row bt-char-activity">
+            <i className="fa-solid fa-person-walking" title="Activity"></i>
+            <span>{character.activity}</span>
+          </div>
+        )}
+
+        {character.physicalState && character.physicalState.length > 0 && (
+          <div className="bt-char-row bt-char-physical">
+            <i className="fa-solid fa-heart-pulse" title="Physical state"></i>
+            <span>{character.physicalState.join(', ')}</span>
+          </div>
+        )}
+
+        {character.outfit && (
+          <div className="bt-char-row bt-char-outfit">
+            <i className="fa-solid fa-shirt" title="Outfit"></i>
+            <span>{formatOutfit(character.outfit)}</span>
+          </div>
+        )}
+      </div>
+
+      {dispositions.length > 0 && (
+        <div className="bt-char-dispositions">
+          {dispositions.map((d, idx) => (
+            <div key={idx} className="bt-disposition">
+              <i className="fa-solid fa-arrow-right" title={`Feelings toward ${d.toward}`}></i>
+              <span className="bt-disposition-target">{d.toward}:</span>
+              <span className="bt-disposition-feelings">{d.feelings.join(', ')}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -220,8 +258,6 @@ function StateDisplay({ stateData, isExtracting }: StateDisplayProps) {
 
   return (
     <div className="bt-state-container">
-      {/* Scene summary - always visible */}
-      {state.scene && <SceneDisplay scene={state.scene} />}
 
       {/* Time/Weather/Location row */}
       <div className="bt-state-summary">
@@ -238,6 +274,9 @@ function StateDisplay({ stateData, isExtracting }: StateDisplayProps) {
           <i className="fa-solid fa-location-dot"></i> {formatLocation(state.location)}
         </span>
       </div>
+
+      {/* Scene summary - always visible */}
+      {state.scene && <SceneDisplay scene={state.scene} />}
 
       {/* Expandable details */}
       <details className="bt-state-details">

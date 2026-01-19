@@ -239,6 +239,14 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* Details content area */
+.bt-details-content {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 /* ============================================
    PROPS SECTION
    ============================================ */
@@ -297,12 +305,11 @@
     justify-content: space-between;
     align-items: baseline;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .bt-char-header strong {
     color: var(--SmartThemeEmColor, #8af);
-    font-size: 1.05em;
 }
 
 .bt-char-mood {
@@ -314,117 +321,26 @@
     min-width: 0;
 }
 
-/* Position - slightly more prominent */
 .bt-char-position {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
     font-size: 0.9em;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
-}
-
-.bt-char-position i {
-    color: var(--SmartThemeQuoteColor, #f80);
-    opacity: 0.7;
-    width: 14px;
-    text-align: center;
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
-.bt-char-position span {
+    margin-bottom: 6px;
     opacity: 0.9;
-    line-height: 1.4;
 }
 
-/* Character detail rows with icons */
-.bt-char-details {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.bt-char-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 0.82em;
-    line-height: 1.4;
-}
-
-.bt-char-row i {
-    width: 14px;
-    text-align: center;
-    flex-shrink: 0;
-    opacity: 0.6;
-    margin-top: 2px;
-}
-
-.bt-char-row span {
-    opacity: 0.8;
-}
-
-/* Icon colors per type */
-.bt-char-goals i {
-    color: #e8b84a;
-}
-
-.bt-char-activity i {
-    color: #6cb86c;
-}
-
-.bt-char-physical i {
-    color: #e66;
-}
-
-.bt-char-outfit i {
-    color: #9b8cd6;
-}
-
-.bt-char-outfit span {
-    word-break: break-word;
-}
-
-/* Dispositions / Feelings section */
+/* Character detail rows */
+.bt-char-goals,
+.bt-char-activity,
+.bt-char-physical,
+.bt-char-outfit,
 .bt-char-dispositions {
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px dashed rgba(255, 255, 255, 0.08);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.bt-disposition {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
     font-size: 0.82em;
-    line-height: 1.4;
-}
-
-.bt-disposition i {
-    width: 12px;
-    text-align: center;
-    flex-shrink: 0;
-    color: var(--SmartThemeEmColor, #8af);
-    opacity: 0.5;
-    margin-top: 3px;
-    font-size: 0.85em;
-}
-
-.bt-disposition-target {
-    font-weight: 600;
-    color: var(--SmartThemeEmColor, #8af);
-    opacity: 0.9;
-    flex-shrink: 0;
-}
-
-.bt-disposition-feelings {
     opacity: 0.75;
-    font-style: italic;
+    line-height: 1.4;
+    margin-top: 3px;
+}
+
+.bt-char-outfit {
+    word-break: break-word;
 }
 
 /* ============================================

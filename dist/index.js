@@ -37938,6 +37938,7 @@ const EXTRACTION_PROMPT = `Analyze this roleplay conversation and extract the cu
 - The previous_state, if defined, is the state of the scene prior to the recent_messages.
 - You must analyse the recent_messages, determine the changes to the previous_state, and return a complete JSON object with the fresh state.
 - Where information is not provided, infer reasonable defaults. For example, if a character is wearing a full set of outdoors clothes, it is reasonable to assume they are wearing socks & underwear.
+- Pruning out of date information is just as important as adding new information. For every field, consider what is no longer important. Respect 'max' in the schema.
 </general>
 <time>
 - Increment time realistically based on what happened in the recent_messages. Dialogue = 1-3 mins per message, actions = varies.
@@ -37963,6 +37964,7 @@ const EXTRACTION_PROMPT = `Analyze this roleplay conversation and extract the cu
 - Now work through the recent events, retain events which are still relevant, discard events which have been superceded or resolved.
 - Add significant recent events which affect the state of the roleplay i.e. a secret discovered, a higher level of intimacy, an injury.
 - If there are more than five recent events, keep the five most salient ones.
+- Prune recent events aggressively if they are no longer relevant, or if there would be more than five.
 </scene>
 <characters>
 For each character in the scene, watch closely for the following:
@@ -38884,7 +38886,7 @@ function getSettings() {
   \*********************************/
 (module, __unused_webpack_exports, __webpack_require__) {
 
-module.exports = __webpack_require__.p + "6a192f3a487ea527333c.css";
+module.exports = __webpack_require__.p + "22401629fec51df9fece.css";
 
 /***/ },
 
@@ -39001,16 +39003,20 @@ function SceneDisplay({ scene }) {
 }
 function Character({ character }) {
     const mood = character.mood?.join(', ') || 'unknown';
-    let dispositionText = '';
+    // Parse dispositions into array format
+    let dispositions = [];
     if (character.dispositions && typeof character.dispositions === 'object') {
-        const entries = Array.isArray(character.dispositions)
-            ? character.dispositions.map((d) => `${d.toward}: ${d.feelings.join(', ')}`)
-            : Object.entries(character.dispositions).map(([name, feelings]) => `${name}: ${feelings.join(', ')}`);
-        if (entries.length) {
-            dispositionText = entries.join('; ');
+        if (Array.isArray(character.dispositions)) {
+            dispositions = character.dispositions;
+        }
+        else {
+            dispositions = Object.entries(character.dispositions).map(([name, feelings]) => ({
+                toward: name,
+                feelings: feelings,
+            }));
         }
     }
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-character", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("strong", { children: character.name }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-char-mood", children: mood })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-char-position", children: character.position }), character.goals && character.goals.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-goals", children: ["Goals: ", character.goals.join(', ')] })), character.activity && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-activity", children: ["Activity: ", character.activity] })), character.physicalState && character.physicalState.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-physical", children: ["Physical: ", character.physicalState.join(', ')] })), character.outfit && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-outfit", children: ["Outfit: ", formatOutfit(character.outfit)] })), dispositionText && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-dispositions", children: ["Feelings: ", dispositionText] }))] }));
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-character", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("strong", { children: character.name }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-char-mood", children: mood })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-position", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-crosshairs", title: "Position" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.position })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-details", children: [character.goals && character.goals.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-goals", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-bullseye", title: "Goals" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.goals.join(', ') })] })), character.activity && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-activity", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-person-walking", title: "Activity" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.activity })] })), character.physicalState && character.physicalState.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-physical", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-heart-pulse", title: "Physical state" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.physicalState.join(', ') })] })), character.outfit && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-outfit", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-shirt", title: "Outfit" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: formatOutfit(character.outfit) })] }))] }), dispositions.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-char-dispositions", children: dispositions.map((d, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-disposition", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-arrow-right", title: `Feelings toward ${d.toward}` }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-disposition-target", children: [d.toward, ":"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-disposition-feelings", children: d.feelings.join(', ') })] }, idx))) }))] }));
 }
 function StateDisplay({ stateData, isExtracting }) {
     // Show loading state while extracting
@@ -39021,7 +39027,7 @@ function StateDisplay({ stateData, isExtracting }) {
         return null;
     }
     const { state } = stateData;
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-container", children: [state.scene && (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SceneDisplay, { scene: state.scene }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-summary", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-time", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), " ", formatTime(state.time)] }), state.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-climate", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${getWeatherIcon(state.climate.weather)}` }), state.climate.temperature !== undefined && ` ${state.climate.temperature}°F`] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-location", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), " ", formatLocation(state.location)] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("details", { className: "bt-state-details", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("summary", { children: ["Details (", state.characters.length, " characters, ", state.location.props.length, " props)"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-props-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-props-header", children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-props", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: state.location.props.map((prop, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("li", { children: prop }, idx))) }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-characters", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(Character, { character: char }, `${char.name}-${idx}`))) })] })] }));
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-container", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-summary", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-time", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), " ", formatTime(state.time)] }), state.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-climate", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${getWeatherIcon(state.climate.weather)}` }), state.climate.temperature !== undefined && ` ${state.climate.temperature}°F`] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-location", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), " ", formatLocation(state.location)] })] }), state.scene && (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SceneDisplay, { scene: state.scene }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("details", { className: "bt-state-details", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("summary", { children: ["Details (", state.characters.length, " characters, ", state.location.props.length, " props)"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-props-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-props-header", children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-props", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: state.location.props.map((prop, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("li", { children: prop }, idx))) }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-characters", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(Character, { character: char }, `${char.name}-${idx}`))) })] })] }));
 }
 // --- State Extraction ---
 function getPreviousState(context, beforeMessageId) {

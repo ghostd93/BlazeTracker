@@ -23,6 +23,7 @@ const EXTRACTION_PROMPT = `Analyze this roleplay conversation and extract the cu
 - The previous_state, if defined, is the state of the scene prior to the recent_messages.
 - You must analyse the recent_messages, determine the changes to the previous_state, and return a complete JSON object with the fresh state.
 - Where information is not provided, infer reasonable defaults. For example, if a character is wearing a full set of outdoors clothes, it is reasonable to assume they are wearing socks & underwear.
+- Pruning out of date information is just as important as adding new information. For every field, consider what is no longer important. Respect 'max' in the schema.
 </general>
 <time>
 - Increment time realistically based on what happened in the recent_messages. Dialogue = 1-3 mins per message, actions = varies.
@@ -48,6 +49,7 @@ const EXTRACTION_PROMPT = `Analyze this roleplay conversation and extract the cu
 - Now work through the recent events, retain events which are still relevant, discard events which have been superceded or resolved.
 - Add significant recent events which affect the state of the roleplay i.e. a secret discovered, a higher level of intimacy, an injury.
 - If there are more than five recent events, keep the five most salient ones.
+- Prune recent events aggressively if they are no longer relevant, or if there would be more than five.
 </scene>
 <characters>
 For each character in the scene, watch closely for the following:
