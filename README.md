@@ -23,7 +23,7 @@ A SillyTavern extension that uses LLM analysis to track and maintain scene state
 2. Go to **Extensions** → **Install Extension**
 3. Paste the repository URL:
    ```
-   https://github.com/yourusername/BlazeTracker
+   https://github.com/lunarblazepony/BlazeTracker
    ```
 4. Click **Install**
 5. Reload SillyTavern
@@ -33,7 +33,7 @@ A SillyTavern extension that uses LLM analysis to track and maintain scene state
 2. Go to `data/<user>/extensions/` (or `public/scripts/extensions/third-party/` for all users)
 3. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/BlazeTracker
+   git clone https://github.com/lunarblazepony/BlazeTracker
    ```
 4. Restart SillyTavern
 5. See Configuration to get started
@@ -127,7 +127,7 @@ Each swipe maintains its own state. When you swipe to a new response, BlazeTrack
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/BlazeTracker
+git clone https://github.com/lunarblazepony/BlazeTracker
 cd BlazeTracker
 
 # Install dependencies
