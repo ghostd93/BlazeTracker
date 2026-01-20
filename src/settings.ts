@@ -10,6 +10,7 @@ export interface BlazeTrackerSettings {
   trackTime: boolean;
   leapThresholdMinutes: number;
   temperatureUnit: 'fahrenheit' | 'celsius';
+  timeFormat: '12h' | '24h';
 }
 
 export const defaultSettings: BlazeTrackerSettings = {
@@ -21,6 +22,7 @@ export const defaultSettings: BlazeTrackerSettings = {
   trackTime: true,
   leapThresholdMinutes: 20,
   temperatureUnit: 'fahrenheit',
+  timeFormat: '24h',
 };
 
 export const settingsManager = new ExtensionSettingsManager<BlazeTrackerSettings>(

@@ -38953,6 +38953,7 @@ const defaultSettings = {
     trackTime: true,
     leapThresholdMinutes: 20,
     temperatureUnit: 'fahrenheit',
+    timeFormat: '24h',
 };
 const settingsManager = new sillytavern_utils_lib__WEBPACK_IMPORTED_MODULE_0__.ExtensionSettingsManager(_constants__WEBPACK_IMPORTED_MODULE_1__.EXTENSION_KEY, defaultSettings);
 
@@ -39433,6 +39434,15 @@ async function initSettingsUI() {
             </select>
           </div>
 
+          <div class="flex-container flexFlowColumn">
+            <label for="blazetracker-timeformat">Time Format</label>
+            <small>Display time in 12-hour or 24-hour format</small>
+            <select id="blazetracker-timeformat" class="text_pole">
+              <option value="24h">24-hour (14:30)</option>
+              <option value="12h">12-hour (2:30 PM)</option>
+            </select>
+          </div>
+
         </div>
       </div>
     </div>
@@ -39553,6 +39563,15 @@ async function initSettingsUI() {
             setTimeout(() => (0,_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.renderAllStates)(), 100);
         });
     }
+    // Set up time format
+    const timeFormatSelect = panel.querySelector('#blazetracker-timeformat');
+    if (timeFormatSelect) {
+        timeFormatSelect.value = settings.timeFormat ?? '24h';
+        timeFormatSelect.addEventListener('change', () => {
+            updateSetting('timeFormat', timeFormatSelect.value);
+            setTimeout(() => (0,_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.renderAllStates)(), 100);
+        });
+    }
     console.log('[BlazeTracker] Settings UI initialized');
 }
 function updateSetting(key, value) {
@@ -39606,6 +39625,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _extractors_extractTime__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../extractors/extractTime */ "./src/extractors/extractTime.ts");
 /* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../constants */ "./src/constants.ts");
 /* harmony import */ var _utils_temperatures__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../utils/temperatures */ "./src/utils/temperatures.ts");
+/* harmony import */ var _utils_timeFormat__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../utils/timeFormat */ "./src/utils/timeFormat.ts");
+
 
 
 
@@ -39655,6 +39676,7 @@ const roots = new Map();
 const extractionInProgress = new Set();
 // --- Helper Functions ---
 function formatTime(time) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_7__.getSettings)();
     const MONTH_NAMES = [
         'January',
         'February',
@@ -39669,11 +39691,9 @@ function formatTime(time) {
         'November',
         'December'
     ];
-    const hour = String(time.hour).padStart(2, '0');
-    const minute = String(time.minute).padStart(2, '0');
     const month = MONTH_NAMES[time.month - 1];
     // "Mon, Jan 15, 14:30"
-    return `${time.dayOfWeek.slice(0, 3)}, ${month} ${time.day} ${time.year}, ${hour}:${minute}`;
+    return `${time.dayOfWeek.slice(0, 3)}, ${month} ${time.day} ${time.year}, ${(0,_utils_timeFormat__WEBPACK_IMPORTED_MODULE_11__.applyTimeFormat)(time.hour, time.minute, settings.timeFormat)}`;
 }
 function formatLocation(location) {
     const parts = [location.position, location.place, location.area];
@@ -40465,6 +40485,29 @@ function calculateTensionDirection(currentLevel, previousLevel) {
     if (currentIndex < previousIndex)
         return 'decreasing';
     return 'stable';
+}
+
+
+/***/ },
+
+/***/ "./src/utils/timeFormat.ts"
+/*!*********************************!*\
+  !*** ./src/utils/timeFormat.ts ***!
+  \*********************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   applyTimeFormat: () => (/* binding */ applyTimeFormat)
+/* harmony export */ });
+function applyTimeFormat(hour, minute, format) {
+    const mm = String(minute).padStart(2, '0');
+    if (format === '12h') {
+        const h = hour % 12 || 12;
+        const ampm = hour < 12 ? 'AM' : 'PM';
+        return `${h}:${mm} ${ampm}`;
+    }
+    return `${String(hour).padStart(2, '0')}:${mm}`;
 }
 
 

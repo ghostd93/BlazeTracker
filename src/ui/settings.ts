@@ -118,6 +118,15 @@ export async function initSettingsUI() {
             </select>
           </div>
 
+          <div class="flex-container flexFlowColumn">
+            <label for="blazetracker-timeformat">Time Format</label>
+            <small>Display time in 12-hour or 24-hour format</small>
+            <select id="blazetracker-timeformat" class="text_pole">
+              <option value="24h">24-hour (14:30)</option>
+              <option value="12h">12-hour (2:30 PM)</option>
+            </select>
+          </div>
+
         </div>
       </div>
     </div>
@@ -252,6 +261,16 @@ export async function initSettingsUI() {
     tempUnitSelect.value = settings.temperatureUnit ?? 'fahrenheit';
     tempUnitSelect.addEventListener('change', () => {
       updateSetting('temperatureUnit', tempUnitSelect.value as 'fahrenheit' | 'celsius');
+      setTimeout(() => renderAllStates(), 100);
+    });
+  }
+
+  // Set up time format
+  const timeFormatSelect = panel.querySelector('#blazetracker-timeformat') as HTMLSelectElement;
+  if (timeFormatSelect) {
+    timeFormatSelect.value = settings.timeFormat ?? '24h';
+    timeFormatSelect.addEventListener('change', () => {
+      updateSetting('timeFormat', timeFormatSelect.value as '12h' | '24h');
       setTimeout(() => renderAllStates(), 100);
     });
   }

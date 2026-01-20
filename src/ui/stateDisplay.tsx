@@ -11,6 +11,7 @@ import { getSettings } from './settings';
 import { resetTimeTracker, setTimeTrackerState } from '../extractors/extractTime';
 import { EXTENSION_NAME } from '../constants';
 import { formatTemperature } from '../utils/temperatures';
+import { applyTimeFormat } from '../utils/timeFormat';
 
 // --- Icon Mappings (UI concern, lives here not in state types) ---
 
@@ -65,6 +66,7 @@ export const extractionInProgress = new Set<number>();
 // --- Helper Functions ---
 
 function formatTime(time: NarrativeDateTime): string {
+  const settings = getSettings();
   const MONTH_NAMES = [
     'January',
     'February',
@@ -79,12 +81,10 @@ function formatTime(time: NarrativeDateTime): string {
     'November',
     'December'];
 
-  const hour = String(time.hour).padStart(2, '0');
-  const minute = String(time.minute).padStart(2, '0');
   const month = MONTH_NAMES[time.month - 1];
 
   // "Mon, Jan 15, 14:30"
-  return `${time.dayOfWeek.slice(0, 3)}, ${month} ${time.day} ${time.year}, ${hour}:${minute}`;
+  return `${time.dayOfWeek.slice(0, 3)}, ${month} ${time.day} ${time.year}, ${applyTimeFormat(time.hour, time.minute, settings.timeFormat)}`;
 }
 
 function formatLocation(location: TrackedState['location']): string {
