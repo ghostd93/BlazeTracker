@@ -2,6 +2,7 @@ import type { CharacterOutfit, TrackedState, Scene, NarrativeDateTime } from '..
 import type { STContext } from '../types/st';
 import { getMessageState } from '../utils/messageState';
 import { getSettings } from '../ui/settings';
+import { formatTemperature } from '../utils/temperatures';
 
 const EXTENSION_KEY = 'blazetracker';
 
@@ -25,7 +26,8 @@ function formatOutfit(outfit: CharacterOutfit): string {
 }
 
 function formatClimate(climate: { weather: string, temperature: number }): string {
-  return `${climate.temperature}°F, ${climate.weather}`;
+  const settings = getSettings();
+  return `${formatTemperature(climate.temperature, settings.temperatureUnit)}, ${climate.weather}`;
 }
 
 function formatScene(scene: Scene): string {
@@ -65,6 +67,16 @@ function getDayOrdinal(day: number): string {
     case 3: return 'rd';
     default: return 'th';
   }
+}
+
+function formatDateShort(time: NarrativeDateTime): string {
+  // "Mon, Jun 15 2024, 14:30"
+  const dayShort = time.dayOfWeek.slice(0, 3);
+  const monthShort = MONTH_NAMES[time.month - 1].slice(0, 3);
+  const hourStr = String(time.hour).padStart(2, '0');
+  const minuteStr = String(time.minute).padStart(2, '0');
+
+  return `${dayShort}, ${monthShort} ${time.day} ${time.year}, ${hourStr}:${minuteStr}`;
 }
 
 export function formatStateForInjection(state: TrackedState): string {

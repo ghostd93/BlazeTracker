@@ -38631,6 +38631,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../utils/messageState */ "./src/utils/messageState.ts");
 /* harmony import */ var _ui_settings__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../ui/settings */ "./src/ui/settings.ts");
+/* harmony import */ var _utils_temperatures__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../utils/temperatures */ "./src/utils/temperatures.ts");
+
 
 
 const EXTENSION_KEY = 'blazetracker';
@@ -38651,7 +38653,8 @@ function formatOutfit(outfit) {
     return outfitParts.filter((v) => v !== null).join(', ');
 }
 function formatClimate(climate) {
-    return `${climate.temperature}°F, ${climate.weather}`;
+    const settings = (0,_ui_settings__WEBPACK_IMPORTED_MODULE_1__.getSettings)();
+    return `${(0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_2__.formatTemperature)(climate.temperature, settings.temperatureUnit)}, ${climate.weather}`;
 }
 function formatScene(scene) {
     const tensionParts = [
@@ -38684,6 +38687,14 @@ function getDayOrdinal(day) {
         case 3: return 'rd';
         default: return 'th';
     }
+}
+function formatDateShort(time) {
+    // "Mon, Jun 15 2024, 14:30"
+    const dayShort = time.dayOfWeek.slice(0, 3);
+    const monthShort = MONTH_NAMES[time.month - 1].slice(0, 3);
+    const hourStr = String(time.hour).padStart(2, '0');
+    const minuteStr = String(time.minute).padStart(2, '0');
+    return `${dayShort}, ${monthShort} ${time.day} ${time.year}, ${hourStr}:${minuteStr}`;
 }
 function formatStateForInjection(state) {
     const settings = (0,_ui_settings__WEBPACK_IMPORTED_MODULE_1__.getSettings)();
@@ -38780,7 +38791,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../utils/messageState */ "./src/utils/messageState.ts");
 /* harmony import */ var _extractors_extractTime__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../extractors/extractTime */ "./src/extractors/extractTime.ts");
+/* harmony import */ var sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! sillytavern-utils-lib/config */ "./node_modules/sillytavern-utils-lib/dist/config.js");
 // migration.ts
+
 
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -38843,6 +38856,7 @@ async function migrateOldTimeFormats(context, profileId) {
     if (!needsMigration) {
         return false;
     }
+    (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_2__.st_echo)?.('warning', '🔥 Updating date/time to v0.3.0 format.');
     console.log('[BlazeTracker] Migrating old time formats to NarrativeDateTime...');
     // Get messages up to and including the first state for context
     const contextMessages = context.chat
@@ -38938,6 +38952,7 @@ const defaultSettings = {
     displayPosition: 'below',
     trackTime: true,
     leapThresholdMinutes: 20,
+    temperatureUnit: 'fahrenheit',
 };
 const settingsManager = new sillytavern_utils_lib__WEBPACK_IMPORTED_MODULE_0__.ExtensionSettingsManager(_constants__WEBPACK_IMPORTED_MODULE_1__.EXTENSION_KEY, defaultSettings);
 
@@ -39407,6 +39422,17 @@ async function initSettingsUI() {
             <input type="number" id="blazetracker-leapthreshold" class="text_pole" min="5" max="1440" step="5">
           </div>
 
+          <hr>
+
+          <div class="flex-container flexFlowColumn">
+            <label for="blazetracker-tempunit">Temperature Unit</label>
+            <small>Display temperatures in Fahrenheit or Celsius</small>
+            <select id="blazetracker-tempunit" class="text_pole">
+              <option value="fahrenheit">Fahrenheit (°F)</option>
+              <option value="celsius">Celsius (°C)</option>
+            </select>
+          </div>
+
         </div>
       </div>
     </div>
@@ -39518,6 +39544,15 @@ async function initSettingsUI() {
             updateSetting('leapThresholdMinutes', parseInt(leapThresholdInput.value) || 20);
         });
     }
+    // Set up temperature unit
+    const tempUnitSelect = panel.querySelector('#blazetracker-tempunit');
+    if (tempUnitSelect) {
+        tempUnitSelect.value = settings.temperatureUnit ?? 'fahrenheit';
+        tempUnitSelect.addEventListener('change', () => {
+            updateSetting('temperatureUnit', tempUnitSelect.value);
+            setTimeout(() => (0,_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.renderAllStates)(), 100);
+        });
+    }
     console.log('[BlazeTracker] Settings UI initialized');
 }
 function updateSetting(key, value) {
@@ -39570,6 +39605,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./settings */ "./src/ui/settings.ts");
 /* harmony import */ var _extractors_extractTime__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../extractors/extractTime */ "./src/extractors/extractTime.ts");
 /* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../constants */ "./src/constants.ts");
+/* harmony import */ var _utils_temperatures__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../utils/temperatures */ "./src/utils/temperatures.ts");
+
 
 
 
@@ -39701,7 +39738,7 @@ function StateDisplay({ stateData, isExtracting }) {
     const { state } = stateData;
     const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_7__.getSettings)();
     const showTime = settings.trackTime !== false;
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-container", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-summary", children: [showTime && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-time", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), " ", formatTime(state.time)] })), state.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-climate", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${getWeatherIcon(state.climate.weather)}` }), state.climate.temperature !== undefined && ` ${state.climate.temperature}°F`] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-location", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), " ", formatLocation(state.location)] })] }), state.scene && (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SceneDisplay, { scene: state.scene }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("details", { className: "bt-state-details", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("summary", { children: ["Details (", state.characters.length, " characters, ", state.location.props.length, " props)"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-props-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-props-header", children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-props", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: state.location.props.map((prop, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("li", { children: prop }, idx))) }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-characters", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(Character, { character: char }, `${char.name}-${idx}`))) })] })] }));
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-container", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-summary", children: [showTime && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-time", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), " ", formatTime(state.time)] })), state.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-climate", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${getWeatherIcon(state.climate.weather)}` }), state.climate.temperature !== undefined && ` ${(0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_10__.formatTemperature)(state.climate.temperature, settings.temperatureUnit)}`] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-location", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), " ", formatLocation(state.location)] })] }), state.scene && (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SceneDisplay, { scene: state.scene }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("details", { className: "bt-state-details", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("summary", { children: ["Details (", state.characters.length, " characters, ", state.location.props.length, " props)"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-props-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-props-header", children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-props", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: state.location.props.map((prop, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("li", { children: prop }, idx))) }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-characters", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(Character, { character: char }, `${char.name}-${idx}`))) })] })] }));
 }
 // --- State Extraction ---
 function getPreviousState(context, beforeMessageId) {
@@ -39985,6 +40022,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
 /* harmony import */ var react_dom_client__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! react-dom/client */ "./node_modules/react-dom/client.js");
+/* harmony import */ var _utils_temperatures__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../utils/temperatures */ "./src/utils/temperatures.ts");
+/* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./settings */ "./src/ui/settings.ts");
 
 /**
  * BlazeTracker State Editor
@@ -39992,6 +40031,8 @@ __webpack_require__.r(__webpack_exports__);
  * A form-based editor for TrackedState with validation against the schema.
  * Uses ST's popup system to display.
  */
+
+
 
 
 // --- Constants from Schema ---
@@ -40191,6 +40232,8 @@ function CharacterEditor({ character, index, onChange, onRemove, otherNames, err
 }
 // --- Main Component ---
 function StateEditor({ initialState, onSave, onCancel }) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_4__.getSettings)();
+    const tempUnit = settings.temperatureUnit ?? 'fahrenheit';
     const [state, setState] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(() => initialState ? cloneState(initialState) : createEmptyState());
     const [errors, setErrors] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)({});
     const [tab, setTab] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('scene');
@@ -40262,7 +40305,7 @@ function StateEditor({ initialState, onSave, onCancel }) {
     const hasErrors = Object.keys(errors).length > 0;
     // Calculate max days for current month
     const maxDaysInMonth = getDaysInMonth(state.time.year, state.time.month);
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tabs", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: `bt-tab ${tab === 'scene' ? 'active' : ''}`, onClick: () => setTab('scene'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), " Scene"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: `bt-tab ${tab === 'chars' ? 'active' : ''}`, onClick: () => setTab('chars'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-users" }), " Characters (", state.characters.length, ")"] })] }), tab === 'scene' && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-panel", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-clapperboard" }), " Context"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Topic *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.scene?.topic || '', onChange: e => updateScene('topic', e.target.value), placeholder: "3-5 words: main topic of interaction", className: errors['scene.topic'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tone *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.scene?.tone || '', onChange: e => updateScene('tone', e.target.value), placeholder: "2-3 words: emotional tone", className: errors['scene.tone'] ? 'bt-err' : '' })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tension Type" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene?.tension?.type || 'conversation', onChange: e => updateTension('type', e.target.value), children: TENSION_TYPES.map(t => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: t, children: t }, t))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tension Level" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene?.tension?.level || 'relaxed', onChange: e => updateTension('level', e.target.value), children: TENSION_LEVELS.map(l => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: l, children: l }, l))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Direction" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene?.tension?.direction || 'stable', onChange: e => updateTension('direction', e.target.value), children: TENSION_DIRECTIONS.map(d => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: d, children: d }, d))) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Recent Events" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(EventListEditor, { events: state.scene?.recentEvents || [], onChange: events => updateScene('recentEvents', events) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-calendar-clock" }), " Date & Time"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Year" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 1, max: 9999, value: state.time.year, onChange: e => updateTime('year', parseInt(e.target.value) || 2024), className: errors['time.year'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Month" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.time.month, onChange: e => updateTime('month', parseInt(e.target.value)), className: errors['time.month'] ? 'bt-err' : '', children: MONTH_NAMES.map((m, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: idx + 1, children: m }, m))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Day" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 1, max: maxDaysInMonth, value: state.time.day, onChange: e => updateTime('day', parseInt(e.target.value) || 1), className: errors['time.day'] ? 'bt-err' : '' })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Hour (0-23)" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 0, max: 23, value: state.time.hour, onChange: e => updateTime('hour', parseInt(e.target.value) || 0), className: errors['time.hour'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Minute" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 0, max: 59, value: state.time.minute, onChange: e => updateTime('minute', parseInt(e.target.value) || 0), className: errors['time.minute'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Day of Week" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.time.dayOfWeek, disabled: true, style: { opacity: 0.7, cursor: 'not-allowed' } })] })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-map-marker-alt" }), " Location"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Area *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.area, onChange: e => updateLocation('area', e.target.value), placeholder: "City, district, region...", className: errors['location.area'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Place *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.place, onChange: e => updateLocation('place', e.target.value), placeholder: "Building, establishment, room...", className: errors['location.place'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Position *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.position, onChange: e => updateLocation('position', e.target.value), placeholder: "Position within the place...", className: errors['location.position'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(TagInput, { tags: state.location.props || [], onChange: t => updateLocation('props', t), placeholder: "Add props..." })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-cloud-sun" }), " Climate"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Weather" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.climate?.weather || 'sunny', onChange: e => updateClimate('weather', e.target.value), children: WEATHER_OPTIONS.map(w => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: w, children: w.charAt(0).toUpperCase() + w.slice(1) }, w))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Temperature (\u00B0F)" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", value: state.climate?.temperature ?? 70, onChange: e => updateClimate('temperature', parseInt(e.target.value) || 0) })] })] })] })] })), tab === 'chars' && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-panel", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chars-list", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(CharacterEditor, { character: char, index: idx, onChange: c => updateChar(idx, c), onRemove: () => removeChar(idx), otherNames: getOtherNames(idx), errors: errors }, idx))) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addChar, className: "bt-add-char", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-plus" }), " Add Character"] })] })), hasErrors && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-errors", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-exclamation-triangle" }), "Fix highlighted errors before saving."] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-actions", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: onCancel, className: "bt-btn", children: "Cancel" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: handleSave, className: "bt-btn bt-btn-primary", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-save" }), " Save"] })] })] }));
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tabs", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: `bt-tab ${tab === 'scene' ? 'active' : ''}`, onClick: () => setTab('scene'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), " Scene"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: `bt-tab ${tab === 'chars' ? 'active' : ''}`, onClick: () => setTab('chars'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-users" }), " Characters (", state.characters.length, ")"] })] }), tab === 'scene' && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-panel", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-clapperboard" }), " Context"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Topic *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.scene?.topic || '', onChange: e => updateScene('topic', e.target.value), placeholder: "3-5 words: main topic of interaction", className: errors['scene.topic'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tone *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.scene?.tone || '', onChange: e => updateScene('tone', e.target.value), placeholder: "2-3 words: emotional tone", className: errors['scene.tone'] ? 'bt-err' : '' })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tension Type" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene?.tension?.type || 'conversation', onChange: e => updateTension('type', e.target.value), children: TENSION_TYPES.map(t => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: t, children: t }, t))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tension Level" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene?.tension?.level || 'relaxed', onChange: e => updateTension('level', e.target.value), children: TENSION_LEVELS.map(l => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: l, children: l }, l))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Direction" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene?.tension?.direction || 'stable', onChange: e => updateTension('direction', e.target.value), children: TENSION_DIRECTIONS.map(d => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: d, children: d }, d))) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Recent Events" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(EventListEditor, { events: state.scene?.recentEvents || [], onChange: events => updateScene('recentEvents', events) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-calendar-clock" }), " Date & Time"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Year" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 1, max: 9999, value: state.time.year, onChange: e => updateTime('year', parseInt(e.target.value) || 2024), className: errors['time.year'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Month" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.time.month, onChange: e => updateTime('month', parseInt(e.target.value)), className: errors['time.month'] ? 'bt-err' : '', children: MONTH_NAMES.map((m, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: idx + 1, children: m }, m))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Day" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 1, max: maxDaysInMonth, value: state.time.day, onChange: e => updateTime('day', parseInt(e.target.value) || 1), className: errors['time.day'] ? 'bt-err' : '' })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Hour (0-23)" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 0, max: 23, value: state.time.hour, onChange: e => updateTime('hour', parseInt(e.target.value) || 0), className: errors['time.hour'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Minute" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 0, max: 59, value: state.time.minute, onChange: e => updateTime('minute', parseInt(e.target.value) || 0), className: errors['time.minute'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Day of Week" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.time.dayOfWeek, disabled: true, style: { opacity: 0.7, cursor: 'not-allowed' } })] })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-map-marker-alt" }), " Location"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Area *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.area, onChange: e => updateLocation('area', e.target.value), placeholder: "City, district, region...", className: errors['location.area'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Place *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.place, onChange: e => updateLocation('place', e.target.value), placeholder: "Building, establishment, room...", className: errors['location.place'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Position *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.position, onChange: e => updateLocation('position', e.target.value), placeholder: "Position within the place...", className: errors['location.position'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(TagInput, { tags: state.location.props || [], onChange: t => updateLocation('props', t), placeholder: "Add props..." })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-cloud-sun" }), " Climate"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Weather" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.climate?.weather || 'sunny', onChange: e => updateClimate('weather', e.target.value), children: WEATHER_OPTIONS.map(w => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: w, children: w.charAt(0).toUpperCase() + w.slice(1) }, w))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { children: ["Temperature (", tempUnit === 'celsius' ? '°C' : '°F', ")"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", value: (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toDisplayTemp)(state.climate?.temperature ?? 70, tempUnit), onChange: e => updateClimate('temperature', (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toStorageTemp)(parseInt(e.target.value) || 0, tempUnit)) })] })] })] })] })), tab === 'chars' && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-panel", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chars-list", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(CharacterEditor, { character: char, index: idx, onChange: c => updateChar(idx, c), onRemove: () => removeChar(idx), otherNames: getOtherNames(idx), errors: errors }, idx))) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addChar, className: "bt-add-char", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-plus" }), " Add Character"] })] })), hasErrors && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-errors", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-exclamation-triangle" }), "Fix highlighted errors before saving."] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-actions", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: onCancel, className: "bt-btn", children: "Cancel" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: handleSave, className: "bt-btn bt-btn-primary", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-save" }), " Save"] })] })] }));
 }
 // --- Integration with SillyTavern Popup ---
 /**
@@ -40349,6 +40392,51 @@ function setMessageState(message, stateData) {
     if (!message.extra[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY])
         message.extra[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY] = {};
     message.extra[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY][swipeId] = stateData;
+}
+
+
+/***/ },
+
+/***/ "./src/utils/temperatures.ts"
+/*!***********************************!*\
+  !*** ./src/utils/temperatures.ts ***!
+  \***********************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   celsiusToFahrenheit: () => (/* binding */ celsiusToFahrenheit),
+/* harmony export */   fahrenheitToCelsius: () => (/* binding */ fahrenheitToCelsius),
+/* harmony export */   formatTemperature: () => (/* binding */ formatTemperature),
+/* harmony export */   toDisplayTemp: () => (/* binding */ toDisplayTemp),
+/* harmony export */   toStorageTemp: () => (/* binding */ toStorageTemp)
+/* harmony export */ });
+function fahrenheitToCelsius(fahrenheit) {
+    return Math.round((fahrenheit - 32) * 5 / 9);
+}
+function celsiusToFahrenheit(celsius) {
+    return Math.round(celsius * 9 / 5 + 32);
+}
+/**
+ * Convert from storage (Fahrenheit) to display unit
+ */
+function toDisplayTemp(fahrenheit, unit) {
+    return unit === 'celsius' ? fahrenheitToCelsius(fahrenheit) : fahrenheit;
+}
+/**
+ * Convert from display unit to storage (Fahrenheit)
+ */
+function toStorageTemp(display, unit) {
+    return unit === 'celsius' ? celsiusToFahrenheit(display) : display;
+}
+/**
+ * Format temperature for display with unit symbol
+ */
+function formatTemperature(fahrenheit, unit) {
+    if (unit === 'celsius') {
+        return `${fahrenheitToCelsius(fahrenheit)}°C`;
+    }
+    return `${fahrenheit}°F`;
 }
 
 
@@ -40584,10 +40672,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _injectors_injectState__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./injectors/injectState */ "./src/injectors/injectState.ts");
 /* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./constants */ "./src/constants.ts");
 /* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./utils/messageState */ "./src/utils/messageState.ts");
-/* harmony import */ var sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! sillytavern-utils-lib/config */ "./node_modules/sillytavern-utils-lib/dist/config.js");
-/* harmony import */ var _migrations_migrateOldTime__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./migrations/migrateOldTime */ "./src/migrations/migrateOldTime.ts");
+/* harmony import */ var _migrations_migrateOldTime__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./migrations/migrateOldTime */ "./src/migrations/migrateOldTime.ts");
 console.log('[BlazeTracker] Script loading...');
-
 
 
 
@@ -40658,8 +40744,7 @@ async function init() {
         const settings = (0,_ui_settings__WEBPACK_IMPORTED_MODULE_1__.getSettings)();
         // Run migration before rendering
         if (settings.profileId) {
-            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_7__.st_echo)?.('warning', '🔥 Updating date/time to v0.3.0 format.');
-            await (0,_migrations_migrateOldTime__WEBPACK_IMPORTED_MODULE_8__.migrateOldTimeFormats)(ctx, settings.profileId);
+            await (0,_migrations_migrateOldTime__WEBPACK_IMPORTED_MODULE_7__.migrateOldTimeFormats)(ctx, settings.profileId);
         }
         setTimeout(() => {
             (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_2__.renderAllStates)();

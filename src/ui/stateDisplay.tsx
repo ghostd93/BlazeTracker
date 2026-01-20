@@ -10,6 +10,7 @@ import { updateInjectionFromChat } from '../injectors/injectState';
 import { getSettings } from './settings';
 import { resetTimeTracker, setTimeTrackerState } from '../extractors/extractTime';
 import { EXTENSION_NAME } from '../constants';
+import { formatTemperature } from '../utils/temperatures';
 
 // --- Icon Mappings (UI concern, lives here not in state types) ---
 
@@ -287,7 +288,7 @@ function StateDisplay({ stateData, isExtracting }: StateDisplayProps) {
         {state.climate && (
           <span className="bt-climate">
             <i className={`fa-solid ${getWeatherIcon(state.climate.weather)}`}></i>
-            {state.climate.temperature !== undefined && ` ${state.climate.temperature}°F`}
+            {state.climate.temperature !== undefined && ` ${formatTemperature(state.climate.temperature, settings.temperatureUnit)}`}
           </span>
         )}
         <span className="bt-location">

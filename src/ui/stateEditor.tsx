@@ -8,6 +8,8 @@
 import React, { useState, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import type { TrackedState, Character, CharacterOutfit, Climate, Scene, NarrativeDateTime } from '../types/state';
+import { toDisplayTemp, toStorageTemp } from '../utils/temperatures';
+import { getSettings } from './settings';
 
 // --- Constants from Schema ---
 
@@ -481,6 +483,8 @@ function CharacterEditor({
 // --- Main Component ---
 
 export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps) {
+  const settings = getSettings();
+  const tempUnit = settings.temperatureUnit ?? 'fahrenheit';
   const [state, setState] = useState<TrackedState>(() =>
     initialState ? cloneState(initialState) : createEmptyState()
   );
@@ -799,11 +803,11 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
                 </select>
               </div>
               <div className="bt-field">
-                <label>Temperature (°F)</label>
+                <label>Temperature ({tempUnit === 'celsius' ? '°C' : '°F'})</label>
                 <input
                   type="number"
-                  value={state.climate?.temperature ?? 70}
-                  onChange={e => updateClimate('temperature', parseInt(e.target.value) || 0)}
+                  value={toDisplayTemp(state.climate?.temperature ?? 70, tempUnit)}
+                  onChange={e => updateClimate('temperature', toStorageTemp(parseInt(e.target.value) || 0, tempUnit))}
                 />
               </div>
             </div>

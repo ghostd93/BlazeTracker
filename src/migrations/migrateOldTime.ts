@@ -4,13 +4,14 @@ import type { STContext } from '../types/st';
 import type { TrackedState, NarrativeDateTime } from '../types/state';
 import { getMessageState, setMessageState } from '../utils/messageState';
 import { extractDateTime } from '../extractors/extractTime';
+import { st_echo } from 'sillytavern-utils-lib/config';
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 interface OldTimeFormat {
   hour: number;
   minute: number;
-  day: string;  // "Monday", "Tuesday", etc.
+  day: string;
 }
 
 function isOldTimeFormat(time: any): time is OldTimeFormat {
@@ -79,6 +80,7 @@ export async function migrateOldTimeFormats(context: STContext, profileId: strin
     return false;
   }
 
+  st_echo?.('warning', '🔥 Updating date/time to v0.3.0 format.');
   console.log('[BlazeTracker] Migrating old time formats to NarrativeDateTime...');
 
   // Get messages up to and including the first state for context

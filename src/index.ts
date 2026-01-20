@@ -91,7 +91,6 @@ async function init() {
 
     // Run migration before rendering
     if (settings.profileId) {
-      st_echo?.('warning', '🔥 Updating date/time to v0.3.0 format.');
       await migrateOldTimeFormats(ctx, settings.profileId);
     }
 

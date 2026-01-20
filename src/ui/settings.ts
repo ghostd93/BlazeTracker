@@ -107,6 +107,17 @@ export async function initSettingsUI() {
             <input type="number" id="blazetracker-leapthreshold" class="text_pole" min="5" max="1440" step="5">
           </div>
 
+          <hr>
+
+          <div class="flex-container flexFlowColumn">
+            <label for="blazetracker-tempunit">Temperature Unit</label>
+            <small>Display temperatures in Fahrenheit or Celsius</small>
+            <select id="blazetracker-tempunit" class="text_pole">
+              <option value="fahrenheit">Fahrenheit (°F)</option>
+              <option value="celsius">Celsius (°C)</option>
+            </select>
+          </div>
+
         </div>
       </div>
     </div>
@@ -232,6 +243,16 @@ export async function initSettingsUI() {
     leapThresholdInput.value = String(settings.leapThresholdMinutes ?? 20);
     leapThresholdInput.addEventListener('change', () => {
       updateSetting('leapThresholdMinutes', parseInt(leapThresholdInput.value) || 20);
+    });
+  }
+
+  // Set up temperature unit
+  const tempUnitSelect = panel.querySelector('#blazetracker-tempunit') as HTMLSelectElement;
+  if (tempUnitSelect) {
+    tempUnitSelect.value = settings.temperatureUnit ?? 'fahrenheit';
+    tempUnitSelect.addEventListener('change', () => {
+      updateSetting('temperatureUnit', tempUnitSelect.value as 'fahrenheit' | 'celsius');
+      setTimeout(() => renderAllStates(), 100);
     });
   }
 
