@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { getMessageState, setMessageState } from './messageState';
 import type { ChatMessage } from '../types/st';
 import type { StoredStateData } from '../types/state';
@@ -135,7 +135,9 @@ describe('setMessageState', () => {
 
 		setMessageState(message, stateData);
 
-		expect((message.extra!.blazetracker as Record<number, unknown>)[0]).toEqual(stateData);
+		expect((message.extra!.blazetracker as Record<number, unknown>)[0]).toEqual(
+			stateData,
+		);
 	});
 
 	it('sets state for non-zero swipe_id', () => {
@@ -144,7 +146,9 @@ describe('setMessageState', () => {
 
 		setMessageState(message, stateData);
 
-		expect((message.extra!.blazetracker as Record<number, unknown>)[3]).toEqual(stateData);
+		expect((message.extra!.blazetracker as Record<number, unknown>)[3]).toEqual(
+			stateData,
+		);
 	});
 
 	it('preserves existing swipe states', () => {
@@ -172,7 +176,9 @@ describe('setMessageState', () => {
 
 		setMessageState(message, newState);
 
-		expect((message.extra!.blazetracker as Record<number, unknown>)[0]).toEqual(newState);
+		expect((message.extra!.blazetracker as Record<number, unknown>)[0]).toEqual(
+			newState,
+		);
 	});
 
 	it('treats undefined swipe_id as 0', () => {
@@ -182,7 +188,9 @@ describe('setMessageState', () => {
 
 		setMessageState(message, stateData);
 
-		expect((message.extra!.blazetracker as Record<number, unknown>)[0]).toEqual(stateData);
+		expect((message.extra!.blazetracker as Record<number, unknown>)[0]).toEqual(
+			stateData,
+		);
 	});
 
 	it('preserves other extra data', () => {

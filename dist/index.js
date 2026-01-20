@@ -38856,18 +38856,6 @@ function getDefaultTime() {
         dayOfWeek: 'Monday',
     };
 }
-function getDefaultScene() {
-    return {
-        topic: 'Scene in progress',
-        tone: 'neutral',
-        tension: {
-            level: 'relaxed',
-            direction: 'stable',
-            type: 'conversation',
-        },
-        recentEvents: ['Scene beginning'],
-    };
-}
 
 
 /***/ },
@@ -40296,7 +40284,7 @@ function NumberField({ id, label, description, value, min, max, step, onChange, 
 function CheckboxField({ id, label, description, checked, onChange }) {
     return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-container flexFlowColumn", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { className: "checkbox_label", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "checkbox", id: id, checked: checked, onChange: e => onChange(e.target.checked) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: label })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: description })] }));
 }
-function PromptEditor({ definition, customPrompts, customTemperatures, onSave, onSaveTemperature }) {
+function PromptEditor({ definition, customPrompts, customTemperatures, onSave, onSaveTemperature, }) {
     const [isEditing, setIsEditing] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
     const [editValue, setEditValue] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
     const [editTemperature, setEditTemperature] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(definition.defaultTemperature);
@@ -40344,9 +40332,9 @@ function PromptEditor({ definition, customPrompts, customTemperatures, onSave, o
     if (isEditing) {
         return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-editor", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-editor-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("strong", { children: definition.name }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-prompt-description", children: definition.description })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-temperature-control", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { className: "bt-temperature-label", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Temperature:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "range", className: "bt-temperature-slider", min: "0", max: "2", step: "0.05", value: editTemperature, onChange: e => setEditTemperature(parseFloat(e.target.value)) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", className: "bt-temperature-input", min: "0", max: "2", step: "0.05", value: editTemperature, onChange: e => handleTemperatureInput(e.target.value) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-temperature-default", children: ["(default: ", definition.defaultTemperature, ")"] })] }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-placeholders", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("strong", { children: "Available placeholders:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: definition.placeholders.map(p => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("li", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("code", { children: p.name }), " \u2014", ' ', p.description] }, p.name))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("textarea", { className: "text_pole bt-prompt-textarea", value: editValue, onChange: e => setEditValue(e.target.value), rows: 15 }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-actions", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: "menu_button", onClick: handleSave, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-check" }), " Save"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: "menu_button", onClick: handleReset, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-rotate-left" }), " Reset to Default"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: "menu_button", onClick: handleCancel, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-xmark" }), " Cancel"] })] })] }));
     }
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-item", onClick: handleEdit, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-item-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-prompt-name", children: definition.name }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-badges", children: [isTemperatureCustomized && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-prompt-temperature-badge", title: `Custom temperature: ${currentTemperature}`, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-temperature-half" }), " ", currentTemperature] })), isPromptCustomized && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-prompt-customized", title: "Custom prompt", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-pen" }) }))] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { className: "bt-prompt-description", children: definition.description })] }));
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-item", onClick: handleEdit, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-item-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-prompt-name", children: definition.name }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompt-badges", children: [isTemperatureCustomized && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-prompt-temperature-badge", title: `Custom temperature: ${currentTemperature}`, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-temperature-half" }), ' ', currentTemperature] })), isPromptCustomized && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-prompt-customized", title: "Custom prompt", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-pen" }) }))] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { className: "bt-prompt-description", children: definition.description })] }));
 }
-function PromptsSection({ customPrompts, customTemperatures, onUpdatePrompt, onUpdateTemperature }) {
+function PromptsSection({ customPrompts, customTemperatures, onUpdatePrompt, onUpdateTemperature, }) {
     const [isExpanded, setIsExpanded] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
     const definitions = (0,_extractors_prompts__WEBPACK_IMPORTED_MODULE_5__.getAllPromptDefinitions)();
     // Defensive: customTemperatures may be undefined for existing users

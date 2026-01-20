@@ -85,22 +85,22 @@ export async function extractClimate(
 
 	const prompt = isInitial
 		? getPrompt('climate_initial')
-			.replace('{{narrativeTime}}', timeStr)
-			.replace('{{location}}', locationStr)
-			.replace('{{characterInfo}}', characterInfo)
-			.replace('{{messages}}', messages)
-			.replace('{{schema}}', schemaStr)
-			.replace('{{schemaExample}}', CLIMATE_EXAMPLE)
+				.replace('{{narrativeTime}}', timeStr)
+				.replace('{{location}}', locationStr)
+				.replace('{{characterInfo}}', characterInfo)
+				.replace('{{messages}}', messages)
+				.replace('{{schema}}', schemaStr)
+				.replace('{{schemaExample}}', CLIMATE_EXAMPLE)
 		: getPrompt('climate_update')
-			.replace('{{narrativeTime}}', timeStr)
-			.replace('{{location}}', locationStr)
-			.replace(
-				'{{previousState}}',
-				JSON.stringify(previousClimate, null, 2),
-			)
-			.replace('{{messages}}', messages)
-			.replace('{{schema}}', schemaStr)
-			.replace('{{schemaExample}}', CLIMATE_EXAMPLE);
+				.replace('{{narrativeTime}}', timeStr)
+				.replace('{{location}}', locationStr)
+				.replace(
+					'{{previousState}}',
+					JSON.stringify(previousClimate, null, 2),
+				)
+				.replace('{{messages}}', messages)
+				.replace('{{schema}}', schemaStr)
+				.replace('{{schemaExample}}', CLIMATE_EXAMPLE);
 
 	const llmMessages = buildExtractionMessages(SYSTEM_PROMPT, prompt);
 

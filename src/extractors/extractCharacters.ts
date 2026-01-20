@@ -172,21 +172,21 @@ export async function extractCharacters(
 
 	const prompt = isInitial
 		? getPrompt('characters_initial')
-			.replace('{{userInfo}}', userInfo)
-			.replace('{{characterInfo}}', characterInfo)
-			.replace('{{location}}', locationStr)
-			.replace('{{messages}}', messages)
-			.replace('{{schema}}', schemaStr)
-			.replace('{{schemaExample}}', CHARACTERS_EXAMPLE)
+				.replace('{{userInfo}}', userInfo)
+				.replace('{{characterInfo}}', characterInfo)
+				.replace('{{location}}', locationStr)
+				.replace('{{messages}}', messages)
+				.replace('{{schema}}', schemaStr)
+				.replace('{{schemaExample}}', CHARACTERS_EXAMPLE)
 		: getPrompt('characters_update')
-			.replace('{{location}}', locationStr)
-			.replace(
-				'{{previousState}}',
-				JSON.stringify(previousCharacters, null, 2),
-			)
-			.replace('{{messages}}', messages)
-			.replace('{{schema}}', schemaStr)
-			.replace('{{schemaExample}}', CHARACTERS_EXAMPLE);
+				.replace('{{location}}', locationStr)
+				.replace(
+					'{{previousState}}',
+					JSON.stringify(previousCharacters, null, 2),
+				)
+				.replace('{{messages}}', messages)
+				.replace('{{schema}}', schemaStr)
+				.replace('{{schemaExample}}', CHARACTERS_EXAMPLE);
 
 	const llmMessages = buildExtractionMessages(SYSTEM_PROMPT, prompt);
 

@@ -371,7 +371,7 @@ describe('isObject', () => {
 	});
 
 	it('returns false for function', () => {
-		expect(isObject(() => { })).toBe(false);
+		expect(isObject(() => {})).toBe(false);
 	});
 
 	it('returns true for Object.create(null)', () => {

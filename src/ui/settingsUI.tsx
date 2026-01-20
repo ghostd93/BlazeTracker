@@ -5,7 +5,6 @@ import {
 	type BlazeTrackerSettings,
 	updateSetting,
 	getSettings,
-	defaultTemperatures,
 } from '../settings';
 import { renderAllStates } from './stateDisplay';
 import {
@@ -133,7 +132,13 @@ interface PromptEditorProps {
 	onSaveTemperature: (key: PromptKey, value: number | null) => void;
 }
 
-function PromptEditor({ definition, customPrompts, customTemperatures, onSave, onSaveTemperature }: PromptEditorProps) {
+function PromptEditor({
+	definition,
+	customPrompts,
+	customTemperatures,
+	onSave,
+	onSaveTemperature,
+}: PromptEditorProps) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState('');
 	const [editTemperature, setEditTemperature] = useState(definition.defaultTemperature);
@@ -205,7 +210,11 @@ function PromptEditor({ definition, customPrompts, customTemperatures, onSave, o
 							max="2"
 							step="0.05"
 							value={editTemperature}
-							onChange={e => setEditTemperature(parseFloat(e.target.value))}
+							onChange={e =>
+								setEditTemperature(
+									parseFloat(e.target.value),
+								)
+							}
 						/>
 						<input
 							type="number"
@@ -214,7 +223,11 @@ function PromptEditor({ definition, customPrompts, customTemperatures, onSave, o
 							max="2"
 							step="0.05"
 							value={editTemperature}
-							onChange={e => handleTemperatureInput(e.target.value)}
+							onChange={e =>
+								handleTemperatureInput(
+									e.target.value,
+								)
+							}
 						/>
 						<span className="bt-temperature-default">
 							(default: {definition.defaultTemperature})
@@ -267,7 +280,8 @@ function PromptEditor({ definition, customPrompts, customTemperatures, onSave, o
 							className="bt-prompt-temperature-badge"
 							title={`Custom temperature: ${currentTemperature}`}
 						>
-							<i className="fa-solid fa-temperature-half"></i> {currentTemperature}
+							<i className="fa-solid fa-temperature-half"></i>{' '}
+							{currentTemperature}
 						</span>
 					)}
 					{isPromptCustomized && (
@@ -296,7 +310,12 @@ interface PromptsSectionProps {
 	onUpdateTemperature: (key: PromptKey, value: number | null) => void;
 }
 
-function PromptsSection({ customPrompts, customTemperatures, onUpdatePrompt, onUpdateTemperature }: PromptsSectionProps) {
+function PromptsSection({
+	customPrompts,
+	customTemperatures,
+	onUpdatePrompt,
+	onUpdateTemperature,
+}: PromptsSectionProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
 	const definitions = getAllPromptDefinitions();
 
@@ -359,8 +378,8 @@ function SettingsPanel() {
 		const context = SillyTavern.getContext();
 		const connectionManager = context.extensionSettings?.connectionManager as
 			| {
-				profiles?: ConnectionProfile[];
-			}
+					profiles?: ConnectionProfile[];
+			  }
 			| undefined;
 		setProfiles(connectionManager?.profiles || []);
 	}, []);

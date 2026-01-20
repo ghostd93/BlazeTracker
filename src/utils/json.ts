@@ -24,10 +24,7 @@ export interface ParseOptions {
 function repairUnquotedKeys(jsonStr: string): string {
 	// Match unquoted keys after { or , (with optional whitespace/newlines)
 	// Captures: delimiter, key name, colon
-	return jsonStr.replace(
-		/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g,
-		'$1"$2"$3',
-	);
+	return jsonStr.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3');
 }
 
 /**

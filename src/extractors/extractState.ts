@@ -350,16 +350,3 @@ function getDefaultTime(): NarrativeDateTime {
 		dayOfWeek: 'Monday',
 	};
 }
-
-function getDefaultScene(): Scene {
-	return {
-		topic: 'Scene in progress',
-		tone: 'neutral',
-		tension: {
-			level: 'relaxed',
-			direction: 'stable',
-			type: 'conversation',
-		},
-		recentEvents: ['Scene beginning'],
-	};
-}

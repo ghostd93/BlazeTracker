@@ -130,7 +130,6 @@ function SceneDisplay({ scene }: SceneDisplayProps) {
 
 	return (
 		<div className="bt-scene">
-
 			<div className="bt-scene-header">
 				<span className="bt-scene-topic">{scene.topic}</span>
 				<span className="bt-scene-tone">{scene.tone}</span>
@@ -156,7 +155,6 @@ function SceneDisplay({ scene }: SceneDisplayProps) {
 				</span>
 			</div>
 
-
 			{scene.recentEvents.length > 0 && (
 				<div className="bt-scene-events">
 					<ul>
@@ -166,7 +164,7 @@ function SceneDisplay({ scene }: SceneDisplayProps) {
 					</ul>
 				</div>
 			)}
-		</div >
+		</div>
 	);
 }
 
@@ -330,8 +328,11 @@ function StateDisplay({ stateData, isExtracting, extractionStep }: StateDisplayP
 			) : (
 				<div className="bt-scene-pending">
 					<i className="fa-solid fa-hourglass-half"></i>
-					<span>Scene analysis will happen after first character response</span>
-				</div >
+					<span>
+						Scene analysis will happen after first character
+						response
+					</span>
+				</div>
 			)}
 
 			{/* Expandable details */}

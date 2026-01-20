@@ -20,7 +20,9 @@ describe('calculateTensionDirection', () => {
 		});
 
 		it('detects escalation from relaxed to explosive', () => {
-			expect(calculateTensionDirection('explosive', 'relaxed')).toBe('escalating');
+			expect(calculateTensionDirection('explosive', 'relaxed')).toBe(
+				'escalating',
+			);
 		});
 
 		it('detects escalation from guarded to tense', () => {
@@ -28,7 +30,9 @@ describe('calculateTensionDirection', () => {
 		});
 
 		it('detects escalation from volatile to explosive', () => {
-			expect(calculateTensionDirection('explosive', 'volatile')).toBe('escalating');
+			expect(calculateTensionDirection('explosive', 'volatile')).toBe(
+				'escalating',
+			);
 		});
 
 		it('detects escalation across multiple levels', () => {
@@ -42,7 +46,9 @@ describe('calculateTensionDirection', () => {
 		});
 
 		it('detects decrease from explosive to relaxed', () => {
-			expect(calculateTensionDirection('relaxed', 'explosive')).toBe('decreasing');
+			expect(calculateTensionDirection('relaxed', 'explosive')).toBe(
+				'decreasing',
+			);
 		});
 
 		it('detects decrease from tense to guarded', () => {
@@ -50,7 +56,9 @@ describe('calculateTensionDirection', () => {
 		});
 
 		it('detects decrease from explosive to volatile', () => {
-			expect(calculateTensionDirection('volatile', 'explosive')).toBe('decreasing');
+			expect(calculateTensionDirection('volatile', 'explosive')).toBe(
+				'decreasing',
+			);
 		});
 
 		it('detects decrease across multiple levels', () => {
@@ -85,13 +93,17 @@ describe('calculateTensionDirection', () => {
 
 		it('correctly orders all levels for escalation', () => {
 			for (let i = 0; i < levels.length - 1; i++) {
-				expect(calculateTensionDirection(levels[i + 1], levels[i])).toBe('escalating');
+				expect(calculateTensionDirection(levels[i + 1], levels[i])).toBe(
+					'escalating',
+				);
 			}
 		});
 
 		it('correctly orders all levels for decrease', () => {
 			for (let i = levels.length - 1; i > 0; i--) {
-				expect(calculateTensionDirection(levels[i - 1], levels[i])).toBe('decreasing');
+				expect(calculateTensionDirection(levels[i - 1], levels[i])).toBe(
+					'decreasing',
+				);
 			}
 		});
 	});

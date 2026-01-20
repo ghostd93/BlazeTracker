@@ -85,18 +85,18 @@ export async function extractLocation(
 
 	const prompt = isInitial
 		? getPrompt('location_initial')
-			.replace('{{characterInfo}}', characterInfo)
-			.replace('{{messages}}', messages)
-			.replace('{{schema}}', schemaStr)
-			.replace('{{schemaExample}}', LOCATION_EXAMPLE)
+				.replace('{{characterInfo}}', characterInfo)
+				.replace('{{messages}}', messages)
+				.replace('{{schema}}', schemaStr)
+				.replace('{{schemaExample}}', LOCATION_EXAMPLE)
 		: getPrompt('location_update')
-			.replace(
-				'{{previousState}}',
-				JSON.stringify(previousLocation, null, 2),
-			)
-			.replace('{{messages}}', messages)
-			.replace('{{schema}}', schemaStr)
-			.replace('{{schemaExample}}', LOCATION_EXAMPLE);
+				.replace(
+					'{{previousState}}',
+					JSON.stringify(previousLocation, null, 2),
+				)
+				.replace('{{messages}}', messages)
+				.replace('{{schema}}', schemaStr)
+				.replace('{{schemaExample}}', LOCATION_EXAMPLE);
 
 	const llmMessages = buildExtractionMessages(SYSTEM_PROMPT, prompt);
 
