@@ -63,10 +63,19 @@ BlazeTracker uses a dedicated LLM call to track narrative time:
 - **Recent Events**: Up to 5 significant events affecting the narrative (secrets discovered, injuries, intimacy changes, etc.)
 
 ### Smart Extraction
-- Extracts state changes from messages using your configured LLM
+- Modular extraction pipeline: Time → Location → Climate → Characters → Scene
+- Each extractor has its own optimized prompt and temperature setting
+- Scene analysis runs after assistant responses (when both sides of the conversation are available)
 - Delta-based updates - only changes what actually changed
 - Grounded in character cards and lorebook for accuracy
 - Swipe-aware storage - each swipe maintains its own state
+
+### Custom Prompts
+All extraction prompts are fully customizable for different models and RP styles:
+- 10 prompts: time (initial/delta), location (initial/update), climate (initial/update), characters (initial/update), scene (initial/update)
+- Each prompt documents available placeholders ({{messages}}, {{schema}}, {{previousState}}, etc.)
+- Reset to defaults at any time
+- Tune prompts to improve extraction accuracy for your specific use case
 
 ### Context Injection
 - Automatically injects current scene state into the prompt
@@ -80,7 +89,7 @@ BlazeTracker uses a dedicated LLM call to track narrative time:
 - Tension visualized with icons (☕ relaxed, 👁 aware, 🛡 guarded, 😬 tense, ⚡ charged, 🔥 volatile, 💥 explosive)
 - Direction indicators (📈 escalating, ➖ stable, 📉 decreasing)
 - Expandable details for characters and props
-- Loading indicator during extraction
+- Step-by-step progress indicator during extraction
 
 ### Manual Editing
 - Full state editor UI
@@ -128,10 +137,25 @@ Prevents the "double sleep" problem. If two consecutive messages both contain ti
 
 Default: 20 minutes. Increase if your RP legitimately has back-to-back large time skips.
 
+### Temperature Unit
+Display temperatures in Fahrenheit or Celsius. The LLM always extracts in Fahrenheit internally; this setting only affects display.
+
+### Time Format
+- **24-hour**: Display as 14:30
+- **12-hour**: Display as 2:30 PM
+
+### Custom Prompts
+Click to expand the Custom Prompts section to view and edit extraction prompts:
+- Click any prompt to open the editor
+- View available placeholders and their descriptions
+- Edit the prompt text to tune for your model
+- Save to apply changes, Reset to restore defaults
+- Customized prompts show a pencil icon
+
 ## Usage
 
 ### Automatic Mode
-With auto-extraction enabled, state is extracted after each message. A loading indicator shows while extraction is in progress.
+With auto-extraction enabled, state is extracted after each message. A progress indicator shows which extraction step is running (Time → Location → Climate → Characters → Scene).
 
 #### Note: Manual Editing
 I usually like to edit the state after the first assistant message, since it will make a bunch of assumptions that may or may not be true for your roleplay. This isn't required, but setting the initial state manually will help to keep the roleplay coherent.
@@ -148,12 +172,23 @@ Each swipe maintains its own state. When you swipe to a new response, BlazeTrack
 
 ## How It Works
 
-1. **Time Extraction**: If enabled, a lightweight LLM call extracts the narrative date/time (initial) or time delta (subsequent)
-2. **State Extraction**: Recent messages plus the previous state are sent to your LLM with a structured extraction prompt, including the current narrative time for climate inference
-3. **Delta Processing**: The LLM returns only what changed, which is merged with the previous state
-4. **Storage**: State is stored in `message.extra.blazetracker` for each message/swipe
-5. **Injection**: The most recent state is formatted and injected into the prompt context
-6. **Display**: React components render the state inline with each message
+BlazeTracker uses a modular extraction pipeline with 5 specialized extractors:
+
+1. **Time Extraction**: If enabled, extracts narrative date/time (initial) or time delta (subsequent). Temperature: 0.3
+2. **Location Extraction**: Extracts area, place, position, and props. Uses time context. Temperature: 0.5
+3. **Climate Extraction**: Extracts weather and temperature. Uses time and location for inference. Temperature: 0.3
+4. **Character Extraction**: Extracts all character states including outfits and dispositions. Temperature: 0.7
+5. **Scene Extraction**: Extracts topic, tone, tension, and events. Only runs on assistant messages to ensure both sides of conversation are available. Temperature: 0.6
+
+Each extractor:
+- Has its own optimized prompt (customizable in settings)
+- Uses appropriate temperature for its task (deterministic for time/climate, creative for characters)
+- Receives relevant context from previous extractors (e.g., climate knows the time and location)
+
+After extraction:
+- **Storage**: State is stored in `message.extra.blazetracker` for each message/swipe
+- **Injection**: The most recent state is formatted and injected into the prompt context
+- **Display**: React components render the state inline with each message
 
 ## Building from Source
 
@@ -168,6 +203,19 @@ npm install
 # Build
 npm run build
 
+# Development (watch mode)
+npm run dev
+
+# Type checking
+npm run typecheck
+
+# Linting
+npm run lint
+npm run lint:fix
+
+# Formatting
+npm run format
+
 # Output appears in dist/
 ```
 
@@ -175,7 +223,13 @@ npm run build
 
 ### State not extracting
 - Check that your API is connected and working
+- Check that a Connection Profile is selected in settings
 - Check browser console for errors
+
+### Extraction seems slow
+- BlazeTracker makes 5-6 sequential LLM calls per extraction (time + location + climate + characters + scene)
+- Each call is small (~100-300 tokens), but latency adds up
+- Disable time tracking if you don't need it to reduce calls
 
 ### Old state showing after swipe
 - This is usually a timing issue - state should update within a moment
@@ -188,6 +242,12 @@ npm run build
 ### Double time advancement
 - If time is advancing too fast (e.g., both characters sleeping advances time twice), try lowering the Leap Threshold setting.
 - The default 20 minutes works well for most scenarios.
+
+### Extraction accuracy issues
+- Different models respond differently to prompts
+- Use Custom Prompts to tune extraction for your specific model
+- Add more explicit instructions if fields are being ignored
+- Adjust the field descriptions in your custom prompts
 
 ### Extension not appearing
 - Ensure you have the latest SillyTavern version
