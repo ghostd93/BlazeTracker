@@ -1,14 +1,15 @@
 import type { STContext } from '../types/st';
-import type { TrackedState, NarrativeDateTime, Scene } from '../types/state';
+import type { TrackedState, NarrativeDateTime, Scene, Character } from '../types/state';
 import { getSettings } from '../settings';
 import { getMessageState } from '../utils/messageState';
 
 // Import extractors
 import { extractTime, setTimeTrackerState } from './extractTime';
-import { extractLocation } from './extractLocation';
+import { extractLocation, type LocationState } from './extractLocation';
 import { extractClimate } from './extractClimate';
 import { extractCharacters } from './extractCharacters';
 import { extractScene, shouldExtractScene } from './extractScene';
+import { propAlreadyExists } from '../utils/clothingMatch';
 import { setExtractionStep } from './extractionProgress';
 
 // ============================================
@@ -163,7 +164,7 @@ export async function extractState(
 		// ========================================
 		setExtractionStep('location', shouldRunScene);
 
-		const location = await extractLocation(
+		let location = await extractLocation(
 			isInitial,
 			formattedMessages,
 			isInitial ? characterInfo : '',
@@ -191,7 +192,7 @@ export async function extractState(
 		// ========================================
 		setExtractionStep('characters', shouldRunScene);
 
-		const characters = await extractCharacters(
+		let characters = await extractCharacters(
 			isInitial,
 			formattedMessages,
 			location,
@@ -200,6 +201,19 @@ export async function extractState(
 			previousState?.characters ?? null,
 			abortController.signal,
 		);
+
+		// ========================================
+		// STEP 4.5: Post-process outfits
+		// ========================================
+		// Fix LLM tendency to write "item (removed)" instead of null
+		// and migrate removed items to location props
+		const cleanup = cleanupOutfitsAndMoveProps(characters, location);
+		characters = cleanup.characters;
+		location = cleanup.location;
+
+		if (cleanup.movedItems.length > 0) {
+			console.log('[BlazeTracker] Moved removed clothing to props:', cleanup.movedItems);
+		}
 
 		// ========================================
 		// STEP 5: Extract Scene (conditional)
@@ -361,5 +375,106 @@ function getDefaultTime(): NarrativeDateTime {
 		minute: 0,
 		second: 0,
 		dayOfWeek: 'Monday',
+	};
+}
+
+// ============================================
+// Outfit Cleanup Post-Processing
+// ============================================
+
+/**
+ * Regex patterns that indicate an item has been removed.
+ * Captures the item name in group 1.
+ */
+const REMOVED_PATTERNS = [
+	/^(.+?)\s*\((?:removed|off|taken off|discarded|dropped|on (?:the )?floor|on (?:the )?ground|cast aside|tossed aside)\)$/i,
+	/^(.+?)\s*-\s*(?:removed|off|taken off)$/i,
+	/^(?:removed|off|none|nothing|bare|naked)$/i,
+];
+
+/**
+ * Values that should be treated as null (no item).
+ */
+const NULL_VALUES = new Set([
+	'none',
+	'nothing',
+	'bare',
+	'naked',
+	'n/a',
+	'na',
+	'-',
+	'',
+]);
+
+interface OutfitCleanupResult {
+	characters: Character[];
+	location: LocationState;
+	movedItems: string[];
+}
+
+/**
+ * Post-process characters to fix outfit items that the LLM marked as removed
+ * but didn't set to null. Moves removed items to location props if not already there.
+ */
+function cleanupOutfitsAndMoveProps(
+	characters: Character[],
+	location: LocationState,
+): OutfitCleanupResult {
+	const movedItems: string[] = [];
+	const existingProps = new Set((location.props || []).map(p => p.toLowerCase()));
+
+	const processedCharacters = characters.map(char => {
+		if (!char.outfit) return char;
+
+		const newOutfit = { ...char.outfit };
+		const outfitSlots = ['head', 'jacket', 'torso', 'legs', 'underwear', 'socks', 'footwear'] as const;
+
+		for (const slot of outfitSlots) {
+			const value = newOutfit[slot];
+			if (value === null || value === undefined) continue;
+
+			const trimmed = value.trim();
+
+			// Check for explicit null values
+			if (NULL_VALUES.has(trimmed.toLowerCase())) {
+				newOutfit[slot] = null;
+				continue;
+			}
+
+			// Check for removal patterns
+			for (const pattern of REMOVED_PATTERNS) {
+				const match = trimmed.match(pattern);
+				if (match) {
+					// Extract the item name (group 1, or the whole thing if no group)
+					const itemName = match[1]?.trim() || trimmed;
+
+					// Set to null
+					newOutfit[slot] = null;
+
+					// Add to props if we have a real item name and it's not already there
+					if (itemName && !NULL_VALUES.has(itemName.toLowerCase())) {
+						if (!propAlreadyExists(itemName, char.name, existingProps)) {
+							const propEntry = `${char.name}'s ${itemName}`;
+							movedItems.push(propEntry);
+							existingProps.add(propEntry.toLowerCase());
+						}
+					}
+					break;
+				}
+			}
+		}
+
+		return { ...char, outfit: newOutfit };
+	});
+
+	// Build new props array if we added items
+	const newProps = movedItems.length > 0
+		? [...(location.props || []), ...movedItems]
+		: location.props;
+
+	return {
+		characters: processedCharacters,
+		location: { ...location, props: newProps },
+		movedItems,
 	};
 }

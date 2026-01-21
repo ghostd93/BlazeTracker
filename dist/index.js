@@ -38638,10 +38638,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _extractClimate__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./extractClimate */ "./src/extractors/extractClimate.ts");
 /* harmony import */ var _extractCharacters__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./extractCharacters */ "./src/extractors/extractCharacters.ts");
 /* harmony import */ var _extractScene__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./extractScene */ "./src/extractors/extractScene.ts");
-/* harmony import */ var _extractionProgress__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./extractionProgress */ "./src/extractors/extractionProgress.ts");
+/* harmony import */ var _utils_clothingMatch__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../utils/clothingMatch */ "./src/utils/clothingMatch.ts");
+/* harmony import */ var _extractionProgress__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./extractionProgress */ "./src/extractors/extractionProgress.ts");
 
 
 // Import extractors
+
 
 
 
@@ -38737,7 +38739,7 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         // ========================================
         // STEP 1: Extract Time
         // ========================================
-        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_7__.setExtractionStep)('time', shouldRunScene);
+        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('time', shouldRunScene);
         let narrativeTime = previousState?.time ?? getDefaultTime();
         if (settings.trackTime !== false) {
             narrativeTime = await (0,_extractTime__WEBPACK_IMPORTED_MODULE_2__.extractTime)(!isInitial, formattedMessages, abortController.signal);
@@ -38745,24 +38747,35 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         // ========================================
         // STEP 2: Extract Location
         // ========================================
-        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_7__.setExtractionStep)('location', shouldRunScene);
-        const location = await (0,_extractLocation__WEBPACK_IMPORTED_MODULE_3__.extractLocation)(isInitial, formattedMessages, isInitial ? characterInfo : '', previousState?.location ?? null, abortController.signal);
+        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('location', shouldRunScene);
+        let location = await (0,_extractLocation__WEBPACK_IMPORTED_MODULE_3__.extractLocation)(isInitial, formattedMessages, isInitial ? characterInfo : '', previousState?.location ?? null, abortController.signal);
         // ========================================
         // STEP 3: Extract Climate
         // ========================================
-        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_7__.setExtractionStep)('climate', shouldRunScene);
+        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('climate', shouldRunScene);
         const climate = await (0,_extractClimate__WEBPACK_IMPORTED_MODULE_4__.extractClimate)(isInitial, formattedMessages, narrativeTime, location, isInitial ? characterInfo : '', previousState?.climate ?? null, abortController.signal);
         // ========================================
         // STEP 4: Extract Characters
         // ========================================
-        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_7__.setExtractionStep)('characters', shouldRunScene);
-        const characters = await (0,_extractCharacters__WEBPACK_IMPORTED_MODULE_5__.extractCharacters)(isInitial, formattedMessages, location, isInitial ? userInfo : '', isInitial ? characterInfo : '', previousState?.characters ?? null, abortController.signal);
+        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('characters', shouldRunScene);
+        let characters = await (0,_extractCharacters__WEBPACK_IMPORTED_MODULE_5__.extractCharacters)(isInitial, formattedMessages, location, isInitial ? userInfo : '', isInitial ? characterInfo : '', previousState?.characters ?? null, abortController.signal);
+        // ========================================
+        // STEP 4.5: Post-process outfits
+        // ========================================
+        // Fix LLM tendency to write "item (removed)" instead of null
+        // and migrate removed items to location props
+        const cleanup = cleanupOutfitsAndMoveProps(characters, location);
+        characters = cleanup.characters;
+        location = cleanup.location;
+        if (cleanup.movedItems.length > 0) {
+            console.log('[BlazeTracker] Moved removed clothing to props:', cleanup.movedItems);
+        }
         // ========================================
         // STEP 5: Extract Scene (conditional)
         // ========================================
         let scene;
         if (shouldRunScene) {
-            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_7__.setExtractionStep)('scene', shouldRunScene);
+            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('scene', shouldRunScene);
             // Scene needs at least 2 messages for tension analysis
             const sceneMessages = formatMessagesForScene(context, messageId, lastXMessages, previousState);
             const isInitialScene = !previousState?.scene;
@@ -38775,7 +38788,7 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         // ========================================
         // STEP 6: Assemble Final State
         // ========================================
-        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_7__.setExtractionStep)('complete', shouldRunScene);
+        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('complete', shouldRunScene);
         const state = {
             time: narrativeTime,
             location,
@@ -38789,7 +38802,7 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         extractionCount--;
         if (extractionCount === 0) {
             setSendButtonState(false);
-            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_7__.setExtractionStep)('idle', true);
+            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('idle', true);
         }
         if (currentAbortController === abortController) {
             currentAbortController = null;
@@ -38867,6 +38880,85 @@ function getDefaultTime() {
         minute: 0,
         second: 0,
         dayOfWeek: 'Monday',
+    };
+}
+// ============================================
+// Outfit Cleanup Post-Processing
+// ============================================
+/**
+ * Regex patterns that indicate an item has been removed.
+ * Captures the item name in group 1.
+ */
+const REMOVED_PATTERNS = [
+    /^(.+?)\s*\((?:removed|off|taken off|discarded|dropped|on (?:the )?floor|on (?:the )?ground|cast aside|tossed aside)\)$/i,
+    /^(.+?)\s*-\s*(?:removed|off|taken off)$/i,
+    /^(?:removed|off|none|nothing|bare|naked)$/i,
+];
+/**
+ * Values that should be treated as null (no item).
+ */
+const NULL_VALUES = new Set([
+    'none',
+    'nothing',
+    'bare',
+    'naked',
+    'n/a',
+    'na',
+    '-',
+    '',
+]);
+/**
+ * Post-process characters to fix outfit items that the LLM marked as removed
+ * but didn't set to null. Moves removed items to location props if not already there.
+ */
+function cleanupOutfitsAndMoveProps(characters, location) {
+    const movedItems = [];
+    const existingProps = new Set((location.props || []).map(p => p.toLowerCase()));
+    const processedCharacters = characters.map(char => {
+        if (!char.outfit)
+            return char;
+        const newOutfit = { ...char.outfit };
+        const outfitSlots = ['head', 'jacket', 'torso', 'legs', 'underwear', 'socks', 'footwear'];
+        for (const slot of outfitSlots) {
+            const value = newOutfit[slot];
+            if (value === null || value === undefined)
+                continue;
+            const trimmed = value.trim();
+            // Check for explicit null values
+            if (NULL_VALUES.has(trimmed.toLowerCase())) {
+                newOutfit[slot] = null;
+                continue;
+            }
+            // Check for removal patterns
+            for (const pattern of REMOVED_PATTERNS) {
+                const match = trimmed.match(pattern);
+                if (match) {
+                    // Extract the item name (group 1, or the whole thing if no group)
+                    const itemName = match[1]?.trim() || trimmed;
+                    // Set to null
+                    newOutfit[slot] = null;
+                    // Add to props if we have a real item name and it's not already there
+                    if (itemName && !NULL_VALUES.has(itemName.toLowerCase())) {
+                        if (!(0,_utils_clothingMatch__WEBPACK_IMPORTED_MODULE_7__.propAlreadyExists)(itemName, char.name, existingProps)) {
+                            const propEntry = `${char.name}'s ${itemName}`;
+                            movedItems.push(propEntry);
+                            existingProps.add(propEntry.toLowerCase());
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        return { ...char, outfit: newOutfit };
+    });
+    // Build new props array if we added items
+    const newProps = movedItems.length > 0
+        ? [...(location.props || []), ...movedItems]
+        : location.props;
+    return {
+        characters: processedCharacters,
+        location: { ...location, props: newProps },
+        movedItems,
     };
 }
 
@@ -41447,6 +41539,254 @@ async function openStateEditor(currentState, onSave) {
     });
 }
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (StateEditor);
+
+
+/***/ },
+
+/***/ "./src/utils/clothingMatch.ts"
+/*!************************************!*\
+  !*** ./src/utils/clothingMatch.ts ***!
+  \************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CHAR_PREFIX_PATTERNS: () => (/* binding */ CHAR_PREFIX_PATTERNS),
+/* harmony export */   CHAR_SUFFIX_PATTERNS: () => (/* binding */ CHAR_SUFFIX_PATTERNS),
+/* harmony export */   CLOTHING_KEYWORDS: () => (/* binding */ CLOTHING_KEYWORDS),
+/* harmony export */   COLOR_KEYWORDS: () => (/* binding */ COLOR_KEYWORDS),
+/* harmony export */   buildItemSearchTerms: () => (/* binding */ buildItemSearchTerms),
+/* harmony export */   extractClothingType: () => (/* binding */ extractClothingType),
+/* harmony export */   extractColors: () => (/* binding */ extractColors),
+/* harmony export */   extractPropCore: () => (/* binding */ extractPropCore),
+/* harmony export */   propAlreadyExists: () => (/* binding */ propAlreadyExists),
+/* harmony export */   propMatchesItem: () => (/* binding */ propMatchesItem)
+/* harmony export */ });
+/**
+ * Utility functions for matching clothing items in props.
+ * Used to detect duplicate items when moving removed clothing to location props.
+ */
+// ============================================
+// Constants
+// ============================================
+/**
+ * Common clothing type keywords to extract for fuzzy matching.
+ * Order matters - more specific terms should come first.
+ */
+const CLOTHING_KEYWORDS = [
+    // Footwear
+    'sneakers', 'trainers', 'boots', 'heels', 'sandals', 'loafers', 'flats', 'shoes', 'slippers',
+    // Legwear
+    'stockings', 'tights', 'thigh-highs', 'knee-highs', 'socks',
+    'jeans', 'trousers', 'pants', 'shorts', 'skirt', 'leggings', 'sweatpants',
+    // Underwear
+    'panties', 'knickers', 'thong', 'boxers', 'briefs', 'underwear',
+    'sports bra', 'bralette', 'bra',
+    // Tops
+    'blouse', 't-shirt', 'tshirt', 'shirt', 'top', 'tank top', 'vest', 'camisole',
+    'sweater', 'jumper', 'hoodie', 'cardigan', 'pullover',
+    // Outerwear
+    'jacket', 'coat', 'blazer', 'parka', 'windbreaker',
+    // Dresses
+    'dress', 'gown', 'sundress',
+    // Headwear
+    'hat', 'cap', 'beanie', 'hood',
+];
+/**
+ * Common color words to extract from item descriptions.
+ */
+const COLOR_KEYWORDS = [
+    'black', 'white', 'red', 'blue', 'green', 'yellow', 'purple', 'pink', 'orange', 'brown',
+    'grey', 'gray', 'navy', 'cream', 'beige', 'tan', 'maroon', 'burgundy', 'teal', 'cyan',
+    'silver', 'gold', 'dark', 'light', 'pale', 'bright', 'pastel',
+];
+/**
+ * Patterns for PREFIX [item] - character name before the item.
+ */
+const CHAR_PREFIX_PATTERNS = [
+    (char) => `${char}'s `,
+    (char) => `${char}s `, // Without apostrophe
+];
+/**
+ * Patterns for [item] SUFFIX - character name after the item.
+ */
+const CHAR_SUFFIX_PATTERNS = [
+    (char) => ` belonging to ${char}`,
+    (char) => ` ${char} removed`,
+    (char) => ` ${char} took off`,
+    (char) => ` ${char} dropped`,
+    (char) => ` ${char} discarded`,
+    (char) => ` from ${char}`,
+    (char) => ` (${char}'s)`,
+];
+// ============================================
+// Extraction Functions
+// ============================================
+/**
+ * Extract the core clothing type from a descriptive item name.
+ * e.g., "dark blue Levi's jeans" -> "jeans"
+ */
+function extractClothingType(itemName) {
+    const lower = itemName.toLowerCase();
+    for (const keyword of CLOTHING_KEYWORDS) {
+        if (lower.includes(keyword)) {
+            return keyword;
+        }
+    }
+    return null;
+}
+/**
+ * Extract color(s) from an item description.
+ * e.g., "dark blue Levi's jeans" -> ["dark", "blue"]
+ */
+function extractColors(itemName) {
+    const lower = itemName.toLowerCase();
+    const colors = [];
+    for (const color of COLOR_KEYWORDS) {
+        if (lower.includes(color)) {
+            colors.push(color);
+        }
+    }
+    return colors;
+}
+/**
+ * Build search terms for an item. Returns variations we should look for.
+ * e.g., "White Nike sneakers" ->
+ *   ["white nike sneakers", "sneakers", "white sneakers"]
+ */
+function buildItemSearchTerms(itemName) {
+    const terms = [];
+    const lower = itemName.toLowerCase();
+    // Full item name
+    terms.push(lower);
+    // Just the clothing type
+    const clothingType = extractClothingType(itemName);
+    if (clothingType) {
+        terms.push(clothingType);
+        // Color + type combinations
+        const colors = extractColors(itemName);
+        for (const color of colors) {
+            terms.push(`${color} ${clothingType}`);
+        }
+    }
+    else {
+        // No known clothing type - add individual words as fallback
+        // This helps match "onesie" when item is "pink onesie"
+        const words = lower.split(/\s+/).filter(w => w.length > 2 &&
+            !COLOR_KEYWORDS.includes(w) &&
+            !['the', 'and', 'with'].includes(w));
+        terms.push(...words);
+    }
+    return [...new Set(terms)]; // Dedupe
+}
+/**
+ * Strip a prop string down to its core item description.
+ * Removes character prefixes, state suffixes like "(removed)", location info.
+ */
+function extractPropCore(prop, charName) {
+    const charLower = charName.toLowerCase();
+    let propCore = prop.toLowerCase();
+    // Remove character prefix
+    for (const prefixFn of CHAR_PREFIX_PATTERNS) {
+        const prefix = prefixFn(charLower);
+        if (propCore.startsWith(prefix)) {
+            propCore = propCore.slice(prefix.length);
+            break;
+        }
+    }
+    // Strip common suffixes like "on the floor", "(removed)" etc.
+    propCore = propCore
+        .replace(/\s*\(.*\)\s*$/, '')
+        .replace(/\s+on the (?:floor|ground|bed|chair|table|sofa|couch).*$/, '')
+        .replace(/\s+(?:removed|discarded|dropped|tossed|thrown).*$/, '')
+        .replace(/\s+belonging to \w+.*$/, '')
+        .replace(/\s+from \w+.*$/, '')
+        .trim();
+    return propCore;
+}
+// ============================================
+// Matching Functions
+// ============================================
+/**
+ * Check if a prop matches an item for a given character.
+ * Uses PREFIX [item] SUFFIX pattern matching.
+ */
+function propMatchesItem(prop, itemSearchTerms, charName, fullItemName) {
+    const propLower = prop.toLowerCase();
+    const charLower = charName.toLowerCase();
+    const itemLower = fullItemName.toLowerCase();
+    // Strategy 1: Check if prop contains any search term AND the character name
+    const hasCharName = propLower.includes(charLower);
+    for (const term of itemSearchTerms) {
+        // Direct match on full prop
+        if (propLower === term)
+            return true;
+        // Prop contains the search term
+        if (propLower.includes(term)) {
+            // If char name is also present, definitely a match
+            if (hasCharName)
+                return true;
+            // If no possessive marker at all, it's probably a generic prop that matches
+            // e.g., "sneakers on the floor" matches anyone's sneakers
+            if (!propLower.includes("'s") && !propLower.includes("belonging to")) {
+                return true;
+            }
+        }
+    }
+    // Strategy 2: Check PREFIX patterns - "Elena's [term]"
+    for (const prefixFn of CHAR_PREFIX_PATTERNS) {
+        const prefix = prefixFn(charLower);
+        if (propLower.startsWith(prefix)) {
+            // Check if any search term appears after the prefix
+            const afterPrefix = propLower.slice(prefix.length);
+            for (const term of itemSearchTerms) {
+                if (afterPrefix.includes(term) || term.includes(afterPrefix.split(' ')[0])) {
+                    return true;
+                }
+            }
+            // Fallback: check if the afterPrefix is substring of item or vice versa
+            if (afterPrefix.length > 2 && (itemLower.includes(afterPrefix) || afterPrefix.includes(itemLower))) {
+                return true;
+            }
+        }
+    }
+    // Strategy 3: Check SUFFIX patterns - "[term] belonging to Elena"
+    for (const suffixFn of CHAR_SUFFIX_PATTERNS) {
+        const suffix = suffixFn(charLower);
+        if (propLower.includes(suffix)) {
+            for (const term of itemSearchTerms) {
+                if (propLower.includes(term)) {
+                    return true;
+                }
+            }
+        }
+    }
+    // Strategy 4: Substring fallback for unknown item types
+    // If prop (without char prefix) is substring of item or vice versa
+    // e.g., prop "onesie" matches item "pink onesie"
+    const propCore = extractPropCore(prop, charName);
+    if (propCore.length > 2) {
+        if (itemLower.includes(propCore) || propCore.includes(itemLower)) {
+            // But make sure it's not a different character's item
+            if (hasCharName || !propLower.includes("'s")) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+/**
+ * Check if a prop already exists in the set using multiple matching strategies.
+ */
+function propAlreadyExists(itemName, charName, existingProps) {
+    const searchTerms = buildItemSearchTerms(itemName);
+    for (const prop of existingProps) {
+        if (propMatchesItem(prop, searchTerms, charName, itemName)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 
 /***/ },
