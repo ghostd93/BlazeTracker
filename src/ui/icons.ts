@@ -1,0 +1,398 @@
+// ============================================
+// UI Icons and Colors for BlazeTracker
+// ============================================
+
+import type {
+	TensionType,
+	TensionLevel,
+	TensionDirection,
+	Climate,
+	EventType,
+	WeatherCondition,
+} from '../types/state';
+
+/**
+ * Font Awesome icons for tension types.
+ */
+export const TENSION_TYPE_ICONS: Record<TensionType, string> = {
+	conversation: 'fa-comments',
+	confrontation: 'fa-burst',
+	intimate: 'fa-heart',
+	suspense: 'fa-clock',
+	vulnerable: 'fa-shield-halved',
+	celebratory: 'fa-champagne-glasses',
+	negotiation: 'fa-handshake',
+};
+
+/**
+ * Font Awesome icons for tension levels.
+ */
+export const TENSION_LEVEL_ICONS: Record<TensionLevel, string> = {
+	relaxed: 'fa-mug-hot',
+	aware: 'fa-eye',
+	guarded: 'fa-shield-halved',
+	tense: 'fa-face-grimace',
+	charged: 'fa-bolt',
+	volatile: 'fa-fire',
+	explosive: 'fa-explosion',
+};
+
+/**
+ * Font Awesome icons for tension directions.
+ */
+export const TENSION_DIRECTION_ICONS: Record<TensionDirection, string> = {
+	escalating: 'fa-arrow-trend-up',
+	stable: 'fa-grip-lines',
+	decreasing: 'fa-arrow-trend-down',
+};
+
+/**
+ * Font Awesome icons for weather types.
+ */
+export const WEATHER_ICONS: Record<Climate['weather'], string> = {
+	sunny: 'fa-sun',
+	cloudy: 'fa-cloud',
+	snowy: 'fa-snowflake',
+	rainy: 'fa-cloud-rain',
+	windy: 'fa-wind',
+	thunderstorm: 'fa-cloud-bolt',
+};
+
+/**
+ * Get the weather icon for a weather type.
+ */
+export function getWeatherIcon(weather: string): string {
+	return WEATHER_ICONS[weather as Climate['weather']] ?? 'fa-question';
+}
+
+/**
+ * Font Awesome icons for procedural weather conditions.
+ */
+export const CONDITION_ICONS: Record<WeatherCondition, string> = {
+	clear: 'fa-moon',
+	sunny: 'fa-sun',
+	partly_cloudy: 'fa-cloud-sun',
+	overcast: 'fa-cloud',
+	foggy: 'fa-smog',
+	drizzle: 'fa-cloud-rain',
+	rain: 'fa-cloud-showers-heavy',
+	heavy_rain: 'fa-cloud-showers-water',
+	thunderstorm: 'fa-cloud-bolt',
+	sleet: 'fa-cloud-meatball',
+	snow: 'fa-snowflake',
+	heavy_snow: 'fa-snowflake',
+	blizzard: 'fa-icicles',
+	windy: 'fa-wind',
+	hot: 'fa-temperature-high',
+	cold: 'fa-temperature-low',
+	humid: 'fa-droplet',
+};
+
+/**
+ * Get the icon for a procedural weather condition.
+ */
+export function getConditionIcon(condition: WeatherCondition): string {
+	return CONDITION_ICONS[condition] ?? 'fa-question';
+}
+
+/**
+ * Colors for tension types.
+ */
+export const TENSION_TYPE_COLORS: Record<TensionType, string> = {
+	conversation: '#6b7280', // gray-500
+	confrontation: '#ef4444', // red-500
+	intimate: '#ec4899', // pink-500
+	suspense: '#8b5cf6', // violet-500
+	vulnerable: '#06b6d4', // cyan-500
+	celebratory: '#eab308', // yellow-500
+	negotiation: '#f97316', // orange-500
+};
+
+/**
+ * Colors for tension levels.
+ */
+export const TENSION_LEVEL_COLORS: Record<TensionLevel, string> = {
+	relaxed: '#6b7280', // gray-500
+	aware: '#3b82f6', // blue-500
+	guarded: '#22c55e', // green-500
+	tense: '#f59e0b', // amber-500
+	charged: '#f97316', // orange-500
+	volatile: '#ef4444', // red-500
+	explosive: '#dc2626', // red-600
+};
+
+/**
+ * Get the icon class for a tension type.
+ */
+export function getTensionIcon(type: TensionType): string {
+	return `fa-solid ${TENSION_TYPE_ICONS[type] || 'fa-circle'}`;
+}
+
+/**
+ * Get the icon class for a tension level.
+ */
+export function getTensionLevelIcon(level: TensionLevel): string {
+	return `fa-solid ${TENSION_LEVEL_ICONS[level] || 'fa-circle'}`;
+}
+
+/**
+ * Get the color for a tension type.
+ */
+export function getTensionTypeColor(type: TensionType): string {
+	return TENSION_TYPE_COLORS[type] || '#6b7280';
+}
+
+/**
+ * Get the color for a tension level.
+ */
+export function getTensionColor(level: TensionLevel): string {
+	return TENSION_LEVEL_COLORS[level] || '#6b7280';
+}
+
+/**
+ * Numeric value for tension level (for graphing).
+ */
+export const TENSION_LEVEL_VALUES: Record<TensionLevel, number> = {
+	relaxed: 1,
+	aware: 2,
+	guarded: 3,
+	tense: 4,
+	charged: 5,
+	volatile: 6,
+	explosive: 7,
+};
+
+/**
+ * Get numeric value for a tension level.
+ */
+export function getTensionValue(level: TensionLevel): number {
+	return TENSION_LEVEL_VALUES[level] || 1;
+}
+
+// ============================================
+// Event Type Icons and Colors
+// ============================================
+
+/**
+ * Font Awesome icons for event types.
+ */
+export const EVENT_TYPE_ICONS: Record<EventType, string> = {
+	// Conversation
+	conversation: 'fa-comments',
+	confession: 'fa-heart-circle-exclamation',
+	argument: 'fa-comment-slash',
+	negotiation: 'fa-handshake',
+
+	// Discovery
+	discovery: 'fa-lightbulb',
+	secret_shared: 'fa-user-secret',
+	secret_revealed: 'fa-mask',
+
+	// Emotional
+	emotional: 'fa-face-smile-beam',
+	supportive: 'fa-hand-holding-heart',
+	rejection: 'fa-hand',
+	comfort: 'fa-hands-holding',
+	apology: 'fa-hands-praying',
+	forgiveness: 'fa-dove',
+
+	// Bonding
+	laugh: 'fa-face-laugh-beam',
+	gift: 'fa-gift',
+	compliment: 'fa-face-grin-stars',
+	tease: 'fa-face-grin-tongue',
+	flirt: 'fa-face-grin-wink',
+	date: 'fa-champagne-glasses',
+	i_love_you: 'fa-heart-circle-check',
+	sleepover: 'fa-bed',
+	shared_meal: 'fa-utensils',
+	shared_activity: 'fa-gamepad',
+
+	// Romantic Intimacy
+	intimate_touch: 'fa-hand-holding-hand',
+	intimate_kiss: 'fa-face-kiss-wink-heart',
+	intimate_embrace: 'fa-people-pulling',
+	intimate_heated: 'fa-fire',
+
+	// Sexual Activity
+	intimate_foreplay: 'fa-fire-flame-curved',
+	intimate_oral: 'fa-face-kiss-beam',
+	intimate_manual: 'fa-hand-sparkles',
+	intimate_penetrative: 'fa-heart',
+	intimate_climax: 'fa-star',
+
+	// Action
+	action: 'fa-person-running',
+	combat: 'fa-hand-fist',
+	danger: 'fa-skull',
+
+	// Commitment
+	decision: 'fa-scale-balanced',
+	promise: 'fa-handshake-angle',
+	betrayal: 'fa-face-angry',
+	lied: 'fa-face-grimace',
+
+	// Life Events
+	exclusivity: 'fa-lock',
+	marriage: 'fa-ring',
+	pregnancy: 'fa-baby',
+	childbirth: 'fa-baby-carriage',
+
+	// Social
+	social: 'fa-users',
+	achievement: 'fa-trophy',
+};
+
+/**
+ * Colors for event types.
+ */
+export const EVENT_TYPE_COLORS: Record<EventType, string> = {
+	// Conversation - grays/blues
+	conversation: '#6b7280',
+	confession: '#ec4899',
+	argument: '#ef4444',
+	negotiation: '#f59e0b',
+
+	// Discovery - yellows
+	discovery: '#eab308',
+	secret_shared: '#8b5cf6',
+	secret_revealed: '#a855f7',
+
+	// Emotional - cyans
+	emotional: '#06b6d4',
+	supportive: '#22d3ee',
+	rejection: '#f43f5e',
+	comfort: '#14b8a6', // teal-500
+	apology: '#a78bfa', // violet-400
+	forgiveness: '#34d399', // emerald-400
+
+	// Bonding - warm greens and oranges
+	laugh: '#facc15', // yellow-400
+	gift: '#f472b6', // pink-400
+	compliment: '#fbbf24', // amber-400
+	tease: '#fb923c', // orange-400
+	flirt: '#f87171', // red-400
+	date: '#a78bfa', // violet-400
+	i_love_you: '#f43f5e', // rose-500
+	sleepover: '#818cf8', // indigo-400
+	shared_meal: '#4ade80', // green-400
+	shared_activity: '#60a5fa', // blue-400
+
+	// Romantic Intimacy - pinks
+	intimate_touch: '#fda4af',
+	intimate_kiss: '#fb7185',
+	intimate_embrace: '#f472b6',
+	intimate_heated: '#ec4899',
+
+	// Sexual Activity - deeper pinks/magentas
+	intimate_foreplay: '#db2777',
+	intimate_oral: '#be185d',
+	intimate_manual: '#9d174d',
+	intimate_penetrative: '#831843',
+	intimate_climax: '#701a75',
+
+	// Action - blues/reds
+	action: '#3b82f6',
+	combat: '#dc2626',
+	danger: '#991b1b',
+
+	// Commitment - purples/oranges
+	decision: '#8b5cf6',
+	promise: '#22c55e',
+	betrayal: '#b91c1c',
+	lied: '#f97316', // orange-500
+
+	// Life Events - golds/teals
+	exclusivity: '#0d9488', // teal-600
+	marriage: '#d97706', // amber-600
+	pregnancy: '#ec4899', // pink-500
+	childbirth: '#8b5cf6', // violet-500
+
+	// Social - greens
+	social: '#22c55e',
+	achievement: '#f59e0b',
+};
+
+/**
+ * Priority order for selecting "primary" icon when multiple types.
+ * Higher priority items appear first.
+ */
+export const EVENT_TYPE_PRIORITY: readonly EventType[] = [
+	// Life events take highest priority (rare, significant)
+	'childbirth',
+	'marriage',
+	'pregnancy',
+	'exclusivity',
+	// Sexual activity takes visual priority (highest intensity first)
+	'intimate_climax',
+	'intimate_penetrative',
+	'intimate_oral',
+	'intimate_manual',
+	'intimate_foreplay',
+	// Then romantic intimacy
+	'intimate_heated',
+	'intimate_kiss',
+	'intimate_embrace',
+	'intimate_touch',
+	// Then high-drama events
+	'combat',
+	'danger',
+	'betrayal',
+	'confession',
+	'argument',
+	// Then emotional/discovery
+	'emotional',
+	'comfort',
+	'apology',
+	'forgiveness',
+	'secret_revealed',
+	'secret_shared',
+	'discovery',
+	// Then decisions
+	'decision',
+	'promise',
+	'rejection',
+	// Then bonding/social
+	'i_love_you',
+	'date',
+	'sleepover',
+	'gift',
+	'laugh',
+	'compliment',
+	'flirt',
+	'tease',
+	'shared_meal',
+	'shared_activity',
+	// Then social/support
+	'supportive',
+	'achievement',
+	'social',
+	'negotiation',
+	// Default
+	'conversation',
+	'action',
+];
+
+/**
+ * Get the primary event type from an array of types based on priority.
+ */
+export function getPrimaryEventType(types: EventType[]): EventType {
+	for (const priority of EVENT_TYPE_PRIORITY) {
+		if (types.includes(priority)) return priority;
+	}
+	return types[0] || 'conversation';
+}
+
+/**
+ * Get the icon class for an event type.
+ */
+export function getEventTypeIcon(type: EventType): string {
+	return `fa-solid ${EVENT_TYPE_ICONS[type] || 'fa-circle'}`;
+}
+
+/**
+ * Get the color for an event type.
+ */
+export function getEventTypeColor(type: EventType): string {
+	return EVENT_TYPE_COLORS[type] || '#6b7280';
+}

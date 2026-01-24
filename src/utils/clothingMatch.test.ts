@@ -142,51 +142,89 @@ describe('propMatchesItem', () => {
 
 		it('matches prop containing term with char name', () => {
 			const terms = buildItemSearchTerms('white sneakers');
-			expect(propMatchesItem("John's white sneakers", terms, 'John', 'white sneakers')).toBe(true);
+			expect(
+				propMatchesItem(
+					"John's white sneakers",
+					terms,
+					'John',
+					'white sneakers',
+				),
+			).toBe(true);
 		});
 
 		it('matches generic prop without possessive', () => {
 			const terms = buildItemSearchTerms('white sneakers');
-			expect(propMatchesItem('sneakers on the floor', terms, 'John', 'white sneakers')).toBe(true);
+			expect(
+				propMatchesItem(
+					'sneakers on the floor',
+					terms,
+					'John',
+					'white sneakers',
+				),
+			).toBe(true);
 		});
 
 		it('does not match other character possessive', () => {
 			const terms = buildItemSearchTerms('white sneakers');
-			expect(propMatchesItem("Lucy's sneakers", terms, 'John', 'white sneakers')).toBe(false);
+			expect(
+				propMatchesItem("Lucy's sneakers", terms, 'John', 'white sneakers'),
+			).toBe(false);
 		});
 	});
 
 	describe('Strategy 2: PREFIX patterns', () => {
 		it("matches char's item pattern", () => {
 			const terms = buildItemSearchTerms('sneakers');
-			expect(propMatchesItem("John's sneakers", terms, 'John', 'sneakers')).toBe(true);
+			expect(propMatchesItem("John's sneakers", terms, 'John', 'sneakers')).toBe(
+				true,
+			);
 		});
 
 		it('matches without apostrophe', () => {
 			const terms = buildItemSearchTerms('sneakers');
-			expect(propMatchesItem('Johns sneakers', terms, 'John', 'sneakers')).toBe(true);
+			expect(propMatchesItem('Johns sneakers', terms, 'John', 'sneakers')).toBe(
+				true,
+			);
 		});
 
 		it('matches with additional description after prefix', () => {
 			const terms = buildItemSearchTerms('sneakers');
-			expect(propMatchesItem("John's sneakers on the floor", terms, 'John', 'sneakers')).toBe(true);
+			expect(
+				propMatchesItem(
+					"John's sneakers on the floor",
+					terms,
+					'John',
+					'sneakers',
+				),
+			).toBe(true);
 		});
 	});
 
 	describe('Strategy 3: SUFFIX patterns', () => {
 		it('matches "belonging to" pattern', () => {
 			const terms = buildItemSearchTerms('sneakers');
-			expect(propMatchesItem('sneakers belonging to John', terms, 'John', 'sneakers')).toBe(true);
+			expect(
+				propMatchesItem(
+					'sneakers belonging to John',
+					terms,
+					'John',
+					'sneakers',
+				),
+			).toBe(true);
 		});
 
 		it('matches "removed" pattern', () => {
 			const terms = buildItemSearchTerms('sneakers');
-			expect(propMatchesItem('sneakers John removed', terms, 'John', 'sneakers')).toBe(true);
+			expect(
+				propMatchesItem('sneakers John removed', terms, 'John', 'sneakers'),
+			).toBe(true);
 		});
 
 		it('matches "from" pattern', () => {
 			const terms = buildItemSearchTerms('sneakers');
-			expect(propMatchesItem('sneakers from John', terms, 'John', 'sneakers')).toBe(true);
+			expect(
+				propMatchesItem('sneakers from John', terms, 'John', 'sneakers'),
+			).toBe(true);
 		});
 	});
 
@@ -198,12 +236,16 @@ describe('propMatchesItem', () => {
 
 		it('matches char prefix with unknown type', () => {
 			const terms = buildItemSearchTerms('pink onesie');
-			expect(propMatchesItem("John's onesie", terms, 'John', 'pink onesie')).toBe(true);
+			expect(propMatchesItem("John's onesie", terms, 'John', 'pink onesie')).toBe(
+				true,
+			);
 		});
 
 		it('does not match other character for unknown type', () => {
 			const terms = buildItemSearchTerms('pink onesie');
-			expect(propMatchesItem("Lucy's onesie", terms, 'John', 'pink onesie')).toBe(false);
+			expect(propMatchesItem("Lucy's onesie", terms, 'John', 'pink onesie')).toBe(
+				false,
+			);
 		});
 	});
 });

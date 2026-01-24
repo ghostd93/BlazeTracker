@@ -13,31 +13,100 @@
  */
 export const CLOTHING_KEYWORDS = [
 	// Footwear
-	'sneakers', 'trainers', 'boots', 'heels', 'sandals', 'loafers', 'flats', 'shoes', 'slippers',
+	'sneakers',
+	'trainers',
+	'boots',
+	'heels',
+	'sandals',
+	'loafers',
+	'flats',
+	'shoes',
+	'slippers',
 	// Legwear
-	'stockings', 'tights', 'thigh-highs', 'knee-highs', 'socks',
-	'jeans', 'trousers', 'pants', 'shorts', 'skirt', 'leggings', 'sweatpants',
+	'stockings',
+	'tights',
+	'thigh-highs',
+	'knee-highs',
+	'socks',
+	'jeans',
+	'trousers',
+	'pants',
+	'shorts',
+	'skirt',
+	'leggings',
+	'sweatpants',
 	// Underwear
-	'panties', 'knickers', 'thong', 'boxers', 'briefs', 'underwear',
-	'sports bra', 'bralette', 'bra',
+	'panties',
+	'knickers',
+	'thong',
+	'boxers',
+	'briefs',
+	'underwear',
+	'sports bra',
+	'bralette',
+	'bra',
 	// Tops
-	'blouse', 't-shirt', 'tshirt', 'shirt', 'top', 'tank top', 'vest', 'camisole',
-	'sweater', 'jumper', 'hoodie', 'cardigan', 'pullover',
+	'blouse',
+	't-shirt',
+	'tshirt',
+	'shirt',
+	'top',
+	'tank top',
+	'vest',
+	'camisole',
+	'sweater',
+	'jumper',
+	'hoodie',
+	'cardigan',
+	'pullover',
 	// Outerwear
-	'jacket', 'coat', 'blazer', 'parka', 'windbreaker',
+	'jacket',
+	'coat',
+	'blazer',
+	'parka',
+	'windbreaker',
 	// Dresses
-	'dress', 'gown', 'sundress',
+	'dress',
+	'gown',
+	'sundress',
 	// Headwear
-	'hat', 'cap', 'beanie', 'hood',
+	'hat',
+	'cap',
+	'beanie',
+	'hood',
 ];
 
 /**
  * Common color words to extract from item descriptions.
  */
 export const COLOR_KEYWORDS = [
-	'black', 'white', 'red', 'blue', 'green', 'yellow', 'purple', 'pink', 'orange', 'brown',
-	'grey', 'gray', 'navy', 'cream', 'beige', 'tan', 'maroon', 'burgundy', 'teal', 'cyan',
-	'silver', 'gold', 'dark', 'light', 'pale', 'bright', 'pastel',
+	'black',
+	'white',
+	'red',
+	'blue',
+	'green',
+	'yellow',
+	'purple',
+	'pink',
+	'orange',
+	'brown',
+	'grey',
+	'gray',
+	'navy',
+	'cream',
+	'beige',
+	'tan',
+	'maroon',
+	'burgundy',
+	'teal',
+	'cyan',
+	'silver',
+	'gold',
+	'dark',
+	'light',
+	'pale',
+	'bright',
+	'pastel',
 ];
 
 /**
@@ -45,7 +114,7 @@ export const COLOR_KEYWORDS = [
  */
 export const CHAR_PREFIX_PATTERNS = [
 	(char: string) => `${char}'s `,
-	(char: string) => `${char}s `,  // Without apostrophe
+	(char: string) => `${char}s `, // Without apostrophe
 ];
 
 /**
@@ -119,11 +188,14 @@ export function buildItemSearchTerms(itemName: string): string[] {
 	} else {
 		// No known clothing type - add individual words as fallback
 		// This helps match "onesie" when item is "pink onesie"
-		const words = lower.split(/\s+/).filter(w =>
-			w.length > 2 &&
-			!COLOR_KEYWORDS.includes(w) &&
-			!['the', 'and', 'with'].includes(w)
-		);
+		const words = lower
+			.split(/\s+/)
+			.filter(
+				w =>
+					w.length > 2 &&
+					!COLOR_KEYWORDS.includes(w) &&
+					!['the', 'and', 'with'].includes(w),
+			);
 		terms.push(...words);
 	}
 
@@ -191,7 +263,7 @@ export function propMatchesItem(
 
 			// If no possessive marker at all, it's probably a generic prop that matches
 			// e.g., "sneakers on the floor" matches anyone's sneakers
-			if (!propLower.includes("'s") && !propLower.includes("belonging to")) {
+			if (!propLower.includes("'s") && !propLower.includes('belonging to')) {
 				return true;
 			}
 		}
@@ -204,12 +276,18 @@ export function propMatchesItem(
 			// Check if any search term appears after the prefix
 			const afterPrefix = propLower.slice(prefix.length);
 			for (const term of itemSearchTerms) {
-				if (afterPrefix.includes(term) || term.includes(afterPrefix.split(' ')[0])) {
+				if (
+					afterPrefix.includes(term) ||
+					term.includes(afterPrefix.split(' ')[0])
+				) {
 					return true;
 				}
 			}
 			// Fallback: check if the afterPrefix is substring of item or vice versa
-			if (afterPrefix.length > 2 && (itemLower.includes(afterPrefix) || afterPrefix.includes(itemLower))) {
+			if (
+				afterPrefix.length > 2 &&
+				(itemLower.includes(afterPrefix) || afterPrefix.includes(itemLower))
+			) {
 				return true;
 			}
 		}

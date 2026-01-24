@@ -29,3 +29,7 @@ yarn-error.log*
 # Environment
 .env
 .env.local
+
+# Claude Code
+CLAUDE.md
+plans/

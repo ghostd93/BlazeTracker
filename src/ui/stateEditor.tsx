@@ -5,7 +5,7 @@
  * Uses ST's popup system to display.
  *
  * Only shows sections for fields that exist in the state.
- * Preserves optionality - undefined fields stay undefined.
+ * Preserves optionality - undefined fields stays undefined.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -13,62 +13,28 @@ import ReactDOM from 'react-dom/client';
 import type {
 	TrackedState,
 	Character,
-	CharacterOutfit,
 	Climate,
 	Scene,
 	NarrativeDateTime,
 	LocationState,
+	WeatherCondition,
 } from '../types/state';
 import { toDisplayTemp, toStorageTemp } from '../utils/temperatures';
 import { getSettings } from '../settings';
-
-// --- Constants from Schema ---
-
-const WEATHER_OPTIONS = ['sunny', 'cloudy', 'snowy', 'rainy', 'windy', 'thunderstorm'] as const;
-const DAYS_OF_WEEK = [
-	'Sunday',
-	'Monday',
-	'Tuesday',
-	'Wednesday',
-	'Thursday',
-	'Friday',
-	'Saturday',
-] as const;
-const MONTH_NAMES = [
-	'January',
-	'February',
-	'March',
-	'April',
-	'May',
-	'June',
-	'July',
-	'August',
-	'September',
-	'October',
-	'November',
-	'December',
-] as const;
-const OUTFIT_SLOTS = ['head', 'jacket', 'torso', 'legs', 'underwear', 'socks', 'footwear'] as const;
-
-const TENSION_LEVELS = [
-	'relaxed',
-	'aware',
-	'guarded',
-	'tense',
-	'charged',
-	'volatile',
-	'explosive',
-] as const;
-const TENSION_DIRECTIONS = ['escalating', 'stable', 'decreasing'] as const;
-const TENSION_TYPES = [
-	'confrontation',
-	'intimate',
-	'vulnerable',
-	'celebratory',
-	'negotiation',
-	'suspense',
-	'conversation',
-] as const;
+import {
+	WEATHER_OPTIONS,
+	WEATHER_CONDITIONS,
+	WEATHER_CONDITION_LABELS,
+	BUILDING_TYPES,
+	BUILDING_TYPE_LABELS,
+	DAYS_OF_WEEK,
+	MONTH_NAMES,
+	TENSION_LEVELS,
+	TENSION_DIRECTIONS,
+	TENSION_TYPES,
+} from './constants';
+import { TagInput, OutfitEditor } from './components/form';
+import { isLegacyClimate } from '../weather';
 
 // --- Types ---
 
@@ -97,19 +63,21 @@ function createEmptyCharacter(): Character {
 		name: '',
 		position: '',
 		activity: '',
-		goals: [],
+		// Note: goals removed in v1.0.0, now tracked in CharacterArc
 		mood: [],
 		physicalState: [],
 		outfit: {
 			head: null,
+			neck: null,
 			jacket: null,
+			back: null,
 			torso: null,
 			legs: null,
 			socks: null,
 			underwear: null,
 			footwear: null,
 		},
-		dispositions: {},
+		// Note: dispositions removed in v1.0.0, now tracked in Relationship
 	};
 }
 
@@ -151,7 +119,7 @@ function createEmptyScene(): Scene {
 			direction: 'stable',
 			type: 'conversation',
 		},
-		recentEvents: [],
+		// Note: recentEvents removed in v1.0.0, replaced by currentEvents on TrackedState
 	};
 }
 
@@ -212,8 +180,22 @@ function validateState(state: TrackedState): ValidationErrors {
 
 	// Climate (only validate if present)
 	if (state.climate) {
-		if (!WEATHER_OPTIONS.includes(state.climate.weather as any)) {
-			errors['climate.weather'] = 'Invalid weather';
+		if (isLegacyClimate(state.climate)) {
+			if (
+				!(WEATHER_OPTIONS as readonly string[]).includes(
+					state.climate.weather,
+				)
+			) {
+				errors['climate.weather'] = 'Invalid weather';
+			}
+		} else {
+			if (
+				!(WEATHER_CONDITIONS as readonly string[]).includes(
+					state.climate.conditionType,
+				)
+			) {
+				errors['climate.conditionType'] = 'Invalid condition type';
+			}
 		}
 	}
 
@@ -234,248 +216,13 @@ function validateState(state: TrackedState): ValidationErrors {
 
 // --- Sub-Components ---
 
-/** Tag input for arrays of strings (mood, physicalState, etc.) */
-function TagInput({
-	tags,
-	onChange,
-	placeholder = 'Add...',
-}: {
-	tags: string[];
-	onChange: (tags: string[]) => void;
-	placeholder?: string;
-}) {
-	const [input, setInput] = useState('');
-
-	const addTag = () => {
-		const trimmed = input.trim();
-		if (trimmed && !tags.includes(trimmed)) {
-			onChange([...tags, trimmed]);
-			setInput('');
-		}
-	};
-
-	const removeTag = (tag: string) => {
-		onChange(tags.filter(t => t !== tag));
-	};
-
-	return (
-		<div className="bt-tag-input">
-			<div className="bt-tags">
-				{tags.map(tag => (
-					<span key={tag} className="bt-tag">
-						{tag}
-						<button
-							type="button"
-							onClick={() => removeTag(tag)}
-							className="bt-tag-x"
-						>
-							×
-						</button>
-					</span>
-				))}
-			</div>
-			<div className="bt-tag-add">
-				<input
-					type="text"
-					value={input}
-					onChange={e => setInput(e.target.value)}
-					onKeyDown={e =>
-						e.key === 'Enter' && (e.preventDefault(), addTag())
-					}
-					placeholder={placeholder}
-				/>
-				<button type="button" onClick={addTag}>
-					+
-				</button>
-			</div>
-		</div>
-	);
-}
-
-/** Event list editor - similar to TagInput but for longer items */
-function EventListEditor({
-	events,
-	onChange,
-}: {
-	events: string[];
-	onChange: (events: string[]) => void;
-}) {
-	const [input, setInput] = useState('');
-
-	const addEvent = () => {
-		const trimmed = input.trim();
-		if (trimmed && !events.includes(trimmed)) {
-			onChange([...events, trimmed]);
-			setInput('');
-		}
-	};
-
-	const removeEvent = (idx: number) => {
-		onChange(events.filter((_, i) => i !== idx));
-	};
-
-	return (
-		<div className="bt-event-list">
-			{events.map((event, idx) => (
-				<div key={idx} className="bt-event-item">
-					<span className="bt-event-text">{event}</span>
-					<button
-						type="button"
-						onClick={() => removeEvent(idx)}
-						className="bt-x"
-					>
-						×
-					</button>
-				</div>
-			))}
-			<div className="bt-event-add">
-				<input
-					type="text"
-					value={input}
-					onChange={e => setInput(e.target.value)}
-					onKeyDown={e =>
-						e.key === 'Enter' &&
-						(e.preventDefault(), addEvent())
-					}
-					placeholder="Add recent event..."
-				/>
-				<button type="button" onClick={addEvent}>
-					+
-				</button>
-			</div>
-			{events.length >= 5 && (
-				<div className="bt-event-hint">Max 5 events recommended</div>
-			)}
-		</div>
-	);
-}
-
-/** Outfit editor with nullable slots */
-function OutfitEditor({
-	outfit,
-	onChange,
-}: {
-	outfit: CharacterOutfit;
-	onChange: (o: CharacterOutfit) => void;
-}) {
-	const update = (slot: keyof CharacterOutfit, value: string | null) => {
-		onChange({ ...outfit, [slot]: value || null });
-	};
-
-	return (
-		<div className="bt-outfit-grid">
-			{OUTFIT_SLOTS.map(slot => (
-				<div key={slot} className="bt-outfit-slot">
-					<label>{slot}</label>
-					<div className="bt-outfit-row">
-						<input
-							type="text"
-							value={outfit[slot] || ''}
-							onChange={e => update(slot, e.target.value)}
-							placeholder="None"
-						/>
-						{outfit[slot] && (
-							<button
-								type="button"
-								onClick={() => update(slot, null)}
-								className="bt-x"
-							>
-								×
-							</button>
-						)}
-					</div>
-				</div>
-			))}
-		</div>
-	);
-}
-
-/** Dispositions editor - feelings toward other characters */
-function DispositionsEditor({
-	dispositions,
-	otherNames,
-	onChange,
-}: {
-	dispositions: Record<string, string[]>;
-	otherNames: string[];
-	onChange: (d: Record<string, string[]>) => void;
-}) {
-	const [selectedName, setSelectedName] = useState('');
-
-	const addDisposition = (name: string) => {
-		if (name && !dispositions[name]) {
-			onChange({ ...dispositions, [name]: [] });
-		}
-		setSelectedName('');
-	};
-
-	const updateFeelings = (name: string, feelings: string[]) => {
-		onChange({ ...dispositions, [name]: feelings });
-	};
-
-	const removeDisposition = (name: string) => {
-		const { [name]: _, ...rest } = dispositions;
-		onChange(rest);
-	};
-
-	// Names not yet in dispositions
-	const availableNames = otherNames.filter(n => !dispositions[n]);
-
-	return (
-		<div className="bt-dispositions">
-			{Object.entries(dispositions).map(([name, feelings]) => (
-				<div key={name} className="bt-disposition-item">
-					<div className="bt-disposition-header">
-						<span className="bt-disposition-name">→ {name}</span>
-						<button
-							type="button"
-							onClick={() => removeDisposition(name)}
-							className="bt-x"
-						>
-							×
-						</button>
-					</div>
-					<TagInput
-						tags={feelings}
-						onChange={f => updateFeelings(name, f)}
-						placeholder="Add feeling..."
-					/>
-				</div>
-			))}
-			{availableNames.length > 0 && (
-				<div className="bt-add-disposition">
-					<select
-						value={selectedName}
-						onChange={e => setSelectedName(e.target.value)}
-					>
-						<option value="">Add feelings toward...</option>
-						{availableNames.map(name => (
-							<option key={name} value={name}>
-								{name}
-							</option>
-						))}
-					</select>
-					{selectedName && (
-						<button
-							type="button"
-							onClick={() => addDisposition(selectedName)}
-						>
-							+
-						</button>
-					)}
-				</div>
-			)}
-		</div>
-	);
-}
-
 /** Character editor */
 function CharacterEditor({
 	character,
 	index,
 	onChange,
 	onRemove,
-	otherNames,
+	otherNames: _otherNames,
 	errors,
 }: {
 	character: Character;
@@ -516,9 +263,16 @@ function CharacterEditor({
 							<input
 								type="text"
 								value={character.name}
-								onChange={e => update('name', e.target.value)}
+								onChange={e =>
+									update(
+										'name',
+										e.target.value,
+									)
+								}
 								className={
-									errors[`char.${index}.name`] ? 'bt-err' : ''
+									errors[`char.${index}.name`]
+										? 'bt-err'
+										: ''
 								}
 							/>
 						</div>
@@ -528,7 +282,11 @@ function CharacterEditor({
 								type="text"
 								value={character.activity || ''}
 								onChange={e =>
-									update('activity', e.target.value || undefined)
+									update(
+										'activity',
+										e.target.value ||
+											undefined,
+									)
 								}
 							/>
 						</div>
@@ -539,9 +297,13 @@ function CharacterEditor({
 						<input
 							type="text"
 							value={character.position}
-							onChange={e => update('position', e.target.value)}
+							onChange={e =>
+								update('position', e.target.value)
+							}
 							className={
-								errors[`char.${index}.position`] ? 'bt-err' : ''
+								errors[`char.${index}.position`]
+									? 'bt-err'
+									: ''
 							}
 						/>
 					</div>
@@ -556,14 +318,7 @@ function CharacterEditor({
 						/>
 					</div>
 
-					<div className="bt-field">
-						<label>Goals</label>
-						<TagInput
-							tags={character.goals || []}
-							onChange={t => update('goals', t)}
-							placeholder="find the artifact..."
-						/>
-					</div>
+					{/* Note: Goals removed in v1.0.0, now tracked in CharacterArc */}
 
 					<div className="bt-field">
 						<label>Physical State</label>
@@ -583,15 +338,7 @@ function CharacterEditor({
 						/>
 					</div>
 
-					{/* Dispositions */}
-					<div className="bt-field">
-						<label>Dispositions</label>
-						<DispositionsEditor
-							dispositions={character.dispositions || {}}
-							otherNames={otherNames}
-							onChange={d => update('dispositions', d)}
-						/>
-					</div>
+					{/* Note: Dispositions removed in v1.0.0, now tracked in Relationship */}
 				</div>
 			</details>
 		</div>
@@ -607,7 +354,7 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 	// Clone the state to avoid mutating the original
 	// Keep undefined fields as undefined
 	const [state, setState] = useState<TrackedState>(() =>
-		initialState ? cloneState(initialState) : {}
+		initialState ? cloneState(initialState) : {},
 	);
 	const [errors, setErrors] = useState<ValidationErrors>({});
 	const [tab, setTab] = useState<'scene' | 'chars'>('scene');
@@ -683,18 +430,15 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 	};
 
 	// Location
-	const updateLocation = (
-		field: keyof LocationState,
-		value: string | string[],
-	) => {
+	const updateLocation = (field: keyof LocationState, value: string | string[]) => {
 		setState(s => {
 			if (!s.location) return s;
 			return { ...s, location: { ...s.location, [field]: value } };
 		});
 	};
 
-	// Climate
-	const updateClimate = (field: keyof Climate, value: any) => {
+	// Climate (handles both legacy Climate and ProceduralClimate)
+	const updateClimate = (field: string, value: any) => {
 		setState(s => {
 			if (!s.climate) return s;
 			return {
@@ -744,19 +488,34 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 
 	// Remove sections (switch tabs if needed)
 	const removeTime = () => {
-		setState(s => { const { time, ...rest } = s; return rest; });
+		setState(s => {
+			const { time: _time, ...rest } = s;
+			return rest;
+		});
 	};
 	const removeLocation = () => {
-		setState(s => { const { location, ...rest } = s; return rest; });
+		setState(s => {
+			const { location: _location, ...rest } = s;
+			return rest;
+		});
 	};
 	const removeClimate = () => {
-		setState(s => { const { climate, ...rest } = s; return rest; });
+		setState(s => {
+			const { climate: _climate, ...rest } = s;
+			return rest;
+		});
 	};
 	const removeScene = () => {
-		setState(s => { const { scene, ...rest } = s; return rest; });
+		setState(s => {
+			const { scene: _scene, ...rest } = s;
+			return rest;
+		});
 	};
 	const removeCharacters = () => {
-		setState(s => { const { characters, ...rest } = s; return rest; });
+		setState(s => {
+			const { characters: _characters, ...rest } = s;
+			return rest;
+		});
 		// Switch to scene tab since characters tab will be gone
 		setTab('scene');
 	};
@@ -773,9 +532,8 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 	const hasErrors = Object.keys(errors).length > 0;
 
 	// Calculate max days for current month (only if time exists)
-	const maxDaysInMonth = hasTime && state.time
-		? getDaysInMonth(state.time.year, state.time.month)
-		: 31;
+	const maxDaysInMonth =
+		hasTime && state.time ? getDaysInMonth(state.time.year, state.time.month) : 31;
 
 	// Check what sections are missing (for add buttons)
 	const missingSections = {
@@ -795,27 +553,48 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 			<div className="bt-add-sections">
 				<span className="bt-add-sections-label">Add section:</span>
 				{missingSections.scene && (
-					<button type="button" onClick={addScene} className="bt-btn-small">
+					<button
+						type="button"
+						onClick={addScene}
+						className="bt-btn-small"
+					>
 						<i className="fa-solid fa-clapperboard"></i> Scene
 					</button>
 				)}
 				{missingSections.time && (
-					<button type="button" onClick={addTime} className="bt-btn-small">
+					<button
+						type="button"
+						onClick={addTime}
+						className="bt-btn-small"
+					>
 						<i className="fa-regular fa-clock"></i> Time
 					</button>
 				)}
 				{missingSections.location && (
-					<button type="button" onClick={addLocation} className="bt-btn-small">
-						<i className="fa-solid fa-map-marker-alt"></i> Location
+					<button
+						type="button"
+						onClick={addLocation}
+						className="bt-btn-small"
+					>
+						<i className="fa-solid fa-map-marker-alt"></i>{' '}
+						Location
 					</button>
 				)}
 				{missingSections.climate && (
-					<button type="button" onClick={addClimate} className="bt-btn-small">
+					<button
+						type="button"
+						onClick={addClimate}
+						className="bt-btn-small"
+					>
 						<i className="fa-solid fa-cloud-sun"></i> Climate
 					</button>
 				)}
 				{missingSections.characters && (
-					<button type="button" onClick={addCharacters} className="bt-btn-small">
+					<button
+						type="button"
+						onClick={addCharacters}
+						className="bt-btn-small"
+					>
 						<i className="fa-solid fa-users"></i> Characters
 					</button>
 				)}
@@ -890,13 +669,25 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 									<label>Topic *</label>
 									<input
 										type="text"
-										value={state.scene.topic}
+										value={
+											state.scene
+												.topic
+										}
 										onChange={e =>
-											updateScene('topic', e.target.value)
+											updateScene(
+												'topic',
+												e
+													.target
+													.value,
+											)
 										}
 										placeholder="What's the scene about?"
 										className={
-											errors['scene.topic'] ? 'bt-err' : ''
+											errors[
+												'scene.topic'
+											]
+												? 'bt-err'
+												: ''
 										}
 									/>
 								</div>
@@ -904,13 +695,25 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 									<label>Tone *</label>
 									<input
 										type="text"
-										value={state.scene.tone}
+										value={
+											state.scene
+												.tone
+										}
 										onChange={e =>
-											updateScene('tone', e.target.value)
+											updateScene(
+												'tone',
+												e
+													.target
+													.value,
+											)
 										}
 										placeholder="Emotional atmosphere..."
 										className={
-											errors['scene.tone'] ? 'bt-err' : ''
+											errors[
+												'scene.tone'
+											]
+												? 'bt-err'
+												: ''
 										}
 									/>
 								</div>
@@ -921,72 +724,126 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 								<div className="bt-field">
 									<label>Tension Level</label>
 									<select
-										value={state.scene.tension.level}
+										value={
+											state.scene
+												.tension
+												.level
+										}
 										onChange={e =>
 											updateTension(
 												'level',
-												e.target.value,
+												e
+													.target
+													.value,
 											)
 										}
 									>
-										{TENSION_LEVELS.map(l => (
-											<option key={l} value={l}>
-												{l.charAt(0).toUpperCase() +
-													l.slice(1)}
-											</option>
-										))}
+										{TENSION_LEVELS.map(
+											l => (
+												<option
+													key={
+														l
+													}
+													value={
+														l
+													}
+												>
+													{l
+														.charAt(
+															0,
+														)
+														.toUpperCase() +
+														l.slice(
+															1,
+														)}
+												</option>
+											),
+										)}
 									</select>
 								</div>
 								<div className="bt-field">
 									<label>Direction</label>
 									<select
-										value={state.scene.tension.direction}
+										value={
+											state.scene
+												.tension
+												.direction
+										}
 										onChange={e =>
 											updateTension(
 												'direction',
-												e.target.value,
+												e
+													.target
+													.value,
 											)
 										}
 									>
-										{TENSION_DIRECTIONS.map(d => (
-											<option key={d} value={d}>
-												{d.charAt(0).toUpperCase() +
-													d.slice(1)}
-											</option>
-										))}
+										{TENSION_DIRECTIONS.map(
+											d => (
+												<option
+													key={
+														d
+													}
+													value={
+														d
+													}
+												>
+													{d
+														.charAt(
+															0,
+														)
+														.toUpperCase() +
+														d.slice(
+															1,
+														)}
+												</option>
+											),
+										)}
 									</select>
 								</div>
 								<div className="bt-field">
 									<label>Type</label>
 									<select
-										value={state.scene.tension.type}
+										value={
+											state.scene
+												.tension
+												.type
+										}
 										onChange={e =>
 											updateTension(
 												'type',
-												e.target.value,
+												e
+													.target
+													.value,
 											)
 										}
 									>
-										{TENSION_TYPES.map(t => (
-											<option key={t} value={t}>
-												{t.charAt(0).toUpperCase() +
-													t.slice(1)}
-											</option>
-										))}
+										{TENSION_TYPES.map(
+											t => (
+												<option
+													key={
+														t
+													}
+													value={
+														t
+													}
+												>
+													{t
+														.charAt(
+															0,
+														)
+														.toUpperCase() +
+														t.slice(
+															1,
+														)}
+												</option>
+											),
+										)}
 									</select>
 								</div>
 							</div>
 
-							{/* Recent Events */}
-							<div className="bt-field">
-								<label>Recent Events</label>
-								<EventListEditor
-									events={state.scene.recentEvents}
-									onChange={e =>
-										updateScene('recentEvents', e)
-									}
-								/>
-							</div>
+							{/* Note: Recent Events removed in v1.0.0, replaced by currentEvents on TrackedState */}
 						</fieldset>
 					)}
 
@@ -994,7 +851,8 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 					{hasTime && state.time && (
 						<fieldset className="bt-section">
 							<legend>
-								<i className="fa-regular fa-clock"></i> Time
+								<i className="fa-regular fa-clock"></i>{' '}
+								Time
 								<button
 									type="button"
 									className="bt-section-remove"
@@ -1012,38 +870,75 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 										type="number"
 										min={1}
 										max={9999}
-										value={state.time.year}
+										value={
+											state.time
+												.year
+										}
 										onChange={e =>
 											updateTime(
 												'year',
-												parseInt(e.target.value) ||
-												2024,
+												parseInt(
+													e
+														.target
+														.value,
+												) ||
+													2024,
 											)
 										}
 										className={
-											errors['time.year'] ? 'bt-err' : ''
+											errors[
+												'time.year'
+											]
+												? 'bt-err'
+												: ''
 										}
 									/>
 								</div>
 								<div className="bt-field">
 									<label>Month</label>
 									<select
-										value={state.time.month}
+										value={
+											state.time
+												.month
+										}
 										onChange={e =>
 											updateTime(
 												'month',
-												parseInt(e.target.value),
+												parseInt(
+													e
+														.target
+														.value,
+												),
 											)
 										}
 										className={
-											errors['time.month'] ? 'bt-err' : ''
+											errors[
+												'time.month'
+											]
+												? 'bt-err'
+												: ''
 										}
 									>
-										{MONTH_NAMES.map((name, idx) => (
-											<option key={idx} value={idx + 1}>
-												{name}
-											</option>
-										))}
+										{MONTH_NAMES.map(
+											(
+												name,
+												idx,
+											) => (
+												<option
+													key={
+														idx
+													}
+													value={
+														idx +
+														1
+													}
+												>
+													{
+														name
+													}
+												</option>
+											),
+										)}
 									</select>
 								</div>
 								<div className="bt-field">
@@ -1052,17 +947,25 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 										type="number"
 										min={1}
 										max={maxDaysInMonth}
-										value={state.time.day}
+										value={
+											state.time
+												.day
+										}
 										onChange={e =>
 											updateTime(
 												'day',
 												parseInt(
-													e.target.value,
-												) || 1,
+													e
+														.target
+														.value,
+												) ||
+													1,
 											)
 										}
 										className={
-											errors['time.day']
+											errors[
+												'time.day'
+											]
 												? 'bt-err'
 												: ''
 										}
@@ -1078,17 +981,25 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 										type="number"
 										min={0}
 										max={23}
-										value={state.time.hour}
+										value={
+											state.time
+												.hour
+										}
 										onChange={e =>
 											updateTime(
 												'hour',
 												parseInt(
-													e.target.value,
-												) || 0,
+													e
+														.target
+														.value,
+												) ||
+													0,
 											)
 										}
 										className={
-											errors['time.hour']
+											errors[
+												'time.hour'
+											]
 												? 'bt-err'
 												: ''
 										}
@@ -1100,17 +1011,25 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 										type="number"
 										min={0}
 										max={59}
-										value={state.time.minute}
+										value={
+											state.time
+												.minute
+										}
 										onChange={e =>
 											updateTime(
 												'minute',
 												parseInt(
-													e.target.value,
-												) || 0,
+													e
+														.target
+														.value,
+												) ||
+													0,
 											)
 										}
 										className={
-											errors['time.minute']
+											errors[
+												'time.minute'
+											]
 												? 'bt-err'
 												: ''
 										}
@@ -1120,7 +1039,10 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 									<label>Day of Week</label>
 									<input
 										type="text"
-										value={state.time.dayOfWeek}
+										value={
+											state.time
+												.dayOfWeek
+										}
 										disabled
 										style={{
 											opacity: 0.7,
@@ -1155,12 +1077,15 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 									onChange={e =>
 										updateLocation(
 											'area',
-											e.target.value,
+											e.target
+												.value,
 										)
 									}
 									placeholder="City, district, region..."
 									className={
-										errors['location.area']
+										errors[
+											'location.area'
+										]
 											? 'bt-err'
 											: ''
 									}
@@ -1174,12 +1099,15 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 									onChange={e =>
 										updateLocation(
 											'place',
-											e.target.value,
+											e.target
+												.value,
 										)
 									}
 									placeholder="Building, establishment, room..."
 									className={
-										errors['location.place']
+										errors[
+											'location.place'
+										]
 											? 'bt-err'
 											: ''
 									}
@@ -1189,16 +1117,22 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 								<label>Position *</label>
 								<input
 									type="text"
-									value={state.location.position}
+									value={
+										state.location
+											.position
+									}
 									onChange={e =>
 										updateLocation(
 											'position',
-											e.target.value,
+											e.target
+												.value,
 										)
 									}
 									placeholder="Position within the place..."
 									className={
-										errors['location.position']
+										errors[
+											'location.position'
+										]
 											? 'bt-err'
 											: ''
 									}
@@ -1207,9 +1141,15 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 							<div className="bt-field">
 								<label>Props</label>
 								<TagInput
-									tags={state.location.props || []}
+									tags={
+										state.location
+											.props || []
+									}
 									onChange={t =>
-										updateLocation('props', t)
+										updateLocation(
+											'props',
+											t,
+										)
 									}
 									placeholder="Add props..."
 								/>
@@ -1232,79 +1172,419 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 									<i className="fa-solid fa-trash"></i>
 								</button>
 							</legend>
-							<div className="bt-row-2">
-								<div className="bt-field">
-									<label>Weather</label>
-									<select
-										value={state.climate.weather}
-										onChange={e =>
-											updateClimate(
-												'weather',
-												e.target.value as Climate['weather'],
-											)
-										}
-									>
-										{WEATHER_OPTIONS.map(w => (
-											<option key={w} value={w}>
-												{w.charAt(0).toUpperCase() +
-													w.slice(1)}
-											</option>
-										))}
-									</select>
-								</div>
-								<div className="bt-field">
-									<label>
-										Temperature (
-										{tempUnit === 'celsius'
-											? '°C'
-											: '°F'}
-										)
-									</label>
-									<input
-										type="number"
-										value={toDisplayTemp(
-											state.climate.temperature,
-											tempUnit,
-										)}
-										onChange={e =>
-											updateClimate(
-												'temperature',
-												toStorageTemp(
-													parseInt(
-														e.target.value,
-													) || 0,
-													tempUnit,
+							{isLegacyClimate(state.climate) ? (
+								/* Legacy Climate Editor */
+								<div className="bt-row-2">
+									<div className="bt-field">
+										<label>
+											Weather
+										</label>
+										<select
+											value={
+												state
+													.climate
+													.weather
+											}
+											onChange={e =>
+												updateClimate(
+													'weather',
+													e
+														.target
+														.value as Climate['weather'],
+												)
+											}
+										>
+											{WEATHER_OPTIONS.map(
+												w => (
+													<option
+														key={
+															w
+														}
+														value={
+															w
+														}
+													>
+														{w
+															.charAt(
+																0,
+															)
+															.toUpperCase() +
+															w.slice(
+																1,
+															)}
+													</option>
 												),
+											)}
+										</select>
+									</div>
+									<div className="bt-field">
+										<label>
+											Temperature
+											(
+											{tempUnit ===
+											'celsius'
+												? '°C'
+												: '°F'}
 											)
-										}
-									/>
+										</label>
+										<input
+											type="number"
+											value={toDisplayTemp(
+												state
+													.climate
+													.temperature,
+												tempUnit,
+											)}
+											onChange={e =>
+												updateClimate(
+													'temperature',
+													toStorageTemp(
+														parseInt(
+															e
+																.target
+																.value,
+														) ||
+															0,
+														tempUnit,
+													),
+												)
+											}
+										/>
+									</div>
 								</div>
-							</div>
+							) : (
+								/* Procedural Climate Editor */
+								<>
+									<div className="bt-row-2">
+										<div className="bt-field">
+											<label>
+												Condition
+											</label>
+											<select
+												value={
+													state
+														.climate
+														.conditionType
+												}
+												onChange={e =>
+													updateClimate(
+														'conditionType',
+														e
+															.target
+															.value as WeatherCondition,
+													)
+												}
+											>
+												{WEATHER_CONDITIONS.map(
+													c => (
+														<option
+															key={
+																c
+															}
+															value={
+																c
+															}
+														>
+															{
+																WEATHER_CONDITION_LABELS[
+																	c
+																]
+															}
+														</option>
+													),
+												)}
+											</select>
+										</div>
+										<div className="bt-field">
+											<label>
+												Temperature
+												(
+												{tempUnit ===
+												'celsius'
+													? '°C'
+													: '°F'}
+												)
+											</label>
+											<input
+												type="number"
+												value={toDisplayTemp(
+													state
+														.climate
+														.temperature,
+													tempUnit,
+												)}
+												onChange={e =>
+													updateClimate(
+														'temperature',
+														toStorageTemp(
+															parseInt(
+																e
+																	.target
+																	.value,
+															) ||
+																0,
+															tempUnit,
+														),
+													)
+												}
+											/>
+										</div>
+									</div>
+									<div className="bt-row-2">
+										<div className="bt-field">
+											<label>
+												Humidity
+												(%)
+											</label>
+											<input
+												type="number"
+												min="0"
+												max="100"
+												value={
+													state
+														.climate
+														.humidity
+												}
+												onChange={e =>
+													updateClimate(
+														'humidity',
+														parseInt(
+															e
+																.target
+																.value,
+														) ||
+															0,
+													)
+												}
+											/>
+										</div>
+										<div className="bt-field">
+											<label>
+												Wind
+												Speed
+												(mph)
+											</label>
+											<input
+												type="number"
+												min="0"
+												value={
+													state
+														.climate
+														.windSpeed
+												}
+												onChange={e =>
+													updateClimate(
+														'windSpeed',
+														parseInt(
+															e
+																.target
+																.value,
+														) ||
+															0,
+													)
+												}
+											/>
+										</div>
+									</div>
+									<div className="bt-row-2">
+										<div className="bt-field">
+											<label>
+												Cloud
+												Cover
+												(%)
+											</label>
+											<input
+												type="number"
+												min="0"
+												max="100"
+												value={
+													state
+														.climate
+														.cloudCover
+												}
+												onChange={e =>
+													updateClimate(
+														'cloudCover',
+														parseInt(
+															e
+																.target
+																.value,
+														) ||
+															0,
+													)
+												}
+											/>
+										</div>
+										<div className="bt-field">
+											<label>
+												Indoors
+											</label>
+											<select
+												value={
+													state
+														.climate
+														.isIndoors
+														? 'yes'
+														: 'no'
+												}
+												onChange={e =>
+													updateClimate(
+														'isIndoors',
+														e
+															.target
+															.value ===
+															'yes',
+													)
+												}
+											>
+												<option value="no">
+													No
+													(Outdoors)
+												</option>
+												<option value="yes">
+													Yes
+													(Indoors)
+												</option>
+											</select>
+										</div>
+									</div>
+									{state.climate
+										.isIndoors && (
+										<div className="bt-row-2">
+											<div className="bt-field">
+												<label>
+													Building
+													Type
+												</label>
+												<select
+													value={
+														state
+															.climate
+															.buildingType ??
+														'modern'
+													}
+													onChange={e =>
+														updateClimate(
+															'buildingType',
+															e
+																.target
+																.value,
+														)
+													}
+												>
+													{BUILDING_TYPES.map(
+														b => (
+															<option
+																key={
+																	b
+																}
+																value={
+																	b
+																}
+															>
+																{
+																	BUILDING_TYPE_LABELS[
+																		b
+																	]
+																}
+															</option>
+														),
+													)}
+												</select>
+											</div>
+											<div className="bt-field">
+												<label>
+													Indoor
+													Temp
+													(
+													{tempUnit ===
+													'celsius'
+														? '°C'
+														: '°F'}
+
+													)
+												</label>
+												<input
+													type="number"
+													value={toDisplayTemp(
+														state
+															.climate
+															.indoorTemperature ??
+															state
+																.climate
+																.temperature,
+														tempUnit,
+													)}
+													onChange={e =>
+														updateClimate(
+															'indoorTemperature',
+															toStorageTemp(
+																parseInt(
+																	e
+																		.target
+																		.value,
+																) ||
+																	0,
+																tempUnit,
+															),
+														)
+													}
+												/>
+											</div>
+										</div>
+									)}
+								</>
+							)}
 						</fieldset>
 					)}
 
 					{/* Add section buttons for scene tab */}
-					{(missingSections.scene || missingSections.time || missingSections.location || missingSections.climate) && (
+					{(missingSections.scene ||
+						missingSections.time ||
+						missingSections.location ||
+						missingSections.climate) && (
 						<div className="bt-add-sections">
-							<span className="bt-add-sections-label">Add:</span>
+							<span className="bt-add-sections-label">
+								Add:
+							</span>
 							{missingSections.scene && (
-								<button type="button" onClick={addScene} className="bt-btn-small">
-									<i className="fa-solid fa-clapperboard"></i> Scene
+								<button
+									type="button"
+									onClick={addScene}
+									className="bt-btn-small"
+								>
+									<i className="fa-solid fa-clapperboard"></i>{' '}
+									Scene
 								</button>
 							)}
 							{missingSections.time && (
-								<button type="button" onClick={addTime} className="bt-btn-small">
-									<i className="fa-regular fa-clock"></i> Time
+								<button
+									type="button"
+									onClick={addTime}
+									className="bt-btn-small"
+								>
+									<i className="fa-regular fa-clock"></i>{' '}
+									Time
 								</button>
 							)}
 							{missingSections.location && (
-								<button type="button" onClick={addLocation} className="bt-btn-small">
-									<i className="fa-solid fa-map-marker-alt"></i> Location
+								<button
+									type="button"
+									onClick={addLocation}
+									className="bt-btn-small"
+								>
+									<i className="fa-solid fa-map-marker-alt"></i>{' '}
+									Location
 								</button>
 							)}
 							{missingSections.climate && (
-								<button type="button" onClick={addClimate} className="bt-btn-small">
-									<i className="fa-solid fa-cloud-sun"></i> Climate
+								<button
+									type="button"
+									onClick={addClimate}
+									className="bt-btn-small"
+								>
+									<i className="fa-solid fa-cloud-sun"></i>{' '}
+									Climate
 								</button>
 							)}
 						</div>
@@ -1323,7 +1603,8 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 							onClick={removeCharacters}
 							title="Remove all characters"
 						>
-							<i className="fa-solid fa-trash"></i> Remove Section
+							<i className="fa-solid fa-trash"></i> Remove
+							Section
 						</button>
 					</div>
 					<div className="bt-chars-list">
@@ -1351,9 +1632,23 @@ export function StateEditor({ initialState, onSave, onCancel }: StateEditorProps
 
 			{/* Show characters add button if on scene tab but no characters */}
 			{tab === 'scene' && missingSections.characters && (
-				<div className="bt-add-sections" style={{ marginTop: '1rem', borderTop: '1px solid var(--SmartThemeBorderColor)', paddingTop: '1rem' }}>
+				<div
+					className="bt-add-sections"
+					style={{
+						marginTop: '1rem',
+						borderTop: '1px solid var(--SmartThemeBorderColor)',
+						paddingTop: '1rem',
+					}}
+				>
 					<span className="bt-add-sections-label">Add:</span>
-					<button type="button" onClick={() => { addCharacters(); setTab('chars'); }} className="bt-btn-small">
+					<button
+						type="button"
+						onClick={() => {
+							addCharacters();
+							setTab('chars');
+						}}
+						className="bt-btn-small"
+					>
 						<i className="fa-solid fa-users"></i> Characters
 					</button>
 				</div>

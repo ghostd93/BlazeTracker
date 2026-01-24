@@ -2,20 +2,14 @@ import { getSettings, getTemperature } from '../settings';
 import { getPrompt } from './prompts';
 import { makeGeneratorRequest, buildExtractionMessages } from '../utils/generator';
 import { parseJsonResponse, asNumber } from '../utils/json';
+import type { NarrativeDateTime } from '../types/state';
+
+// Re-export for convenience (maintains backward compatibility)
+export type { NarrativeDateTime };
 
 // ============================================
 // Types
 // ============================================
-
-export interface NarrativeDateTime {
-	year: number;
-	month: number; // 1-12
-	day: number; // 1-31
-	hour: number; // 0-23
-	minute: number; // 0-59
-	second: number; // 0-59
-	dayOfWeek: string; // "Monday", "Tuesday", etc.
-}
 
 export interface TimeDelta {
 	hours: number;

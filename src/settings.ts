@@ -21,6 +21,17 @@ export interface BlazeTrackerSettings {
 	trackClimate: boolean;
 	trackCharacters: boolean;
 	trackScene: boolean;
+	trackEvents: boolean;
+	trackRelationships: boolean;
+	// Weather settings
+	useProceduralWeather: boolean;
+	injectWeatherTransitions: boolean;
+	// Chapter settings
+	chapterTimeThreshold: number;
+	injectedChapters: number;
+	// Relationship settings
+	relationshipRefreshInterval: number;
+	includeRelationshipSecrets: boolean;
 	// Other settings
 	leapThresholdMinutes: number;
 	temperatureUnit: 'fahrenheit' | 'celsius';
@@ -41,6 +52,17 @@ export const defaultSettings: BlazeTrackerSettings = {
 	trackClimate: true,
 	trackCharacters: true,
 	trackScene: true,
+	trackEvents: true,
+	trackRelationships: true,
+	// Weather settings
+	useProceduralWeather: true,
+	injectWeatherTransitions: true,
+	// Chapter settings
+	chapterTimeThreshold: 60,
+	injectedChapters: 3,
+	// Relationship settings
+	relationshipRefreshInterval: 10,
+	includeRelationshipSecrets: true,
 	// Other defaults
 	leapThresholdMinutes: 20,
 	temperatureUnit: 'fahrenheit',
@@ -57,10 +79,16 @@ export const defaultTemperatures: Record<string, number> = {
 	location_update: 0.5,
 	climate_initial: 0.3,
 	climate_update: 0.3,
+	climate_location_map: 0.4,
 	characters_initial: 0.7,
 	characters_update: 0.7,
 	scene_initial: 0.6,
 	scene_update: 0.6,
+	event_extract: 0.4,
+	chapter_boundary: 0.5,
+	relationship_initial: 0.6,
+	relationship_update: 0.6,
+	milestone_description: 0.7,
 };
 
 /**
@@ -91,5 +119,4 @@ export function updateSetting<K extends keyof BlazeTrackerSettings>(
 	const settings = settingsManager.getSettings();
 	settings[key] = value;
 	settingsManager.saveSettings();
-	console.log(`[BlazeTracker] Setting ${key} updated`);
 }

@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
-import type { CharacterOutfit, TrackedState, Scene, NarrativeDateTime, Character } from '../types/state';
+import type {
+	TrackedState,
+	StoredStateData,
+	NarrativeState,
+	TimestampedEvent,
+} from '../types/state';
 import type { STContext } from '../types/st';
 import { st_echo } from 'sillytavern-utils-lib/config';
-import { extractState } from '../extractors/extractState';
+import { extractState, updateSubsequentMessagesEvents } from '../extractors/extractState';
 import {
 	onExtractionProgress,
 	getStepLabel,
@@ -16,52 +21,20 @@ import { updateInjectionFromChat } from '../injectors/injectState';
 import { getSettings } from '../settings';
 import { resetTimeTracker, setTimeTrackerState } from '../extractors/extractTime';
 import { EXTENSION_NAME } from '../constants';
-import { formatTemperature } from '../utils/temperatures';
-import { applyTimeFormat } from '../utils/timeFormat';
-
-// --- Icon Mappings (UI concern, lives here not in state types) ---
-
-const TENSION_LEVEL_ICONS: Record<Scene['tension']['level'], string> = {
-	relaxed: 'fa-mug-hot',
-	aware: 'fa-eye',
-	guarded: 'fa-shield-halved',
-	tense: 'fa-face-grimace',
-	charged: 'fa-bolt',
-	volatile: 'fa-fire',
-	explosive: 'fa-explosion',
-};
-
-const TENSION_DIRECTION_ICONS: Record<Scene['tension']['direction'], string> = {
-	escalating: 'fa-arrow-trend-up',
-	stable: 'fa-grip-lines',
-	decreasing: 'fa-arrow-trend-down',
-};
-
-const TENSION_TYPE_ICONS: Record<Scene['tension']['type'], string> = {
-	confrontation: 'fa-hand-fist',
-	intimate: 'fa-heart',
-	vulnerable: 'fa-heart-crack',
-	celebratory: 'fa-champagne-glasses',
-	negotiation: 'fa-handshake',
-	suspense: 'fa-hourglass-half',
-	conversation: 'fa-comments',
-};
-
-const WEATHER_ICONS: Record<string, string> = {
-	sunny: 'fa-sun',
-	cloudy: 'fa-cloud',
-	snowy: 'fa-snowflake',
-	rainy: 'fa-cloud-rain',
-	windy: 'fa-wind',
-	thunderstorm: 'fa-cloud-bolt',
-};
-
-// --- Types ---
-
-interface StoredStateData {
-	state: TrackedState;
-	extractedAt: string;
-}
+import { formatTime, formatLocation } from './formatters';
+import {
+	SceneDisplay,
+	CharacterCard,
+	LoadingIndicator,
+	ClimateDisplay,
+} from './components/display';
+import { EventList } from './components/EventList';
+import { NarrativeModal, type DeletedEventInfo } from './components/NarrativeModal';
+import { getNarrativeState, saveNarrativeState } from '../state/narrativeState';
+import {
+	clearAllMilestonesForMessage,
+	getRelationshipsAtMessage,
+} from '../state/relationships';
 
 // Track React roots so we can unmount/update them
 const roots = new Map<number, ReactDOM.Root>();
@@ -69,218 +42,124 @@ const roots = new Map<number, ReactDOM.Root>();
 // Track ongoing extractions - exported so index.ts can check
 export const extractionInProgress = new Set<number>();
 
+// Track manual extraction in progress (prevents auto-extraction during manual)
+let manualExtractionInProgress = false;
+
 // Track current extraction step for UI updates
 let currentExtractionStep: ExtractionStep = 'idle';
 let currentExtractionMessageId: number | null = null;
 
-// --- Helper Functions ---
-
-function formatTime(time: NarrativeDateTime): string {
-	const settings = getSettings();
-	const MONTH_NAMES = [
-		'January',
-		'February',
-		'March',
-		'April',
-		'May',
-		'June',
-		'July',
-		'August',
-		'September',
-		'October',
-		'November',
-		'December',
-	];
-
-	const month = MONTH_NAMES[time.month - 1];
-
-	// "Mon, Jan 15, 14:30"
-	return `${time.dayOfWeek.slice(0, 3)}, ${month} ${time.day} ${time.year}, ${applyTimeFormat(time.hour, time.minute, settings.timeFormat)}`;
+/**
+ * Check if a manual extraction is currently in progress.
+ */
+export function isManualExtractionInProgress(): boolean {
+	return manualExtractionInProgress;
 }
 
-function formatLocation(location: NonNullable<TrackedState['location']>): string {
-	const parts = [location.position, location.place, location.area];
-	return parts.filter(Boolean).join(' · ');
-}
-
-function formatOutfit(outfit: CharacterOutfit): string {
-	const outfitParts = [
-		outfit.torso || 'topless',
-		outfit.legs || 'bottomless',
-		outfit.underwear || 'no underwear',
-		outfit.head || null,
-		outfit.jacket || null,
-		outfit.footwear || null,
-	];
-	return outfitParts.filter((v: string | null) => v !== null).join(', ');
-}
-
-function getWeatherIcon(weather: string): string {
-	return WEATHER_ICONS[weather] ?? 'fa-question';
+/**
+ * Set the manual extraction flag.
+ */
+export function setManualExtractionInProgress(value: boolean): void {
+	manualExtractionInProgress = value;
 }
 
 // --- React Components ---
 
-interface SceneDisplayProps {
-	scene: Scene;
-}
-
-function SceneDisplay({ scene }: SceneDisplayProps) {
-	const { tension } = scene;
-
-	return (
-		<div className="bt-scene">
-			<div className="bt-scene-header">
-				<span className="bt-scene-topic">{scene.topic}</span>
-				<span className="bt-scene-tone">{scene.tone}</span>
-			</div>
-			<div className="bt-scene-tension">
-				<span className="bt-tension-type" title={tension.type}>
-					<i
-						className={`fa-solid ${TENSION_TYPE_ICONS[tension.type]}`}
-					></i>
-					{tension.type}
-				</span>
-				<span className="bt-tension-level" title={tension.level}>
-					<i
-						className={`fa-solid ${TENSION_LEVEL_ICONS[tension.level]}`}
-					></i>
-					{tension.level}
-				</span>
-				<span className="bt-tension-direction" title={tension.direction}>
-					<i
-						className={`fa-solid ${TENSION_DIRECTION_ICONS[tension.direction]}`}
-					></i>
-					{tension.direction}
-				</span>
-			</div>
-
-			{scene.recentEvents.length > 0 && (
-				<div className="bt-scene-events">
-					<ul>
-						{scene.recentEvents.map((event, idx) => (
-							<li key={idx}>{event}</li>
-						))}
-					</ul>
-				</div>
-			)}
-		</div>
-	);
-}
-
-interface CharacterProps {
-	character: Character;
-}
-
-function Character({ character }: CharacterProps) {
-	const mood = character.mood?.join(', ') || 'unknown';
-
-	// Parse dispositions into array format
-	let dispositions: Array<{ toward: string; feelings: string[] }> = [];
-	if (character.dispositions && typeof character.dispositions === 'object') {
-		if (Array.isArray(character.dispositions)) {
-			dispositions = character.dispositions;
-		} else {
-			dispositions = Object.entries(character.dispositions).map(
-				([name, feelings]) => ({
-					toward: name,
-					feelings: feelings as string[],
-				}),
-			);
-		}
-	}
-
-	return (
-		<div className="bt-character">
-			<div className="bt-char-header">
-				<strong>{character.name}</strong>
-				<span className="bt-char-mood">{mood}</span>
-			</div>
-
-			<div className="bt-char-position">
-				<i className="fa-solid fa-location-crosshairs" title="Position"></i>
-				<span>{character.position}</span>
-			</div>
-
-			<div className="bt-char-details">
-				{character.goals && character.goals.length > 0 && (
-					<div className="bt-char-row bt-char-goals">
-						<i
-							className="fa-solid fa-bullseye"
-							title="Goals"
-						></i>
-						<span>{character.goals.join(', ')}</span>
-					</div>
-				)}
-
-				{character.activity && (
-					<div className="bt-char-row bt-char-activity">
-						<i
-							className="fa-solid fa-person-walking"
-							title="Activity"
-						></i>
-						<span>{character.activity}</span>
-					</div>
-				)}
-
-				{character.physicalState && character.physicalState.length > 0 && (
-					<div className="bt-char-row bt-char-physical">
-						<i
-							className="fa-solid fa-heart-pulse"
-							title="Physical state"
-						></i>
-						<span>{character.physicalState.join(', ')}</span>
-					</div>
-				)}
-
-				{character.outfit && (
-					<div className="bt-char-row bt-char-outfit">
-						<i className="fa-solid fa-shirt" title="Outfit"></i>
-						<span>{formatOutfit(character.outfit)}</span>
-					</div>
-				)}
-			</div>
-
-			{dispositions.length > 0 && (
-				<div className="bt-char-dispositions">
-					{dispositions.map((d, idx) => (
-						<div key={idx} className="bt-disposition">
-							<i
-								className="fa-solid fa-arrow-right"
-								title={`Feelings toward ${d.toward}`}
-							></i>
-							<span className="bt-disposition-target">
-								{d.toward}:
-							</span>
-							<span className="bt-disposition-feelings">
-								{d.feelings.join(', ')}
-							</span>
-						</div>
-					))}
-				</div>
-			)}
-		</div>
-	);
-}
-
 interface StateDisplayProps {
 	stateData: StoredStateData | null;
+	narrativeState: NarrativeState | null;
+	messageId: number;
 	isExtracting?: boolean;
 	extractionStep?: ExtractionStep;
 }
 
-function StateDisplay({ stateData, isExtracting, extractionStep }: StateDisplayProps) {
+function StateDisplay({
+	stateData,
+	narrativeState,
+	messageId,
+	isExtracting,
+	extractionStep,
+}: StateDisplayProps) {
+	const [showModal, setShowModal] = useState(false);
+
+	const handleOpenModal = useCallback(() => {
+		setShowModal(true);
+	}, []);
+
+	const handleCloseModal = useCallback(() => {
+		setShowModal(false);
+	}, []);
+
+	// Handle saving narrative state from the modal
+	const handleNarrativeSave = useCallback(
+		async (
+			updatedState: NarrativeState,
+			deletedEvents: DeletedEventInfo[],
+			updatedCurrentEvents?: TimestampedEvent[],
+		) => {
+			const context = SillyTavern.getContext() as STContext;
+
+			// Save the narrative state
+			await saveNarrativeState(updatedState);
+
+			// Sync deleted events: remove from affected messages' currentEvents
+			if (deletedEvents.length > 0 || updatedCurrentEvents) {
+				// Group deletions by messageId
+				const deletionsByMessage = new Map<number, Set<string>>();
+				for (const del of deletedEvents) {
+					if (!deletionsByMessage.has(del.messageId)) {
+						deletionsByMessage.set(del.messageId, new Set());
+					}
+					deletionsByMessage.get(del.messageId)!.add(del.summary);
+				}
+
+				// Update each affected message
+				for (const [messageId, deletedSummaries] of deletionsByMessage) {
+					const message = context.chat[messageId];
+					if (!message) continue;
+
+					const msgStateData = getMessageState(message);
+					if (!msgStateData?.state.currentEvents) continue;
+
+					// Filter out deleted events
+					msgStateData.state.currentEvents =
+						msgStateData.state.currentEvents.filter(
+							event =>
+								!deletedSummaries.has(
+									event.summary,
+								),
+						);
+					setMessageState(message, msgStateData);
+				}
+
+				// If we have updated current events, update the most recent message
+				if (updatedCurrentEvents && context.chat.length > 0) {
+					// Find the most recent message that has state
+					for (let i = context.chat.length - 1; i >= 0; i--) {
+						const message = context.chat[i];
+						const msgStateData = getMessageState(message);
+						if (msgStateData?.state) {
+							msgStateData.state.currentEvents =
+								updatedCurrentEvents;
+							setMessageState(message, msgStateData);
+							break;
+						}
+					}
+				}
+
+				await context.saveChat();
+			}
+
+			// Re-render all states to reflect the changes
+			renderAllStates();
+		},
+		[],
+	);
+
 	// Show loading state while extracting
 	if (isExtracting) {
 		const stepLabel = extractionStep ? getStepLabel(extractionStep) : 'Extracting...';
-		return (
-			<div className="bt-state-container bt-extracting">
-				<div className="bt-loading-indicator">
-					<i className="fa-solid fa-fire fa-beat-fade"></i>
-					<span>{stepLabel}</span>
-				</div>
-			</div>
-		);
+		return <LoadingIndicator stepLabel={stepLabel} />;
 	}
 
 	if (!stateData) {
@@ -295,10 +174,14 @@ function StateDisplay({ stateData, isExtracting, extractionStep }: StateDisplayP
 	const showLocation = settings.trackLocation !== false && state.location;
 	const showClimate = settings.trackClimate !== false && state.climate;
 	const showScene = settings.trackScene !== false && state.scene;
-	const showCharacters = settings.trackCharacters !== false && state.characters && state.characters.length > 0;
+	const showCharacters =
+		settings.trackCharacters !== false &&
+		state.characters &&
+		state.characters.length > 0;
 
 	// If nothing to show, render nothing
-	const hasAnythingToShow = showTime || showLocation || showClimate || showScene || showCharacters;
+	const hasAnythingToShow =
+		showTime || showLocation || showClimate || showScene || showCharacters;
 	if (!hasAnythingToShow) {
 		return null;
 	}
@@ -306,7 +189,24 @@ function StateDisplay({ stateData, isExtracting, extractionStep }: StateDisplayP
 	// Calculate details summary
 	const characterCount = state.characters?.length ?? 0;
 	const propsCount = state.location?.props?.length ?? 0;
-	const showDetails = (showCharacters && characterCount > 0) || (showLocation && propsCount > 0);
+	const showDetails =
+		(showCharacters && characterCount > 0) || (showLocation && propsCount > 0);
+
+	// Get relationships for character cards, versioned to this message's time
+	const allRelationships = narrativeState?.relationships ?? [];
+	const relationships = getRelationshipsAtMessage(allRelationships, messageId);
+
+	// Get current events for display
+	const currentEvents = state.currentEvents ?? [];
+	const showEvents = currentEvents.length > 0;
+
+	// Get present character names for context
+	const presentCharacters = state.characters?.map(c => c.name) ?? [];
+
+	// Check if narrative modal should be available (has chapters or relationships)
+	const hasNarrativeContent =
+		narrativeState &&
+		(narrativeState.chapters.length > 0 || narrativeState.relationships.length > 0);
 
 	return (
 		<div className="bt-state-container">
@@ -316,17 +216,17 @@ function StateDisplay({ stateData, isExtracting, extractionStep }: StateDisplayP
 					{showTime && state.time && (
 						<span className="bt-time">
 							<i className="fa-regular fa-clock"></i>{' '}
-							{formatTime(state.time)}
+							{formatTime(
+								state.time,
+								settings.timeFormat,
+							)}
 						</span>
 					)}
 					{showClimate && state.climate && (
-						<span className="bt-climate">
-							<i
-								className={`fa-solid ${getWeatherIcon(state.climate.weather)}`}
-							></i>
-							{state.climate.temperature !== undefined &&
-								` ${formatTemperature(state.climate.temperature, settings.temperatureUnit)}`}
-						</span>
+						<ClimateDisplay
+							climate={state.climate}
+							temperatureUnit={settings.temperatureUnit}
+						/>
 					)}
 					{showLocation && state.location && (
 						<span className="bt-location">
@@ -339,7 +239,12 @@ function StateDisplay({ stateData, isExtracting, extractionStep }: StateDisplayP
 
 			{/* Scene summary */}
 			{showScene && state.scene ? (
-				<SceneDisplay scene={state.scene} />
+				<SceneDisplay
+					scene={state.scene}
+					onMoreInfoClick={
+						hasNarrativeContent ? handleOpenModal : undefined
+					}
+				/>
 			) : showScene && !state.scene ? (
 				<div className="bt-scene-pending">
 					<i className="fa-solid fa-hourglass-half"></i>
@@ -350,40 +255,139 @@ function StateDisplay({ stateData, isExtracting, extractionStep }: StateDisplayP
 				</div>
 			) : null}
 
+			{/* Current Events OR Chapter Ended Summary (same slot) */}
+			{state.chapterEnded ? (
+				<div className="bt-current-events">
+					<div className="bt-chapter-ended">
+						<div className="bt-chapter-ended-header">
+							<i className="fa-solid fa-book"></i>
+							<span className="bt-chapter-ended-title">
+								Chapter {state.chapterEnded.index + 1}:{' '}
+								{state.chapterEnded.title}
+							</span>
+							<span className="bt-chapter-ended-badge">
+								{state.chapterEnded.reason ===
+									'location_change' &&
+									'Location changed'}
+								{state.chapterEnded.reason ===
+									'time_jump' && 'Time skip'}
+								{state.chapterEnded.reason === 'both' &&
+									'Location + Time'}
+								{state.chapterEnded.reason === 'manual' &&
+									'Manual'}
+							</span>
+						</div>
+						<div className="bt-chapter-ended-summary">
+							{state.chapterEnded.summary}
+						</div>
+						<div className="bt-chapter-ended-stats">
+							<span>
+								{state.chapterEnded.eventCount} events
+								archived
+							</span>
+						</div>
+					</div>
+				</div>
+			) : showEvents ? (
+				<div className="bt-current-events">
+					<EventList
+						events={currentEvents.slice(-3)}
+						presentCharacters={presentCharacters}
+						maxEvents={3}
+					/>
+					{currentEvents.length > 3 && hasNarrativeContent && (
+						<button
+							className="bt-view-all-events"
+							onClick={handleOpenModal}
+						>
+							View all {currentEvents.length} events...
+						</button>
+					)}
+				</div>
+			) : null}
+
 			{/* Expandable details - only show if there's something to expand */}
 			{showDetails && (
 				<details className="bt-state-details">
 					<summary>
 						Details
-						{showCharacters && characterCount > 0 && ` (${characterCount} characters`}
-						{showLocation && propsCount > 0 && `${showCharacters && characterCount > 0 ? ', ' : ' ('}${propsCount} props`}
-						{(showCharacters && characterCount > 0) || (showLocation && propsCount > 0) ? ')' : ''}
+						{showCharacters &&
+							characterCount > 0 &&
+							` (${characterCount} characters`}
+						{showLocation &&
+							propsCount > 0 &&
+							`${showCharacters && characterCount > 0 ? ', ' : ' ('}${propsCount} props`}
+						{(showCharacters && characterCount > 0) ||
+						(showLocation && propsCount > 0)
+							? ')'
+							: ''}
 					</summary>
 
-					{showLocation && state.location && state.location.props && state.location.props.length > 0 && (
-						<div className="bt-props-section">
-							<span className="bt-props-header">Props</span>
-							<div className="bt-props">
-								<ul>
-									{state.location.props.map((prop, idx) => (
-										<li key={idx}>{prop}</li>
-									))}
-								</ul>
+					{showLocation &&
+						state.location &&
+						state.location.props &&
+						state.location.props.length > 0 && (
+							<div className="bt-props-section">
+								<span className="bt-props-header">
+									Props
+								</span>
+								<div className="bt-props">
+									<ul>
+										{state.location.props.map(
+											(
+												prop,
+												idx,
+											) => (
+												<li
+													key={
+														idx
+													}
+												>
+													{
+														prop
+													}
+												</li>
+											),
+										)}
+									</ul>
+								</div>
 							</div>
-						</div>
-					)}
+						)}
 
-					{showCharacters && state.characters && state.characters.length > 0 && (
-						<div className="bt-characters">
-							{state.characters.map((char, idx) => (
-								<Character
-									key={`${char.name}-${idx}`}
-									character={char}
-								/>
-							))}
-						</div>
-					)}
+					{showCharacters &&
+						state.characters &&
+						state.characters.length > 0 && (
+							<div className="bt-characters">
+								{state.characters.map(
+									(char, idx) => (
+										<CharacterCard
+											key={`${char.name}-${idx}`}
+											character={
+												char
+											}
+											relationships={
+												relationships
+											}
+										/>
+									),
+								)}
+							</div>
+						)}
 				</details>
+			)}
+
+			{/* Narrative Modal */}
+			{showModal && narrativeState && (
+				<NarrativeModal
+					narrativeState={narrativeState}
+					currentEvents={currentEvents}
+					presentCharacters={presentCharacters}
+					onClose={handleCloseModal}
+					onSave={handleNarrativeSave}
+					initialTab={
+						currentEvents.length > 3 ? 'events' : 'chapters'
+					}
+				/>
 			)}
 		</div>
 	);
@@ -402,9 +406,17 @@ function getPreviousState(context: STContext, beforeMessageId: number): TrackedS
 	return null;
 }
 
-export async function doExtractState(messageId: number): Promise<StoredStateData | null> {
+export async function doExtractState(
+	messageId: number,
+	options: { isManual?: boolean } = {},
+): Promise<StoredStateData | null> {
 	if (extractionInProgress.has(messageId)) {
 		return null;
+	}
+
+	// Set manual extraction flag if this is a manual trigger
+	if (options.isManual) {
+		setManualExtractionInProgress(true);
 	}
 
 	const context = SillyTavern.getContext() as STContext;
@@ -437,6 +449,19 @@ export async function doExtractState(messageId: number): Promise<StoredStateData
 
 	const previousState = getPreviousState(context, messageId);
 
+	// Clear milestones created by this message before re-extraction
+	// This applies to all triggers: swiping, editing, fire button, slash commands
+	const narrativeState = getNarrativeState();
+	if (narrativeState && narrativeState.relationships.length > 0) {
+		const removed = clearAllMilestonesForMessage(
+			narrativeState.relationships,
+			messageId,
+		);
+		if (removed > 0) {
+			await saveNarrativeState(narrativeState);
+		}
+	}
+
 	try {
 		const { state } = await extractState(context, messageId, previousState);
 
@@ -451,6 +476,18 @@ export async function doExtractState(messageId: number): Promise<StoredStateData
 		setMessageState(message, stateData);
 
 		await context.saveChat();
+
+		// Update subsequent messages if this isn't the last message (re-extraction case)
+		if (messageId < context.chat.length - 1) {
+			// Find the event that was extracted for this specific messageId
+			const newEvent = state.currentEvents?.find(e => e.messageId === messageId);
+
+			// Update subsequent messages' events
+			updateSubsequentMessagesEvents(context, messageId, newEvent);
+
+			// Save again to persist the updated subsequent messages
+			await context.saveChat();
+		}
 
 		// Render the extracted state
 		if (messageElement) {
@@ -476,6 +513,10 @@ export async function doExtractState(messageId: number): Promise<StoredStateData
 		extractionInProgress.delete(messageId);
 		if (currentExtractionMessageId === messageId) {
 			currentExtractionMessageId = null;
+		}
+		// Clear manual extraction flag if we set it
+		if (options.isManual) {
+			setManualExtractionInProgress(false);
 		}
 		updateMenuButtonState(messageId, false);
 	}
@@ -510,7 +551,7 @@ function addMenuButton(messageId: number, messageElement: Element) {
 		extractBtn.addEventListener('click', async e => {
 			e.preventDefault();
 			e.stopPropagation();
-			await doExtractState(messageId);
+			await doExtractState(messageId, { isManual: true });
 		});
 
 		extraButtons.insertBefore(extractBtn, extraButtons.firstChild);
@@ -586,9 +627,14 @@ function renderMessageStateInternal(
 		roots.set(messageId, root);
 	}
 
+	// Get narrative state from message 0
+	const narrativeState = getNarrativeState();
+
 	root.render(
 		<StateDisplay
 			stateData={stateData}
+			narrativeState={narrativeState}
+			messageId={messageId}
 			isExtracting={isExtracting}
 			extractionStep={extractionStep}
 		/>,
@@ -643,6 +689,21 @@ export function unmountMessageState(messageId: number) {
 	}
 }
 
+/**
+ * Unmount all React roots and clear DOM containers.
+ * Use this before bulk operations like bt-extract-all.
+ */
+export function unmountAllRoots(): void {
+	// Remove all DOM containers
+	document.querySelectorAll('.bt-state-root').forEach(el => el.remove());
+
+	// Unmount all React roots
+	for (const [_messageId, root] of roots) {
+		root.unmount();
+	}
+	roots.clear();
+}
+
 export function renderAllStates() {
 	const context = SillyTavern.getContext() as STContext;
 
@@ -659,20 +720,12 @@ export function renderAllStates() {
 		}
 	}
 
-	// Unmount and remove roots that aren't mid-extraction
-	document.querySelectorAll('.bt-state-root').forEach(el => el.remove());
-	for (const [messageId, root] of roots) {
-		if (!extractionInProgress.has(messageId)) {
-			root.unmount();
-			roots.delete(messageId);
-		}
-	}
+	// Unmount all roots and clear DOM containers
+	unmountAllRoots();
 
-	// Re-render all non-in-progress messages
+	// Re-render all messages
 	for (let i = 0; i < context.chat.length; i++) {
-		if (!extractionInProgress.has(i)) {
-			renderMessageState(i);
-		}
+		renderMessageState(i);
 	}
 }
 

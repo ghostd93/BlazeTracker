@@ -84,7 +84,6 @@ export async function migrateOldTimeFormats(
 	}
 
 	st_echo?.('warning', '🔥 Updating date/time to v0.3.0 format.');
-	console.log('[BlazeTracker] Migrating old time formats to NarrativeDateTime...');
 
 	// Get messages up to and including the first state for context
 	const contextMessages = context.chat
@@ -96,7 +95,6 @@ export async function migrateOldTimeFormats(
 	let baselineTime: NarrativeDateTime;
 	try {
 		baselineTime = await extractDateTime(contextMessages, profileId);
-		console.log('[BlazeTracker] LLM inferred baseline date:', baselineTime);
 	} catch (e) {
 		console.error('[BlazeTracker] Failed to infer baseline date, using defaults:', e);
 		baselineTime = {
@@ -162,6 +160,5 @@ export async function migrateOldTimeFormats(
 	const saveContext = SillyTavern.getContext();
 	await saveContext.saveChat();
 
-	console.log('[BlazeTracker] Migration complete');
 	return true;
 }

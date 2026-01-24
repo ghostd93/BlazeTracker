@@ -32702,6 +32702,1037 @@ if (false) // removed by dead control flow
 
 /***/ },
 
+/***/ "./node_modules/seedrandom/index.js"
+/*!******************************************!*\
+  !*** ./node_modules/seedrandom/index.js ***!
+  \******************************************/
+(module, __unused_webpack_exports, __webpack_require__) {
+
+// A library of seedable RNGs implemented in Javascript.
+//
+// Usage:
+//
+// var seedrandom = require('seedrandom');
+// var random = seedrandom(1); // or any seed.
+// var x = random();       // 0 <= x < 1.  Every bit is random.
+// var x = random.quick(); // 0 <= x < 1.  32 bits of randomness.
+
+// alea, a 53-bit multiply-with-carry generator by Johannes Baagøe.
+// Period: ~2^116
+// Reported to pass all BigCrush tests.
+var alea = __webpack_require__(/*! ./lib/alea */ "./node_modules/seedrandom/lib/alea.js");
+
+// xor128, a pure xor-shift generator by George Marsaglia.
+// Period: 2^128-1.
+// Reported to fail: MatrixRank and LinearComp.
+var xor128 = __webpack_require__(/*! ./lib/xor128 */ "./node_modules/seedrandom/lib/xor128.js");
+
+// xorwow, George Marsaglia's 160-bit xor-shift combined plus weyl.
+// Period: 2^192-2^32
+// Reported to fail: CollisionOver, SimpPoker, and LinearComp.
+var xorwow = __webpack_require__(/*! ./lib/xorwow */ "./node_modules/seedrandom/lib/xorwow.js");
+
+// xorshift7, by François Panneton and Pierre L'ecuyer, takes
+// a different approach: it adds robustness by allowing more shifts
+// than Marsaglia's original three.  It is a 7-shift generator
+// with 256 bits, that passes BigCrush with no systmatic failures.
+// Period 2^256-1.
+// No systematic BigCrush failures reported.
+var xorshift7 = __webpack_require__(/*! ./lib/xorshift7 */ "./node_modules/seedrandom/lib/xorshift7.js");
+
+// xor4096, by Richard Brent, is a 4096-bit xor-shift with a
+// very long period that also adds a Weyl generator. It also passes
+// BigCrush with no systematic failures.  Its long period may
+// be useful if you have many generators and need to avoid
+// collisions.
+// Period: 2^4128-2^32.
+// No systematic BigCrush failures reported.
+var xor4096 = __webpack_require__(/*! ./lib/xor4096 */ "./node_modules/seedrandom/lib/xor4096.js");
+
+// Tyche-i, by Samuel Neves and Filipe Araujo, is a bit-shifting random
+// number generator derived from ChaCha, a modern stream cipher.
+// https://eden.dei.uc.pt/~sneves/pubs/2011-snfa2.pdf
+// Period: ~2^127
+// No systematic BigCrush failures reported.
+var tychei = __webpack_require__(/*! ./lib/tychei */ "./node_modules/seedrandom/lib/tychei.js");
+
+// The original ARC4-based prng included in this library.
+// Period: ~2^1600
+var sr = __webpack_require__(/*! ./seedrandom */ "./node_modules/seedrandom/seedrandom.js");
+
+sr.alea = alea;
+sr.xor128 = xor128;
+sr.xorwow = xorwow;
+sr.xorshift7 = xorshift7;
+sr.xor4096 = xor4096;
+sr.tychei = tychei;
+
+module.exports = sr;
+
+
+/***/ },
+
+/***/ "./node_modules/seedrandom/lib/alea.js"
+/*!*********************************************!*\
+  !*** ./node_modules/seedrandom/lib/alea.js ***!
+  \*********************************************/
+(module, exports, __webpack_require__) {
+
+/* module decorator */ module = __webpack_require__.nmd(module);
+var __WEBPACK_AMD_DEFINE_RESULT__;// A port of an algorithm by Johannes Baagøe <baagoe@baagoe.com>, 2010
+// http://baagoe.com/en/RandomMusings/javascript/
+// https://github.com/nquinlan/better-random-numbers-for-javascript-mirror
+// Original work is under MIT license -
+
+// Copyright (C) 2010 by Johannes Baagøe <baagoe@baagoe.org>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+
+
+(function(global, module, define) {
+
+function Alea(seed) {
+  var me = this, mash = Mash();
+
+  me.next = function() {
+    var t = 2091639 * me.s0 + me.c * 2.3283064365386963e-10; // 2^-32
+    me.s0 = me.s1;
+    me.s1 = me.s2;
+    return me.s2 = t - (me.c = t | 0);
+  };
+
+  // Apply the seeding algorithm from Baagoe.
+  me.c = 1;
+  me.s0 = mash(' ');
+  me.s1 = mash(' ');
+  me.s2 = mash(' ');
+  me.s0 -= mash(seed);
+  if (me.s0 < 0) { me.s0 += 1; }
+  me.s1 -= mash(seed);
+  if (me.s1 < 0) { me.s1 += 1; }
+  me.s2 -= mash(seed);
+  if (me.s2 < 0) { me.s2 += 1; }
+  mash = null;
+}
+
+function copy(f, t) {
+  t.c = f.c;
+  t.s0 = f.s0;
+  t.s1 = f.s1;
+  t.s2 = f.s2;
+  return t;
+}
+
+function impl(seed, opts) {
+  var xg = new Alea(seed),
+      state = opts && opts.state,
+      prng = xg.next;
+  prng.int32 = function() { return (xg.next() * 0x100000000) | 0; }
+  prng.double = function() {
+    return prng() + (prng() * 0x200000 | 0) * 1.1102230246251565e-16; // 2^-53
+  };
+  prng.quick = prng;
+  if (state) {
+    if (typeof(state) == 'object') copy(state, xg);
+    prng.state = function() { return copy(xg, {}); }
+  }
+  return prng;
+}
+
+function Mash() {
+  var n = 0xefc8249d;
+
+  var mash = function(data) {
+    data = String(data);
+    for (var i = 0; i < data.length; i++) {
+      n += data.charCodeAt(i);
+      var h = 0.02519603282416938 * n;
+      n = h >>> 0;
+      h -= n;
+      h *= n;
+      n = h >>> 0;
+      h -= n;
+      n += h * 0x100000000; // 2^32
+    }
+    return (n >>> 0) * 2.3283064365386963e-10; // 2^-32
+  };
+
+  return mash;
+}
+
+
+if (module && module.exports) {
+  module.exports = impl;
+} else if (__webpack_require__.amdD && __webpack_require__.amdO) {
+  !(__WEBPACK_AMD_DEFINE_RESULT__ = (function() { return impl; }).call(exports, __webpack_require__, exports, module),
+		__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+} else {
+  this.alea = impl;
+}
+
+})(
+  this,
+   true && module,    // present in node.js
+  __webpack_require__.amdD   // present with an AMD loader
+);
+
+
+
+
+/***/ },
+
+/***/ "./node_modules/seedrandom/lib/tychei.js"
+/*!***********************************************!*\
+  !*** ./node_modules/seedrandom/lib/tychei.js ***!
+  \***********************************************/
+(module, exports, __webpack_require__) {
+
+/* module decorator */ module = __webpack_require__.nmd(module);
+var __WEBPACK_AMD_DEFINE_RESULT__;// A Javascript implementaion of the "Tyche-i" prng algorithm by
+// Samuel Neves and Filipe Araujo.
+// See https://eden.dei.uc.pt/~sneves/pubs/2011-snfa2.pdf
+
+(function(global, module, define) {
+
+function XorGen(seed) {
+  var me = this, strseed = '';
+
+  // Set up generator function.
+  me.next = function() {
+    var b = me.b, c = me.c, d = me.d, a = me.a;
+    b = (b << 25) ^ (b >>> 7) ^ c;
+    c = (c - d) | 0;
+    d = (d << 24) ^ (d >>> 8) ^ a;
+    a = (a - b) | 0;
+    me.b = b = (b << 20) ^ (b >>> 12) ^ c;
+    me.c = c = (c - d) | 0;
+    me.d = (d << 16) ^ (c >>> 16) ^ a;
+    return me.a = (a - b) | 0;
+  };
+
+  /* The following is non-inverted tyche, which has better internal
+   * bit diffusion, but which is about 25% slower than tyche-i in JS.
+  me.next = function() {
+    var a = me.a, b = me.b, c = me.c, d = me.d;
+    a = (me.a + me.b | 0) >>> 0;
+    d = me.d ^ a; d = d << 16 ^ d >>> 16;
+    c = me.c + d | 0;
+    b = me.b ^ c; b = b << 12 ^ d >>> 20;
+    me.a = a = a + b | 0;
+    d = d ^ a; me.d = d = d << 8 ^ d >>> 24;
+    me.c = c = c + d | 0;
+    b = b ^ c;
+    return me.b = (b << 7 ^ b >>> 25);
+  }
+  */
+
+  me.a = 0;
+  me.b = 0;
+  me.c = 2654435769 | 0;
+  me.d = 1367130551;
+
+  if (seed === Math.floor(seed)) {
+    // Integer seed.
+    me.a = (seed / 0x100000000) | 0;
+    me.b = seed | 0;
+  } else {
+    // String seed.
+    strseed += seed;
+  }
+
+  // Mix in string seed, then discard an initial batch of 64 values.
+  for (var k = 0; k < strseed.length + 20; k++) {
+    me.b ^= strseed.charCodeAt(k) | 0;
+    me.next();
+  }
+}
+
+function copy(f, t) {
+  t.a = f.a;
+  t.b = f.b;
+  t.c = f.c;
+  t.d = f.d;
+  return t;
+};
+
+function impl(seed, opts) {
+  var xg = new XorGen(seed),
+      state = opts && opts.state,
+      prng = function() { return (xg.next() >>> 0) / 0x100000000; };
+  prng.double = function() {
+    do {
+      var top = xg.next() >>> 11,
+          bot = (xg.next() >>> 0) / 0x100000000,
+          result = (top + bot) / (1 << 21);
+    } while (result === 0);
+    return result;
+  };
+  prng.int32 = xg.next;
+  prng.quick = prng;
+  if (state) {
+    if (typeof(state) == 'object') copy(state, xg);
+    prng.state = function() { return copy(xg, {}); }
+  }
+  return prng;
+}
+
+if (module && module.exports) {
+  module.exports = impl;
+} else if (__webpack_require__.amdD && __webpack_require__.amdO) {
+  !(__WEBPACK_AMD_DEFINE_RESULT__ = (function() { return impl; }).call(exports, __webpack_require__, exports, module),
+		__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+} else {
+  this.tychei = impl;
+}
+
+})(
+  this,
+   true && module,    // present in node.js
+  __webpack_require__.amdD   // present with an AMD loader
+);
+
+
+
+
+/***/ },
+
+/***/ "./node_modules/seedrandom/lib/xor128.js"
+/*!***********************************************!*\
+  !*** ./node_modules/seedrandom/lib/xor128.js ***!
+  \***********************************************/
+(module, exports, __webpack_require__) {
+
+/* module decorator */ module = __webpack_require__.nmd(module);
+var __WEBPACK_AMD_DEFINE_RESULT__;// A Javascript implementaion of the "xor128" prng algorithm by
+// George Marsaglia.  See http://www.jstatsoft.org/v08/i14/paper
+
+(function(global, module, define) {
+
+function XorGen(seed) {
+  var me = this, strseed = '';
+
+  me.x = 0;
+  me.y = 0;
+  me.z = 0;
+  me.w = 0;
+
+  // Set up generator function.
+  me.next = function() {
+    var t = me.x ^ (me.x << 11);
+    me.x = me.y;
+    me.y = me.z;
+    me.z = me.w;
+    return me.w ^= (me.w >>> 19) ^ t ^ (t >>> 8);
+  };
+
+  if (seed === (seed | 0)) {
+    // Integer seed.
+    me.x = seed;
+  } else {
+    // String seed.
+    strseed += seed;
+  }
+
+  // Mix in string seed, then discard an initial batch of 64 values.
+  for (var k = 0; k < strseed.length + 64; k++) {
+    me.x ^= strseed.charCodeAt(k) | 0;
+    me.next();
+  }
+}
+
+function copy(f, t) {
+  t.x = f.x;
+  t.y = f.y;
+  t.z = f.z;
+  t.w = f.w;
+  return t;
+}
+
+function impl(seed, opts) {
+  var xg = new XorGen(seed),
+      state = opts && opts.state,
+      prng = function() { return (xg.next() >>> 0) / 0x100000000; };
+  prng.double = function() {
+    do {
+      var top = xg.next() >>> 11,
+          bot = (xg.next() >>> 0) / 0x100000000,
+          result = (top + bot) / (1 << 21);
+    } while (result === 0);
+    return result;
+  };
+  prng.int32 = xg.next;
+  prng.quick = prng;
+  if (state) {
+    if (typeof(state) == 'object') copy(state, xg);
+    prng.state = function() { return copy(xg, {}); }
+  }
+  return prng;
+}
+
+if (module && module.exports) {
+  module.exports = impl;
+} else if (__webpack_require__.amdD && __webpack_require__.amdO) {
+  !(__WEBPACK_AMD_DEFINE_RESULT__ = (function() { return impl; }).call(exports, __webpack_require__, exports, module),
+		__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+} else {
+  this.xor128 = impl;
+}
+
+})(
+  this,
+   true && module,    // present in node.js
+  __webpack_require__.amdD   // present with an AMD loader
+);
+
+
+
+
+/***/ },
+
+/***/ "./node_modules/seedrandom/lib/xor4096.js"
+/*!************************************************!*\
+  !*** ./node_modules/seedrandom/lib/xor4096.js ***!
+  \************************************************/
+(module, exports, __webpack_require__) {
+
+/* module decorator */ module = __webpack_require__.nmd(module);
+var __WEBPACK_AMD_DEFINE_RESULT__;// A Javascript implementaion of Richard Brent's Xorgens xor4096 algorithm.
+//
+// This fast non-cryptographic random number generator is designed for
+// use in Monte-Carlo algorithms. It combines a long-period xorshift
+// generator with a Weyl generator, and it passes all common batteries
+// of stasticial tests for randomness while consuming only a few nanoseconds
+// for each prng generated.  For background on the generator, see Brent's
+// paper: "Some long-period random number generators using shifts and xors."
+// http://arxiv.org/pdf/1004.3115v1.pdf
+//
+// Usage:
+//
+// var xor4096 = require('xor4096');
+// random = xor4096(1);                        // Seed with int32 or string.
+// assert.equal(random(), 0.1520436450538547); // (0, 1) range, 53 bits.
+// assert.equal(random.int32(), 1806534897);   // signed int32, 32 bits.
+//
+// For nonzero numeric keys, this impelementation provides a sequence
+// identical to that by Brent's xorgens 3 implementaion in C.  This
+// implementation also provides for initalizing the generator with
+// string seeds, or for saving and restoring the state of the generator.
+//
+// On Chrome, this prng benchmarks about 2.1 times slower than
+// Javascript's built-in Math.random().
+
+(function(global, module, define) {
+
+function XorGen(seed) {
+  var me = this;
+
+  // Set up generator function.
+  me.next = function() {
+    var w = me.w,
+        X = me.X, i = me.i, t, v;
+    // Update Weyl generator.
+    me.w = w = (w + 0x61c88647) | 0;
+    // Update xor generator.
+    v = X[(i + 34) & 127];
+    t = X[i = ((i + 1) & 127)];
+    v ^= v << 13;
+    t ^= t << 17;
+    v ^= v >>> 15;
+    t ^= t >>> 12;
+    // Update Xor generator array state.
+    v = X[i] = v ^ t;
+    me.i = i;
+    // Result is the combination.
+    return (v + (w ^ (w >>> 16))) | 0;
+  };
+
+  function init(me, seed) {
+    var t, v, i, j, w, X = [], limit = 128;
+    if (seed === (seed | 0)) {
+      // Numeric seeds initialize v, which is used to generates X.
+      v = seed;
+      seed = null;
+    } else {
+      // String seeds are mixed into v and X one character at a time.
+      seed = seed + '\0';
+      v = 0;
+      limit = Math.max(limit, seed.length);
+    }
+    // Initialize circular array and weyl value.
+    for (i = 0, j = -32; j < limit; ++j) {
+      // Put the unicode characters into the array, and shuffle them.
+      if (seed) v ^= seed.charCodeAt((j + 32) % seed.length);
+      // After 32 shuffles, take v as the starting w value.
+      if (j === 0) w = v;
+      v ^= v << 10;
+      v ^= v >>> 15;
+      v ^= v << 4;
+      v ^= v >>> 13;
+      if (j >= 0) {
+        w = (w + 0x61c88647) | 0;     // Weyl.
+        t = (X[j & 127] ^= (v + w));  // Combine xor and weyl to init array.
+        i = (0 == t) ? i + 1 : 0;     // Count zeroes.
+      }
+    }
+    // We have detected all zeroes; make the key nonzero.
+    if (i >= 128) {
+      X[(seed && seed.length || 0) & 127] = -1;
+    }
+    // Run the generator 512 times to further mix the state before using it.
+    // Factoring this as a function slows the main generator, so it is just
+    // unrolled here.  The weyl generator is not advanced while warming up.
+    i = 127;
+    for (j = 4 * 128; j > 0; --j) {
+      v = X[(i + 34) & 127];
+      t = X[i = ((i + 1) & 127)];
+      v ^= v << 13;
+      t ^= t << 17;
+      v ^= v >>> 15;
+      t ^= t >>> 12;
+      X[i] = v ^ t;
+    }
+    // Storing state as object members is faster than using closure variables.
+    me.w = w;
+    me.X = X;
+    me.i = i;
+  }
+
+  init(me, seed);
+}
+
+function copy(f, t) {
+  t.i = f.i;
+  t.w = f.w;
+  t.X = f.X.slice();
+  return t;
+};
+
+function impl(seed, opts) {
+  if (seed == null) seed = +(new Date);
+  var xg = new XorGen(seed),
+      state = opts && opts.state,
+      prng = function() { return (xg.next() >>> 0) / 0x100000000; };
+  prng.double = function() {
+    do {
+      var top = xg.next() >>> 11,
+          bot = (xg.next() >>> 0) / 0x100000000,
+          result = (top + bot) / (1 << 21);
+    } while (result === 0);
+    return result;
+  };
+  prng.int32 = xg.next;
+  prng.quick = prng;
+  if (state) {
+    if (state.X) copy(state, xg);
+    prng.state = function() { return copy(xg, {}); }
+  }
+  return prng;
+}
+
+if (module && module.exports) {
+  module.exports = impl;
+} else if (__webpack_require__.amdD && __webpack_require__.amdO) {
+  !(__WEBPACK_AMD_DEFINE_RESULT__ = (function() { return impl; }).call(exports, __webpack_require__, exports, module),
+		__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+} else {
+  this.xor4096 = impl;
+}
+
+})(
+  this,                                     // window object or global
+   true && module,    // present in node.js
+  __webpack_require__.amdD   // present with an AMD loader
+);
+
+
+/***/ },
+
+/***/ "./node_modules/seedrandom/lib/xorshift7.js"
+/*!**************************************************!*\
+  !*** ./node_modules/seedrandom/lib/xorshift7.js ***!
+  \**************************************************/
+(module, exports, __webpack_require__) {
+
+/* module decorator */ module = __webpack_require__.nmd(module);
+var __WEBPACK_AMD_DEFINE_RESULT__;// A Javascript implementaion of the "xorshift7" algorithm by
+// François Panneton and Pierre L'ecuyer:
+// "On the Xorgshift Random Number Generators"
+// http://saluc.engr.uconn.edu/refs/crypto/rng/panneton05onthexorshift.pdf
+
+(function(global, module, define) {
+
+function XorGen(seed) {
+  var me = this;
+
+  // Set up generator function.
+  me.next = function() {
+    // Update xor generator.
+    var X = me.x, i = me.i, t, v, w;
+    t = X[i]; t ^= (t >>> 7); v = t ^ (t << 24);
+    t = X[(i + 1) & 7]; v ^= t ^ (t >>> 10);
+    t = X[(i + 3) & 7]; v ^= t ^ (t >>> 3);
+    t = X[(i + 4) & 7]; v ^= t ^ (t << 7);
+    t = X[(i + 7) & 7]; t = t ^ (t << 13); v ^= t ^ (t << 9);
+    X[i] = v;
+    me.i = (i + 1) & 7;
+    return v;
+  };
+
+  function init(me, seed) {
+    var j, w, X = [];
+
+    if (seed === (seed | 0)) {
+      // Seed state array using a 32-bit integer.
+      w = X[0] = seed;
+    } else {
+      // Seed state using a string.
+      seed = '' + seed;
+      for (j = 0; j < seed.length; ++j) {
+        X[j & 7] = (X[j & 7] << 15) ^
+            (seed.charCodeAt(j) + X[(j + 1) & 7] << 13);
+      }
+    }
+    // Enforce an array length of 8, not all zeroes.
+    while (X.length < 8) X.push(0);
+    for (j = 0; j < 8 && X[j] === 0; ++j);
+    if (j == 8) w = X[7] = -1; else w = X[j];
+
+    me.x = X;
+    me.i = 0;
+
+    // Discard an initial 256 values.
+    for (j = 256; j > 0; --j) {
+      me.next();
+    }
+  }
+
+  init(me, seed);
+}
+
+function copy(f, t) {
+  t.x = f.x.slice();
+  t.i = f.i;
+  return t;
+}
+
+function impl(seed, opts) {
+  if (seed == null) seed = +(new Date);
+  var xg = new XorGen(seed),
+      state = opts && opts.state,
+      prng = function() { return (xg.next() >>> 0) / 0x100000000; };
+  prng.double = function() {
+    do {
+      var top = xg.next() >>> 11,
+          bot = (xg.next() >>> 0) / 0x100000000,
+          result = (top + bot) / (1 << 21);
+    } while (result === 0);
+    return result;
+  };
+  prng.int32 = xg.next;
+  prng.quick = prng;
+  if (state) {
+    if (state.x) copy(state, xg);
+    prng.state = function() { return copy(xg, {}); }
+  }
+  return prng;
+}
+
+if (module && module.exports) {
+  module.exports = impl;
+} else if (__webpack_require__.amdD && __webpack_require__.amdO) {
+  !(__WEBPACK_AMD_DEFINE_RESULT__ = (function() { return impl; }).call(exports, __webpack_require__, exports, module),
+		__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+} else {
+  this.xorshift7 = impl;
+}
+
+})(
+  this,
+   true && module,    // present in node.js
+  __webpack_require__.amdD   // present with an AMD loader
+);
+
+
+
+/***/ },
+
+/***/ "./node_modules/seedrandom/lib/xorwow.js"
+/*!***********************************************!*\
+  !*** ./node_modules/seedrandom/lib/xorwow.js ***!
+  \***********************************************/
+(module, exports, __webpack_require__) {
+
+/* module decorator */ module = __webpack_require__.nmd(module);
+var __WEBPACK_AMD_DEFINE_RESULT__;// A Javascript implementaion of the "xorwow" prng algorithm by
+// George Marsaglia.  See http://www.jstatsoft.org/v08/i14/paper
+
+(function(global, module, define) {
+
+function XorGen(seed) {
+  var me = this, strseed = '';
+
+  // Set up generator function.
+  me.next = function() {
+    var t = (me.x ^ (me.x >>> 2));
+    me.x = me.y; me.y = me.z; me.z = me.w; me.w = me.v;
+    return (me.d = (me.d + 362437 | 0)) +
+       (me.v = (me.v ^ (me.v << 4)) ^ (t ^ (t << 1))) | 0;
+  };
+
+  me.x = 0;
+  me.y = 0;
+  me.z = 0;
+  me.w = 0;
+  me.v = 0;
+
+  if (seed === (seed | 0)) {
+    // Integer seed.
+    me.x = seed;
+  } else {
+    // String seed.
+    strseed += seed;
+  }
+
+  // Mix in string seed, then discard an initial batch of 64 values.
+  for (var k = 0; k < strseed.length + 64; k++) {
+    me.x ^= strseed.charCodeAt(k) | 0;
+    if (k == strseed.length) {
+      me.d = me.x << 10 ^ me.x >>> 4;
+    }
+    me.next();
+  }
+}
+
+function copy(f, t) {
+  t.x = f.x;
+  t.y = f.y;
+  t.z = f.z;
+  t.w = f.w;
+  t.v = f.v;
+  t.d = f.d;
+  return t;
+}
+
+function impl(seed, opts) {
+  var xg = new XorGen(seed),
+      state = opts && opts.state,
+      prng = function() { return (xg.next() >>> 0) / 0x100000000; };
+  prng.double = function() {
+    do {
+      var top = xg.next() >>> 11,
+          bot = (xg.next() >>> 0) / 0x100000000,
+          result = (top + bot) / (1 << 21);
+    } while (result === 0);
+    return result;
+  };
+  prng.int32 = xg.next;
+  prng.quick = prng;
+  if (state) {
+    if (typeof(state) == 'object') copy(state, xg);
+    prng.state = function() { return copy(xg, {}); }
+  }
+  return prng;
+}
+
+if (module && module.exports) {
+  module.exports = impl;
+} else if (__webpack_require__.amdD && __webpack_require__.amdO) {
+  !(__WEBPACK_AMD_DEFINE_RESULT__ = (function() { return impl; }).call(exports, __webpack_require__, exports, module),
+		__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+} else {
+  this.xorwow = impl;
+}
+
+})(
+  this,
+   true && module,    // present in node.js
+  __webpack_require__.amdD   // present with an AMD loader
+);
+
+
+
+
+/***/ },
+
+/***/ "./node_modules/seedrandom/seedrandom.js"
+/*!***********************************************!*\
+  !*** ./node_modules/seedrandom/seedrandom.js ***!
+  \***********************************************/
+(module, exports, __webpack_require__) {
+
+var __WEBPACK_AMD_DEFINE_RESULT__;/*
+Copyright 2019 David Bau.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+*/
+
+(function (global, pool, math) {
+//
+// The following constants are related to IEEE 754 limits.
+//
+
+var width = 256,        // each RC4 output is 0 <= x < 256
+    chunks = 6,         // at least six RC4 outputs for each double
+    digits = 52,        // there are 52 significant digits in a double
+    rngname = 'random', // rngname: name for Math.random and Math.seedrandom
+    startdenom = math.pow(width, chunks),
+    significance = math.pow(2, digits),
+    overflow = significance * 2,
+    mask = width - 1,
+    nodecrypto;         // node.js crypto module, initialized at the bottom.
+
+//
+// seedrandom()
+// This is the seedrandom function described above.
+//
+function seedrandom(seed, options, callback) {
+  var key = [];
+  options = (options == true) ? { entropy: true } : (options || {});
+
+  // Flatten the seed string or build one from local entropy if needed.
+  var shortseed = mixkey(flatten(
+    options.entropy ? [seed, tostring(pool)] :
+    (seed == null) ? autoseed() : seed, 3), key);
+
+  // Use the seed to initialize an ARC4 generator.
+  var arc4 = new ARC4(key);
+
+  // This function returns a random double in [0, 1) that contains
+  // randomness in every bit of the mantissa of the IEEE 754 value.
+  var prng = function() {
+    var n = arc4.g(chunks),             // Start with a numerator n < 2 ^ 48
+        d = startdenom,                 //   and denominator d = 2 ^ 48.
+        x = 0;                          //   and no 'extra last byte'.
+    while (n < significance) {          // Fill up all significant digits by
+      n = (n + x) * width;              //   shifting numerator and
+      d *= width;                       //   denominator and generating a
+      x = arc4.g(1);                    //   new least-significant-byte.
+    }
+    while (n >= overflow) {             // To avoid rounding up, before adding
+      n /= 2;                           //   last byte, shift everything
+      d /= 2;                           //   right using integer math until
+      x >>>= 1;                         //   we have exactly the desired bits.
+    }
+    return (n + x) / d;                 // Form the number within [0, 1).
+  };
+
+  prng.int32 = function() { return arc4.g(4) | 0; }
+  prng.quick = function() { return arc4.g(4) / 0x100000000; }
+  prng.double = prng;
+
+  // Mix the randomness into accumulated entropy.
+  mixkey(tostring(arc4.S), pool);
+
+  // Calling convention: what to return as a function of prng, seed, is_math.
+  return (options.pass || callback ||
+      function(prng, seed, is_math_call, state) {
+        if (state) {
+          // Load the arc4 state from the given state if it has an S array.
+          if (state.S) { copy(state, arc4); }
+          // Only provide the .state method if requested via options.state.
+          prng.state = function() { return copy(arc4, {}); }
+        }
+
+        // If called as a method of Math (Math.seedrandom()), mutate
+        // Math.random because that is how seedrandom.js has worked since v1.0.
+        if (is_math_call) { math[rngname] = prng; return seed; }
+
+        // Otherwise, it is a newer calling convention, so return the
+        // prng directly.
+        else return prng;
+      })(
+  prng,
+  shortseed,
+  'global' in options ? options.global : (this == math),
+  options.state);
+}
+
+//
+// ARC4
+//
+// An ARC4 implementation.  The constructor takes a key in the form of
+// an array of at most (width) integers that should be 0 <= x < (width).
+//
+// The g(count) method returns a pseudorandom integer that concatenates
+// the next (count) outputs from ARC4.  Its return value is a number x
+// that is in the range 0 <= x < (width ^ count).
+//
+function ARC4(key) {
+  var t, keylen = key.length,
+      me = this, i = 0, j = me.i = me.j = 0, s = me.S = [];
+
+  // The empty key [] is treated as [0].
+  if (!keylen) { key = [keylen++]; }
+
+  // Set up S using the standard key scheduling algorithm.
+  while (i < width) {
+    s[i] = i++;
+  }
+  for (i = 0; i < width; i++) {
+    s[i] = s[j = mask & (j + key[i % keylen] + (t = s[i]))];
+    s[j] = t;
+  }
+
+  // The "g" method returns the next (count) outputs as one number.
+  (me.g = function(count) {
+    // Using instance members instead of closure state nearly doubles speed.
+    var t, r = 0,
+        i = me.i, j = me.j, s = me.S;
+    while (count--) {
+      t = s[i = mask & (i + 1)];
+      r = r * width + s[mask & ((s[i] = s[j = mask & (j + t)]) + (s[j] = t))];
+    }
+    me.i = i; me.j = j;
+    return r;
+    // For robust unpredictability, the function call below automatically
+    // discards an initial batch of values.  This is called RC4-drop[256].
+    // See http://google.com/search?q=rsa+fluhrer+response&btnI
+  })(width);
+}
+
+//
+// copy()
+// Copies internal state of ARC4 to or from a plain object.
+//
+function copy(f, t) {
+  t.i = f.i;
+  t.j = f.j;
+  t.S = f.S.slice();
+  return t;
+};
+
+//
+// flatten()
+// Converts an object tree to nested arrays of strings.
+//
+function flatten(obj, depth) {
+  var result = [], typ = (typeof obj), prop;
+  if (depth && typ == 'object') {
+    for (prop in obj) {
+      try { result.push(flatten(obj[prop], depth - 1)); } catch (e) {}
+    }
+  }
+  return (result.length ? result : typ == 'string' ? obj : obj + '\0');
+}
+
+//
+// mixkey()
+// Mixes a string seed into a key that is an array of integers, and
+// returns a shortened string seed that is equivalent to the result key.
+//
+function mixkey(seed, key) {
+  var stringseed = seed + '', smear, j = 0;
+  while (j < stringseed.length) {
+    key[mask & j] =
+      mask & ((smear ^= key[mask & j] * 19) + stringseed.charCodeAt(j++));
+  }
+  return tostring(key);
+}
+
+//
+// autoseed()
+// Returns an object for autoseeding, using window.crypto and Node crypto
+// module if available.
+//
+function autoseed() {
+  try {
+    var out;
+    if (nodecrypto && (out = nodecrypto.randomBytes)) {
+      // The use of 'out' to remember randomBytes makes tight minified code.
+      out = out(width);
+    } else {
+      out = new Uint8Array(width);
+      (global.crypto || global.msCrypto).getRandomValues(out);
+    }
+    return tostring(out);
+  } catch (e) {
+    var browser = global.navigator,
+        plugins = browser && browser.plugins;
+    return [+new Date, global, plugins, global.screen, tostring(pool)];
+  }
+}
+
+//
+// tostring()
+// Converts an array of charcodes to a string
+//
+function tostring(a) {
+  return String.fromCharCode.apply(0, a);
+}
+
+//
+// When seedrandom.js is loaded, we immediately mix a few bits
+// from the built-in RNG into the entropy pool.  Because we do
+// not want to interfere with deterministic PRNG state later,
+// seedrandom will not call math.random on its own again after
+// initialization.
+//
+mixkey(math.random(), pool);
+
+//
+// Nodejs and AMD support: export the implementation as a module using
+// either convention.
+//
+if ( true && module.exports) {
+  module.exports = seedrandom;
+  // When in node.js, try using crypto package for autoseeding.
+  try {
+    nodecrypto = __webpack_require__(/*! crypto */ "?d4c0");
+  } catch (ex) {}
+} else if (true) {
+  !(__WEBPACK_AMD_DEFINE_RESULT__ = (function() { return seedrandom; }).call(exports, __webpack_require__, exports, module),
+		__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+} else // removed by dead control flow
+{}
+
+
+// End anonymous scope, and pass initial values.
+})(
+  // global: `self` in browsers (including strict mode and web workers),
+  // otherwise `this` in Node and other environments
+  (typeof self !== 'undefined') ? self : this,
+  [],     // pool: entropy pool starts empty
+  Math    // math: package containing random, pow, and seedrandom
+);
+
+
+/***/ },
+
 /***/ "./node_modules/sillytavern-utils-lib/dist/character-utils.js"
 /*!********************************************************************!*\
   !*** ./node_modules/sillytavern-utils-lib/dist/character-utils.js ***!
@@ -37884,6 +38915,519 @@ Sortable.mount(Remove, Revert);
 
 /***/ },
 
+/***/ "./src/commands/helpers.ts"
+/*!*********************************!*\
+  !*** ./src/commands/helpers.ts ***!
+  \*********************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   countExtractedMessages: () => (/* binding */ countExtractedMessages),
+/* harmony export */   getMostRecentMessageId: () => (/* binding */ getMostRecentMessageId),
+/* harmony export */   getStateForMessage: () => (/* binding */ getStateForMessage)
+/* harmony export */ });
+/* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../utils/messageState */ "./src/utils/messageState.ts");
+// ============================================
+// Slash Command Helper Functions (Pure/Testable)
+// ============================================
+
+/**
+ * Get the most recent message ID from the chat.
+ */
+function getMostRecentMessageId(context) {
+    return context.chat.length - 1;
+}
+/**
+ * Get stored state for a message by ID.
+ */
+function getStateForMessage(context, messageId) {
+    const message = context.chat[messageId];
+    if (!message)
+        return null;
+    const stateData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_0__.getMessageState)(message);
+    return stateData?.state ?? null;
+}
+/**
+ * Count messages that have extracted state.
+ */
+function countExtractedMessages(context) {
+    let extracted = 0;
+    const total = context.chat.length;
+    for (let i = 0; i < total; i++) {
+        const message = context.chat[i];
+        if ((0,_utils_messageState__WEBPACK_IMPORTED_MODULE_0__.getMessageState)(message)) {
+            extracted++;
+        }
+    }
+    return { extracted, total };
+}
+
+
+/***/ },
+
+/***/ "./src/commands/slashCommands.ts"
+/*!***************************************!*\
+  !*** ./src/commands/slashCommands.ts ***!
+  \***************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   registerSlashCommands: () => (/* binding */ registerSlashCommands),
+/* harmony export */   runExtractAll: () => (/* binding */ runExtractAll)
+/* harmony export */ });
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../constants */ "./src/constants.ts");
+/* harmony import */ var _ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../ui/stateDisplay */ "./src/ui/stateDisplay.tsx");
+/* harmony import */ var _extractors_extractState__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../extractors/extractState */ "./src/extractors/extractState.ts");
+/* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../utils/messageState */ "./src/utils/messageState.ts");
+/* harmony import */ var _injectors_injectState__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../injectors/injectState */ "./src/injectors/injectState.ts");
+/* harmony import */ var _state_narrativeState__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../state/narrativeState */ "./src/state/narrativeState.ts");
+/* harmony import */ var _extractors_extractChapter__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../extractors/extractChapter */ "./src/extractors/extractChapter.ts");
+/* harmony import */ var _helpers__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./helpers */ "./src/commands/helpers.ts");
+// ============================================
+// BlazeTracker Slash Commands (STScript)
+// ============================================
+
+
+
+
+
+
+
+
+
+// Slash command types are retrieved from SillyTavern context at registration time
+function log(..._args) {
+    // Logging disabled for production
+}
+// ============================================
+// Helper Functions
+// ============================================
+/**
+ * Get default time for chapter extraction.
+ */
+function getDefaultTime() {
+    return {
+        year: 2024,
+        month: 1,
+        day: 1,
+        dayOfWeek: 'Monday',
+        hour: 12,
+        minute: 0,
+        second: 0,
+    };
+}
+// ============================================
+// Command: /bt-extract
+// ============================================
+async function extractCommand(args, _value) {
+    const context = SillyTavern.getContext();
+    // Parse message ID from args or use most recent
+    let messageId;
+    if (args.id !== undefined && args.id !== '') {
+        messageId = parseInt(args.id, 10);
+        if (isNaN(messageId) || messageId < 0 || messageId >= context.chat.length) {
+            return `Error: Invalid message ID "${args.id}". Valid range: 0-${context.chat.length - 1}`;
+        }
+    }
+    else {
+        messageId = (0,_helpers__WEBPACK_IMPORTED_MODULE_7__.getMostRecentMessageId)(context);
+    }
+    if (messageId <= 0) {
+        return 'Error: No messages to extract (chat is empty or only has system message)';
+    }
+    log('Slash command: extracting state for message', messageId);
+    // Note: Milestone clearing for re-extraction happens inside doExtractState
+    // so it applies to all extraction triggers (swiping, editing, fire button, etc.)
+    try {
+        const result = await (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.doExtractState)(messageId, { isManual: true });
+        if (result) {
+            (0,_injectors_injectState__WEBPACK_IMPORTED_MODULE_4__.updateInjectionFromChat)();
+            return `Successfully extracted state for message ${messageId}`;
+        }
+        else {
+            return `Extraction returned no result for message ${messageId} (may have been aborted or already in progress)`;
+        }
+    }
+    catch (e) {
+        log('Extraction error:', e);
+        return `Error extracting state: ${e.message}`;
+    }
+}
+// ============================================
+// Command: /bt-chapter
+// ============================================
+async function chapterCommand(args, _value) {
+    const context = SillyTavern.getContext();
+    const lastMessageId = (0,_helpers__WEBPACK_IMPORTED_MODULE_7__.getMostRecentMessageId)(context);
+    if (lastMessageId <= 0) {
+        return 'Error: No messages in chat';
+    }
+    // Get the current state
+    const message = context.chat[lastMessageId];
+    let stateData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_3__.getMessageState)(message);
+    // If no state, run extraction first
+    if (!stateData?.state) {
+        if (_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.extractionInProgress.has(lastMessageId)) {
+            return 'Error: Extraction already in progress for this message. Please wait.';
+        }
+        const extractResult = await (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.doExtractState)(lastMessageId, { isManual: true });
+        if (!extractResult?.state) {
+            return 'Error: Failed to extract state for the most recent message.';
+        }
+        stateData = extractResult;
+    }
+    const state = stateData.state;
+    const currentEvents = state.currentEvents ?? [];
+    if (currentEvents.length === 0) {
+        return 'Error: No events in current chapter to finalize. Need at least one event.';
+    }
+    const narrativeState = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_5__.getOrInitializeNarrativeState)();
+    const currentChapter = state.currentChapter ?? 0;
+    // Get time range from events
+    const startTime = currentEvents[0]?.timestamp ?? state.time ?? getDefaultTime();
+    const endTime = state.time ?? getDefaultTime();
+    const primaryLocation = state.location
+        ? `${state.location.area} - ${state.location.place}`
+        : 'Unknown';
+    log('Slash command: forcing chapter break at chapter', currentChapter);
+    try {
+        // Extract chapter summary via LLM (force create since this is an explicit command)
+        const chapterResult = await (0,_extractors_extractChapter__WEBPACK_IMPORTED_MODULE_6__.extractChapterBoundary)({
+            events: currentEvents,
+            narrativeState,
+            chapterIndex: currentChapter,
+            startTime,
+            endTime,
+            primaryLocation,
+            forceCreate: true,
+        });
+        if (!chapterResult.chapter) {
+            return 'Error: Failed to generate chapter summary';
+        }
+        // Allow title override
+        if (args.title) {
+            chapterResult.chapter.title = args.title;
+        }
+        // Add chapter to narrative state
+        (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_5__.addChapter)(narrativeState, chapterResult.chapter);
+        await (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_5__.saveNarrativeState)(narrativeState);
+        // Update the message state - increment chapter, clear events, show chapter ended
+        const updatedState = {
+            ...state,
+            currentChapter: currentChapter + 1,
+            currentEvents: undefined,
+            chapterEnded: {
+                index: currentChapter,
+                title: chapterResult.chapter.title,
+                summary: chapterResult.chapter.summary,
+                eventCount: currentEvents.length,
+                reason: 'manual',
+            },
+        };
+        const newStateData = {
+            state: updatedState,
+            extractedAt: new Date().toISOString(),
+        };
+        (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_3__.setMessageState)(message, newStateData);
+        await context.saveChat();
+        // Re-render the state display with the new state data
+        (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.renderMessageState)(lastMessageId, newStateData);
+        (0,_injectors_injectState__WEBPACK_IMPORTED_MODULE_4__.updateInjectionFromChat)();
+        return `Chapter ${currentChapter + 1} created: "${chapterResult.chapter.title}" (${currentEvents.length} events archived)`;
+    }
+    catch (e) {
+        log('Chapter creation error:', e);
+        return `Error creating chapter: ${e.message}`;
+    }
+}
+// ============================================
+// Command: /bt-extract-all
+// ============================================
+async function extractAllCommand(_args, _value) {
+    const context = SillyTavern.getContext();
+    const totalMessages = context.chat.length;
+    if (totalMessages <= 1) {
+        return 'Error: No messages to extract (chat is empty or only has system message)';
+    }
+    // Get current state info for confirmation message
+    const currentNarrativeState = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_5__.getNarrativeState)();
+    const chapterCount = currentNarrativeState?.chapters.length ?? 0;
+    const relationshipCount = currentNarrativeState?.relationships.length ?? 0;
+    // Show confirmation popup
+    const confirmMessage = `This will DELETE all BlazeTracker data FOR THIS CHAT and re-extract from scratch:\n\n` +
+        `• ${chapterCount} chapter(s)\n` +
+        `• ${relationshipCount} relationship(s) (including all milestones)\n` +
+        `• All per-message state data\n\n` +
+        `Other chats are not affected. This cannot be undone. Continue?`;
+    const confirmed = (await context.callGenericPopup?.(confirmMessage, 1 /* CONFIRM */)) ??
+        window.confirm(confirmMessage);
+    if (!confirmed) {
+        return 'Extraction cancelled.';
+    }
+    log('Slash command: extracting all messages');
+    // Unmount all roots first to prevent stale UI during extraction
+    (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.unmountAllRoots)();
+    // Clear all existing state before starting
+    log('Clearing all existing BlazeTracker state...');
+    // 1. Reset narrative state (chapters, relationships)
+    const freshNarrativeState = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_5__.initializeNarrativeState)();
+    (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_5__.setNarrativeState)(freshNarrativeState);
+    // 2. Clear all per-message states
+    for (let i = 1; i < totalMessages; i++) {
+        const message = context.chat[i];
+        if (message.extra && message.extra[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY]) {
+            delete message.extra[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY];
+        }
+    }
+    // Save the cleared state
+    await context.saveChat();
+    log('All state cleared, starting fresh extraction...');
+    let extracted = 0;
+    let failed = 0;
+    // Set batch flag to prevent GENERATION_ENDED handler from interfering
+    (0,_extractors_extractState__WEBPACK_IMPORTED_MODULE_2__.setBatchExtractionInProgress)(true);
+    try {
+        // Start from message 1 (skip system message at 0)
+        for (let i = 1; i < totalMessages; i++) {
+            try {
+                // Show progress via toastr if available
+                window.toastr?.info(`Extracting message ${i}/${totalMessages - 1}...`, _constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_NAME, { timeOut: 1000 });
+                const result = await (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.doExtractState)(i);
+                if (result) {
+                    extracted++;
+                }
+                else {
+                    failed++;
+                }
+            }
+            catch (e) {
+                log(`Failed to extract message ${i}:`, e);
+                failed++;
+            }
+        }
+    }
+    finally {
+        // Always clear the batch flag when done
+        (0,_extractors_extractState__WEBPACK_IMPORTED_MODULE_2__.setBatchExtractionInProgress)(false);
+    }
+    // Final update
+    (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.renderAllStates)();
+    (0,_injectors_injectState__WEBPACK_IMPORTED_MODULE_4__.updateInjectionFromChat)();
+    const results = [];
+    if (extracted > 0)
+        results.push(`${extracted} extracted`);
+    if (failed > 0)
+        results.push(`${failed} failed`);
+    return `Extraction complete (full reset): ${results.join(', ')}`;
+}
+/**
+ * Run extraction on all messages (used by legacy data migration).
+ * Assumes state has already been cleared/initialized.
+ */
+async function runExtractAll() {
+    const context = SillyTavern.getContext();
+    const totalMessages = context.chat.length;
+    let extracted = 0;
+    let failed = 0;
+    // Set batch flag to prevent GENERATION_ENDED handler from interfering
+    (0,_extractors_extractState__WEBPACK_IMPORTED_MODULE_2__.setBatchExtractionInProgress)(true);
+    try {
+        // Start from message 1 (skip system message at 0)
+        for (let i = 1; i < totalMessages; i++) {
+            try {
+                window.toastr?.info(`Extracting message ${i}/${totalMessages - 1}...`, _constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_NAME, { timeOut: 1000 });
+                const result = await (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.doExtractState)(i);
+                if (result) {
+                    extracted++;
+                }
+                else {
+                    failed++;
+                }
+            }
+            catch (e) {
+                log(`Failed to extract message ${i}:`, e);
+                failed++;
+            }
+        }
+    }
+    finally {
+        (0,_extractors_extractState__WEBPACK_IMPORTED_MODULE_2__.setBatchExtractionInProgress)(false);
+    }
+    // Final update
+    (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_1__.renderAllStates)();
+    (0,_injectors_injectState__WEBPACK_IMPORTED_MODULE_4__.updateInjectionFromChat)();
+    return { extracted, failed };
+}
+// ============================================
+// Command: /bt-status
+// ============================================
+async function statusCommand(_args, _value) {
+    const context = SillyTavern.getContext();
+    const { extracted, total } = (0,_helpers__WEBPACK_IMPORTED_MODULE_7__.countExtractedMessages)(context);
+    const narrativeState = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_5__.getNarrativeState)();
+    // Build status rows
+    const rows = [
+        { label: 'Messages Extracted', value: `${extracted} / ${total}` },
+    ];
+    if (narrativeState) {
+        rows.push({ label: 'Chapters', value: String(narrativeState.chapters.length) });
+        rows.push({ label: 'Relationships', value: String(narrativeState.relationships.length) });
+    }
+    else {
+        rows.push({ label: 'Narrative State', value: 'Not initialized' });
+    }
+    // Get current events from most recent state
+    const lastMessageId = (0,_helpers__WEBPACK_IMPORTED_MODULE_7__.getMostRecentMessageId)(context);
+    if (lastMessageId > 0) {
+        const state = (0,_helpers__WEBPACK_IMPORTED_MODULE_7__.getStateForMessage)(context, lastMessageId);
+        if (state?.currentEvents) {
+            rows.push({ label: 'Current Chapter Events', value: String(state.currentEvents.length) });
+        }
+    }
+    // Create popup content
+    const container = document.createElement('div');
+    container.innerHTML = `
+		<div style="padding: 15px; min-width: 300px;">
+			<h3 style="margin: 0 0 15px 0; color: var(--SmartThemeEmColor, #8af);">
+				<i class="fa-solid fa-fire" style="margin-right: 8px;"></i>BlazeTracker Status
+			</h3>
+			<table style="width: 100%; border-collapse: collapse;">
+				${rows
+        .map(row => `
+					<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+						<td style="padding: 8px 12px 8px 0; opacity: 0.8;">${row.label}</td>
+						<td style="padding: 8px 0; font-weight: 600; text-align: right;">${row.value}</td>
+					</tr>
+				`)
+        .join('')}
+			</table>
+		</div>
+	`;
+    // Show popup
+    await context.callGenericPopup(container, context.POPUP_TYPE.TEXT, null, {
+        okButton: 'Close',
+    });
+    return '';
+}
+// ============================================
+// Registration
+// ============================================
+function registerSlashCommands() {
+    try {
+        // Get slash command classes from SillyTavern context
+        const context = SillyTavern.getContext();
+        const SlashCommandParser = context.SlashCommandParser;
+        const SlashCommand = context.SlashCommand;
+        const SlashCommandNamedArgument = context.SlashCommandNamedArgument;
+        const ARGUMENT_TYPE = context.ARGUMENT_TYPE;
+        if (!SlashCommandParser || !SlashCommand) {
+            console.warn(`[${_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_NAME}] Slash command API not available, skipping registration`);
+            return;
+        }
+        // /bt-extract - Extract state for a message
+        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+            name: 'bt-extract',
+            callback: extractCommand,
+            namedArgumentList: [
+                SlashCommandNamedArgument.fromProps({
+                    name: 'id',
+                    description: 'Message ID to extract (defaults to most recent)',
+                    typeList: [ARGUMENT_TYPE.NUMBER],
+                    isRequired: false,
+                }),
+            ],
+            helpString: `
+				<div>
+					Extract BlazeTracker state for a message.
+					<br><br>
+					<strong>Usage:</strong>
+					<ul>
+						<li><code>/bt-extract</code> - Extract most recent message</li>
+						<li><code>/bt-extract id=5</code> - Extract message #5</li>
+					</ul>
+				</div>
+			`,
+            returns: ARGUMENT_TYPE.STRING,
+        }));
+        // /bt-chapter - Force chapter break
+        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+            name: 'bt-chapter',
+            callback: chapterCommand,
+            namedArgumentList: [
+                SlashCommandNamedArgument.fromProps({
+                    name: 'title',
+                    description: 'Override the auto-generated chapter title',
+                    typeList: [ARGUMENT_TYPE.STRING],
+                    isRequired: false,
+                }),
+            ],
+            helpString: `
+				<div>
+					Force a chapter break at the current point in the narrative.
+					<br><br>
+					<strong>Usage:</strong>
+					<ul>
+						<li><code>/bt-chapter</code> - Create chapter with auto-generated title</li>
+						<li><code>/bt-chapter title="The Great Escape"</code> - Create chapter with custom title</li>
+					</ul>
+					<br>
+					Requires extracted state with at least one event. Run /bt-extract first if needed.
+				</div>
+			`,
+            returns: ARGUMENT_TYPE.STRING,
+        }));
+        // /bt-extract-all - Extract all messages (full reset)
+        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+            name: 'bt-extract-all',
+            callback: extractAllCommand,
+            helpString: `
+				<div>
+					Extract BlazeTracker state for all messages in the chat.
+					<br><br>
+					<strong>WARNING:</strong> This command clears ALL existing BlazeTracker data
+					(relationships, chapters, events, per-message state) before starting fresh extraction.
+					<br><br>
+					<strong>Usage:</strong>
+					<ul>
+						<li><code>/bt-extract-all</code> - Clear all state and re-extract everything</li>
+					</ul>
+					<br>
+					<em>Note: This can take a while for long chats as it makes multiple API calls.</em>
+				</div>
+			`,
+            returns: ARGUMENT_TYPE.STRING,
+        }));
+        // /bt-status - Show BlazeTracker status
+        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+            name: 'bt-status',
+            callback: statusCommand,
+            helpString: `
+				<div>
+					Show BlazeTracker status for the current chat.
+					<br><br>
+					Displays:
+					<ul>
+						<li>Messages extracted vs total</li>
+						<li>Number of chapters</li>
+						<li>Number of relationships</li>
+						<li>Events in current chapter</li>
+					</ul>
+				</div>
+			`,
+            returns: ARGUMENT_TYPE.STRING,
+        }));
+        log('Slash commands registered: /bt-extract, /bt-chapter, /bt-extract-all, /bt-status');
+    }
+    catch (e) {
+        console.error(`[${_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_NAME}] Failed to register slash commands:`, e);
+    }
+}
+
+
+/***/ },
+
 /***/ "./src/constants.ts"
 /*!**************************!*\
   !*** ./src/constants.ts ***!
@@ -37897,6 +39441,176 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 const EXTENSION_NAME = 'BlazeTracker';
 const EXTENSION_KEY = 'blazetracker';
+
+
+/***/ },
+
+/***/ "./src/extractors/extractChapter.ts"
+/*!******************************************!*\
+  !*** ./src/extractors/extractChapter.ts ***!
+  \******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CHAPTER_BOUNDARY_SCHEMA: () => (/* binding */ CHAPTER_BOUNDARY_SCHEMA),
+/* harmony export */   extractChapterBoundary: () => (/* binding */ extractChapterBoundary)
+/* harmony export */ });
+/* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
+/* harmony import */ var _prompts__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./prompts */ "./src/extractors/prompts.ts");
+/* harmony import */ var _utils_generator__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../utils/generator */ "./src/utils/generator.ts");
+/* harmony import */ var _utils_json__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../utils/json */ "./src/utils/json.ts");
+/* harmony import */ var _state_chapters__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../state/chapters */ "./src/state/chapters.ts");
+/* harmony import */ var _state_events__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../state/events */ "./src/state/events.ts");
+/* harmony import */ var _state_relationships__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../state/relationships */ "./src/state/relationships.ts");
+// ============================================
+// Chapter Extractor
+// ============================================
+
+
+
+
+
+
+
+// ============================================
+// Schema & Example
+// ============================================
+const CHAPTER_BOUNDARY_SCHEMA = {
+    type: 'object',
+    description: 'Chapter boundary analysis result',
+    additionalProperties: false,
+    properties: {
+        isChapterBoundary: {
+            type: 'boolean',
+            description: 'Whether this represents a true narrative chapter boundary',
+        },
+        title: {
+            type: 'string',
+            description: 'A short, evocative title for the chapter (3-6 words)',
+        },
+        summary: {
+            type: 'string',
+            description: '2-3 sentence summary of what happened in the chapter',
+        },
+        outcomes: {
+            type: 'object',
+            properties: {
+                relationshipChanges: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Brief descriptions of relationship shifts',
+                },
+                secretsRevealed: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Secrets that came to light',
+                },
+                newComplications: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'New problems or tensions introduced',
+                },
+            },
+        },
+    },
+    required: ['isChapterBoundary', 'title', 'summary'],
+};
+const CHAPTER_EXAMPLE = JSON.stringify({
+    isChapterBoundary: true,
+    title: 'The Midnight Confession',
+    summary: 'Elena revealed her past to Marcus under the stars, leading to an unexpected moment of vulnerability. Their relationship deepened as secrets were shared and trust was established.',
+    outcomes: {
+        relationshipChanges: [
+            'Elena and Marcus grew closer through shared vulnerability',
+        ],
+        secretsRevealed: ["Elena's criminal past"],
+        newComplications: ["Marcus must now decide whether to keep Elena's secret"],
+    },
+}, null, 2);
+// ============================================
+// Constants
+// ============================================
+const SYSTEM_PROMPT = 'You are a narrative analysis agent for roleplay. Analyze chapter boundaries and summarize story progression. Return only valid JSON.';
+/**
+ * Extract chapter information when a potential boundary is detected.
+ * Returns the chapter if it's a true boundary, null otherwise.
+ */
+async function extractChapterBoundary(params) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getSettings)();
+    const schemaStr = JSON.stringify(CHAPTER_BOUNDARY_SCHEMA, null, 2);
+    const eventsStr = (0,_state_events__WEBPACK_IMPORTED_MODULE_5__.formatEventsForInjection)(params.events);
+    const relationshipsStr = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_6__.formatRelationshipsForPrompt)(params.narrativeState.relationships);
+    const prompt = (0,_prompts__WEBPACK_IMPORTED_MODULE_1__.getPrompt)('chapter_boundary')
+        .replace('{{currentEvents}}', eventsStr)
+        .replace('{{currentRelationships}}', relationshipsStr)
+        .replace('{{schema}}', schemaStr)
+        .replace('{{schemaExample}}', CHAPTER_EXAMPLE);
+    const llmMessages = (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.buildExtractionMessages)(SYSTEM_PROMPT, prompt);
+    try {
+        const response = await (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.makeGeneratorRequest)(llmMessages, {
+            profileId: settings.profileId,
+            maxTokens: settings.maxResponseTokens,
+            temperature: (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getTemperature)('chapter_boundary'),
+            abortSignal: params.abortSignal,
+        });
+        const parsed = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.parseJsonResponse)(response, {
+            shape: 'object',
+            moduleName: 'BlazeTracker/Chapter',
+        });
+        const result = validateChapterData(parsed);
+        // If not forcing and LLM says it's not a boundary, return false
+        if (!params.forceCreate && !result.isChapterBoundary) {
+            return { isChapterBoundary: false };
+        }
+        // Create the chapter with extracted data (either forced or natural boundary)
+        const chapter = (0,_state_chapters__WEBPACK_IMPORTED_MODULE_4__.createEmptyChapter)(params.chapterIndex);
+        chapter.title = result.title;
+        chapter.summary = result.summary;
+        chapter.outcomes = result.outcomes;
+        // Finalize with time range and events
+        const finalizedChapter = (0,_state_chapters__WEBPACK_IMPORTED_MODULE_4__.finalizeChapter)(chapter, params.events, params.startTime, params.endTime, params.primaryLocation);
+        return {
+            isChapterBoundary: true,
+            chapter: finalizedChapter,
+        };
+    }
+    catch (error) {
+        console.warn('[BlazeTracker] Chapter extraction failed:', error);
+        // On error, assume it's not a chapter boundary
+        return { isChapterBoundary: false };
+    }
+}
+function validateChapterData(data) {
+    if (!(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data)) {
+        return {
+            isChapterBoundary: false,
+            title: '',
+            summary: '',
+            outcomes: (0,_state_chapters__WEBPACK_IMPORTED_MODULE_4__.createEmptyOutcomes)(),
+        };
+    }
+    const isChapterBoundary = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asBoolean)(data.isChapterBoundary, false);
+    const title = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asString)(data.title, 'Untitled Chapter');
+    const summary = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asString)(data.summary, '');
+    const outcomes = validateOutcomes(data.outcomes);
+    return {
+        isChapterBoundary,
+        title,
+        summary,
+        outcomes,
+    };
+}
+function validateOutcomes(data) {
+    if (!(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data)) {
+        return (0,_state_chapters__WEBPACK_IMPORTED_MODULE_4__.createEmptyOutcomes)();
+    }
+    return {
+        relationshipChanges: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(data.relationshipChanges),
+        secretsRevealed: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(data.secretsRevealed),
+        newComplications: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(data.newComplications),
+    };
+}
 
 
 /***/ },
@@ -37934,11 +39648,6 @@ const CHARACTERS_SCHEMA = {
                 type: 'string',
                 description: "Character's name as used in the scene",
             },
-            goals: {
-                type: 'array',
-                description: "Character's short-term goals",
-                items: { type: 'string' },
-            },
             position: {
                 type: 'string',
                 description: "Physical position and where (e.g. 'sitting at the bar', 'leaning against the wall'). Be detailed about who they're facing/interacting with.",
@@ -37968,9 +39677,17 @@ const CHARACTERS_SCHEMA = {
                         type: ['string', 'null'],
                         description: 'Headwear (null if none)',
                     },
+                    neck: {
+                        type: ['string', 'null'],
+                        description: 'Neckwear - necklaces, chokers, scarves, ties (null if none)',
+                    },
                     jacket: {
                         type: ['string', 'null'],
                         description: 'Outer layer (null if none)',
+                    },
+                    back: {
+                        type: ['string', 'null'],
+                        description: 'Items worn on back - backpacks, quivers, cloaks, capes (null if none)',
                     },
                     torso: {
                         type: ['string', 'null'],
@@ -37995,7 +39712,9 @@ const CHARACTERS_SCHEMA = {
                 },
                 required: [
                     'head',
+                    'neck',
                     'jacket',
+                    'back',
                     'torso',
                     'legs',
                     'underwear',
@@ -38027,14 +39746,15 @@ const CHARACTERS_SCHEMA = {
 const CHARACTERS_EXAMPLE = JSON.stringify([
     {
         name: 'Elena',
-        position: 'Sitting in the booth, facing the entrance, hands wrapped around a coffee mug',
-        activity: 'Watching the door nervously',
+        position: 'Sitting in the booth, facing the entrance',
+        activity: 'Watching the door nervously, hands wrapped around a coffee mug',
         mood: ['anxious', 'hopeful'],
-        goals: ['find out what Marcus wants', 'protect Sarah'],
         physicalState: ['tired'],
         outfit: {
             head: null,
+            neck: 'Silver pendant necklace',
             jacket: null,
+            back: null,
             torso: 'Dark red blouse',
             legs: 'Black jeans',
             underwear: 'Black lace bra and matching panties',
@@ -38111,20 +39831,22 @@ function validateCharacter(data) {
         name,
         position,
         activity: typeof data.activity === 'string' ? data.activity : undefined,
-        goals: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(data.goals),
+        // Note: goals removed in v1.0.0, now tracked in CharacterArc
         mood: Array.isArray(data.mood) ? (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(data.mood, 5) : ['neutral'],
         physicalState: Array.isArray(data.physicalState)
             ? (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(data.physicalState, 5)
             : undefined,
         outfit,
-        dispositions: validateDispositions(data.dispositions),
+        // Note: dispositions removed in v1.0.0, now tracked in Relationship
     };
 }
 function validateOutfit(data) {
     if (!(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data)) {
         return {
             head: null,
+            neck: null,
             jacket: null,
+            back: null,
             torso: null,
             legs: null,
             underwear: null,
@@ -38134,25 +39856,15 @@ function validateOutfit(data) {
     }
     return {
         head: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringOrNull)(data.head),
+        neck: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringOrNull)(data.neck),
         jacket: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringOrNull)(data.jacket),
+        back: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringOrNull)(data.back),
         torso: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringOrNull)(data.torso),
         legs: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringOrNull)(data.legs),
         underwear: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringOrNull)(data.underwear),
         socks: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringOrNull)(data.socks),
         footwear: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringOrNull)(data.footwear),
     };
-}
-function validateDispositions(data) {
-    if (!(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data)) {
-        return undefined;
-    }
-    const result = {};
-    for (const [key, value] of Object.entries(data)) {
-        if (Array.isArray(value)) {
-            result[key] = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(value, 5);
-        }
-    }
-    return Object.keys(result).length > 0 ? result : undefined;
 }
 
 
@@ -38167,18 +39879,22 @@ function validateDispositions(data) {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   CLIMATE_SCHEMA: () => (/* binding */ CLIMATE_SCHEMA),
-/* harmony export */   extractClimate: () => (/* binding */ extractClimate)
+/* harmony export */   extractClimate: () => (/* binding */ extractClimate),
+/* harmony export */   extractClimateWithContext: () => (/* binding */ extractClimateWithContext),
+/* harmony export */   isLegacyClimate: () => (/* reexport safe */ _weather__WEBPACK_IMPORTED_MODULE_4__.isLegacyClimate)
 /* harmony export */ });
 /* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
 /* harmony import */ var _prompts__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./prompts */ "./src/extractors/prompts.ts");
 /* harmony import */ var _utils_generator__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../utils/generator */ "./src/utils/generator.ts");
 /* harmony import */ var _utils_json__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../utils/json */ "./src/utils/json.ts");
+/* harmony import */ var _weather__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../weather */ "./src/weather/index.ts");
+
 
 
 
 
 // ============================================
-// Schema & Example
+// Schema & Example (Legacy)
 // ============================================
 const CLIMATE_SCHEMA = {
     type: 'object',
@@ -38213,10 +39929,59 @@ const VALID_WEATHER = [
     'windy',
     'thunderstorm',
 ];
-// ============================================
-// Public API
-// ============================================
+/**
+ * Main climate extraction function.
+ * Uses procedural weather system if enabled, otherwise falls back to LLM extraction.
+ */
+async function extractClimateWithContext(options) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getSettings)();
+    if (settings.useProceduralWeather) {
+        return extractProceduralClimateWrapper(options);
+    }
+    else {
+        const climate = await extractLegacyClimate(options.isInitial, options.messages, options.narrativeTime, options.location, options.characterInfo, (0,_weather__WEBPACK_IMPORTED_MODULE_4__.isLegacyClimate)(options.previousClimate) ? options.previousClimate : null, options.abortSignal);
+        return {
+            climate,
+            transition: null,
+            // Return unchanged caches when using legacy mode
+            forecastCache: options.forecastCache,
+            locationMappings: options.locationMappings,
+        };
+    }
+}
+/**
+ * Legacy extraction function for backward compatibility.
+ * Uses LLM to extract climate data.
+ */
 async function extractClimate(isInitial, messages, narrativeTime, location, characterInfo, previousClimate, abortSignal) {
+    return extractLegacyClimate(isInitial, messages, narrativeTime, location, characterInfo, previousClimate, abortSignal);
+}
+// ============================================
+// Procedural Weather Wrapper
+// ============================================
+async function extractProceduralClimateWrapper(options) {
+    const params = {
+        isInitial: options.isInitial,
+        currentTime: options.narrativeTime,
+        currentLocation: options.location,
+        previousClimate: options.previousClimate,
+        narrativeContext: options.messages,
+        forecastCache: options.forecastCache,
+        locationMappings: options.locationMappings,
+        abortSignal: options.abortSignal,
+    };
+    const result = await (0,_weather__WEBPACK_IMPORTED_MODULE_4__.extractProceduralClimate)(params);
+    return {
+        climate: result.climate,
+        transition: result.transition,
+        forecastCache: result.forecastCache,
+        locationMappings: result.locationMappings,
+    };
+}
+// ============================================
+// Legacy LLM Extraction
+// ============================================
+async function extractLegacyClimate(isInitial, messages, narrativeTime, location, characterInfo, previousClimate, abortSignal) {
     const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getSettings)();
     const timeStr = formatNarrativeTime(narrativeTime);
     const locationStr = `${location.area} - ${location.place} (${location.position})`;
@@ -38286,6 +40051,750 @@ function validateClimate(data) {
     const temperature = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asNumber)(obj.temperature, 70);
     return { weather, temperature };
 }
+// ============================================
+// Type Guards
+// ============================================
+
+
+
+/***/ },
+
+/***/ "./src/extractors/extractEvent.ts"
+/*!****************************************!*\
+  !*** ./src/extractors/extractEvent.ts ***!
+  \****************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   EVENT_SCHEMA: () => (/* binding */ EVENT_SCHEMA),
+/* harmony export */   extractEvent: () => (/* binding */ extractEvent)
+/* harmony export */ });
+/* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
+/* harmony import */ var _prompts__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./prompts */ "./src/extractors/prompts.ts");
+/* harmony import */ var _utils_generator__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../utils/generator */ "./src/utils/generator.ts");
+/* harmony import */ var _utils_json__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../utils/json */ "./src/utils/json.ts");
+/* harmony import */ var _types_state__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../types/state */ "./src/types/state.ts");
+/* harmony import */ var _state_relationships__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../state/relationships */ "./src/state/relationships.ts");
+// ============================================
+// Event Extractor
+// ============================================
+
+
+
+
+
+
+// ============================================
+// Schema & Example
+// ============================================
+const EVENT_SCHEMA = {
+    type: 'object',
+    description: 'A significant event extracted from the messages',
+    additionalProperties: false,
+    properties: {
+        summary: {
+            type: 'string',
+            description: 'Detailed 2-sentence summary capturing what happened, who was involved, and the emotional context',
+        },
+        eventTypes: {
+            type: 'array',
+            items: { type: 'string', enum: [..._types_state__WEBPACK_IMPORTED_MODULE_4__.EVENT_TYPES] },
+            description: 'All applicable event type flags (can select multiple)',
+        },
+        eventPairs: {
+            type: 'object',
+            description: 'REQUIRED: Maps each event type to the pair(s) of characters involved. Value is either [char1, char2] for single pair, or [[char1, char2], [char3, char4]] for multiple pairs.',
+            additionalProperties: {
+                oneOf: [
+                    {
+                        type: 'array',
+                        items: { type: 'string' },
+                        minItems: 2,
+                        maxItems: 2,
+                        description: 'Single pair: [char1, char2]',
+                    },
+                    {
+                        type: 'array',
+                        items: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            minItems: 2,
+                            maxItems: 2,
+                        },
+                        description: 'Multiple pairs: [[char1, char2], [char3, char4]]',
+                    },
+                ],
+            },
+        },
+        eventDetails: {
+            type: 'object',
+            description: 'Brief clarifying details for event types that need context. Key is the event type, value is a short phrase explaining what specifically happened.',
+            additionalProperties: { type: 'string' },
+        },
+        witnesses: {
+            type: 'array',
+            description: 'Characters who witnessed or participated in this event',
+            items: { type: 'string' },
+        },
+        relationshipSignals: {
+            type: 'array',
+            description: 'Optional signals if events affect relationships. One entry per affected pair.',
+            items: {
+                type: 'object',
+                properties: {
+                    pair: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        minItems: 2,
+                        maxItems: 2,
+                        description: 'The two characters involved',
+                    },
+                    changes: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                from: {
+                                    type: 'string',
+                                    description: 'Character whose attitude is changing',
+                                },
+                                toward: {
+                                    type: 'string',
+                                    description: 'Character they feel differently about',
+                                },
+                                feeling: {
+                                    type: 'string',
+                                    description: 'New or changed feeling',
+                                },
+                            },
+                            required: ['from', 'toward', 'feeling'],
+                        },
+                    },
+                },
+            },
+        },
+    },
+    required: ['summary', 'eventTypes', 'eventPairs', 'witnesses'],
+};
+// Multiple examples showing different scenarios
+const EVENT_EXAMPLES = [
+    // Example 1: Single pair, emotional moment
+    {
+        summary: "After hours of tense silence, Elena finally broke down and confessed her past as a thief to Marcus, her voice trembling as she revealed the crimes she'd committed before they met. Marcus listened without interrupting, his expression unreadable, before finally reaching across the table to take her hand.",
+        eventTypes: ['secret_shared', 'emotional', 'confession'],
+        eventPairs: {
+            secret_shared: ['Elena', 'Marcus'],
+            emotional: ['Elena', 'Marcus'],
+            confession: ['Elena', 'Marcus'],
+        },
+        eventDetails: {
+            secret_shared: "Elena's past as a thief and the crimes she committed",
+            emotional: 'Elena broke down crying while revealing her past',
+            confession: 'Elena admitted her criminal history to Marcus',
+        },
+        witnesses: ['Elena', 'Marcus'],
+        relationshipSignals: [
+            {
+                pair: ['Elena', 'Marcus'],
+                changes: [
+                    { from: 'Elena', toward: 'Marcus', feeling: 'vulnerable' },
+                    { from: 'Marcus', toward: 'Elena', feeling: 'protective' },
+                ],
+            },
+        ],
+    },
+    // Example 2: Combat with multiple enemies (same event type, different pairs)
+    {
+        summary: "The ambush came from both sides - Jake barely dodged Viper's knife before spinning to block Razor's bat. He managed to disarm Viper with a swift kick, then turned his fury on Razor, slamming him against the alley wall.",
+        eventTypes: ['combat', 'danger'],
+        eventPairs: {
+            combat: [
+                ['Jake', 'Viper'],
+                ['Jake', 'Razor'],
+            ],
+            danger: ['Jake', 'Viper'],
+        },
+        eventDetails: {
+            combat: 'Jake fought off both Viper and Razor in the alley ambush',
+            danger: 'Jake was ambushed by two armed attackers',
+        },
+        witnesses: ['Jake', 'Viper', 'Razor'],
+        relationshipSignals: [
+            {
+                pair: ['Jake', 'Viper'],
+                changes: [{ from: 'Viper', toward: 'Jake', feeling: 'vengeful' }],
+            },
+            {
+                pair: ['Jake', 'Razor'],
+                changes: [{ from: 'Razor', toward: 'Jake', feeling: 'fearful' }],
+            },
+        ],
+    },
+    // Example 3: Mixed - combat AND emotional support from different people
+    {
+        summary: 'After Sarah dispatched the last of the guards, she found Alex trembling in the corner. She knelt beside him, pulling him into a fierce embrace while promising they would make it out together.',
+        eventTypes: ['combat', 'emotional', 'supportive', 'intimate_embrace'],
+        eventPairs: {
+            combat: ['Sarah', 'Guard'],
+            emotional: ['Sarah', 'Alex'],
+            supportive: ['Sarah', 'Alex'],
+            intimate_embrace: ['Sarah', 'Alex'],
+        },
+        eventDetails: {
+            combat: 'Sarah fought and defeated the guards',
+            emotional: 'Alex was traumatized and trembling',
+            supportive: 'Sarah comforted and reassured Alex',
+            intimate_embrace: 'Sarah pulled Alex into a protective embrace',
+        },
+        witnesses: ['Sarah', 'Alex', 'Guard'],
+        relationshipSignals: [
+            {
+                pair: ['Sarah', 'Alex'],
+                changes: [
+                    { from: 'Alex', toward: 'Sarah', feeling: 'grateful' },
+                    { from: 'Sarah', toward: 'Alex', feeling: 'protective' },
+                ],
+            },
+        ],
+    },
+];
+const EVENT_EXAMPLE = JSON.stringify(EVENT_EXAMPLES[0], null, 2);
+// ============================================
+// Constants
+// ============================================
+const SYSTEM_PROMPT = 'You are an event analysis agent for roleplay. Extract significant events and relationship changes. Return only valid JSON.';
+/**
+ * Extract a significant event from the recent messages.
+ * Returns null if no significant event occurred.
+ */
+async function extractEvent(params) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getSettings)();
+    if (!settings.trackEvents) {
+        return null;
+    }
+    // Format relationships for context
+    const relationshipsContext = formatRelationshipsForPrompt(params.relationships);
+    const schemaStr = JSON.stringify(EVENT_SCHEMA, null, 2);
+    const locationStr = `${params.currentLocation.area} - ${params.currentLocation.place}`;
+    const prompt = (0,_prompts__WEBPACK_IMPORTED_MODULE_1__.getPrompt)('event_extract')
+        .replace('{{messages}}', params.messages)
+        .replace('{{currentRelationships}}', relationshipsContext)
+        .replace('{{schema}}', schemaStr)
+        .replace('{{schemaExample}}', EVENT_EXAMPLE);
+    const llmMessages = (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.buildExtractionMessages)(SYSTEM_PROMPT, prompt);
+    try {
+        const response = await (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.makeGeneratorRequest)(llmMessages, {
+            profileId: settings.profileId,
+            maxTokens: settings.maxResponseTokens,
+            temperature: (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getTemperature)('event_extract'),
+            abortSignal: params.abortSignal,
+        });
+        const parsed = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.parseJsonResponse)(response, {
+            shape: 'object',
+            moduleName: 'BlazeTracker/Event',
+        });
+        const eventData = validateEventData(parsed, params.relationships);
+        // If the summary indicates no significant event, return null
+        if (!eventData || isNoEventResponse(eventData.summary)) {
+            return null;
+        }
+        // Process relationship signals and add milestones
+        // We use the first signal as the primary one for the event (for backward compat)
+        let relationshipSignal;
+        if (eventData.relationshipSignals && eventData.relationshipSignals.length > 0) {
+            // Process each relationship signal - infer milestones based on eventPairs
+            const processedSignals = await Promise.all(eventData.relationshipSignals.map(async (signal) => {
+                // Find event types that apply to this pair
+                const pairKey = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_5__.sortPair)(signal.pair[0], signal.pair[1])
+                    .join('|')
+                    .toLowerCase();
+                const eventTypesForPair = eventData.eventTypes.filter(et => {
+                    const etPairValue = eventData.eventPairs[et];
+                    if (!etPairValue)
+                        return false;
+                    // Normalize to array of pairs and check if any match
+                    const etPairs = normalizePairs(etPairValue);
+                    return etPairs.some(p => {
+                        const etPairKey = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_5__.sortPair)(p[0], p[1])
+                            .join('|')
+                            .toLowerCase();
+                        return etPairKey === pairKey;
+                    });
+                });
+                // Infer milestones from the event types for this pair
+                const existingRelationship = findRelationshipForPair(params.relationships, signal.pair);
+                const milestoneTypes = inferMilestoneTypesFromEventTypes(eventTypesForPair, existingRelationship);
+                if (milestoneTypes.length > 0) {
+                    const milestones = await createMilestonesWithDescriptions(milestoneTypes, signal.pair, params.messages, params.currentTime, params.currentLocation, params.characters ?? [], existingRelationship ?? undefined, eventData.eventDetails ?? {}, params.messageId, params.abortSignal);
+                    return { ...signal, milestones };
+                }
+                return signal;
+            }));
+            // Use the first signal as the primary relationship signal for the event
+            relationshipSignal = processedSignals[0];
+        }
+        // Create the timestamped event using scene's tension values
+        return {
+            timestamp: params.currentTime,
+            summary: eventData.summary,
+            eventTypes: eventData.eventTypes,
+            tensionType: params.currentTensionType,
+            tensionLevel: params.currentTensionLevel,
+            witnesses: eventData.witnesses,
+            location: locationStr,
+            relationshipSignal,
+        };
+    }
+    catch (error) {
+        console.warn('[BlazeTracker] Event extraction failed:', error);
+        return null;
+    }
+}
+// ============================================
+// Validation
+// ============================================
+function validateEventTypes(data) {
+    if (!Array.isArray(data)) {
+        return ['conversation']; // Default fallback
+    }
+    const valid = data.filter((t) => typeof t === 'string' && _types_state__WEBPACK_IMPORTED_MODULE_4__.EVENT_TYPES.includes(t));
+    return valid.length > 0 ? valid : ['conversation'];
+}
+/**
+ * Map event types to potential milestone types.
+ */
+const EVENT_TYPE_TO_MILESTONE = {
+    // Bonding
+    laugh: 'first_laugh',
+    gift: 'first_gift',
+    date: 'first_date',
+    i_love_you: 'first_i_love_you',
+    sleepover: 'first_sleepover',
+    shared_meal: 'first_shared_meal',
+    // Physical intimacy
+    intimate_touch: 'first_touch',
+    intimate_kiss: 'first_kiss',
+    intimate_embrace: 'first_embrace',
+    intimate_heated: 'first_heated',
+    // Sexual milestones (atomic)
+    intimate_foreplay: 'first_foreplay',
+    intimate_oral: 'first_oral',
+    intimate_manual: 'first_manual',
+    intimate_penetrative: 'first_penetrative',
+    intimate_climax: 'first_climax',
+    // Emotional
+    confession: 'confession',
+    secret_shared: 'secret_shared',
+    secret_revealed: 'secret_revealed',
+    // Commitment
+    promise: 'promise_made',
+    betrayal: 'betrayal',
+    // Life events
+    exclusivity: 'promised_exclusivity',
+    marriage: 'marriage',
+    pregnancy: 'pregnancy',
+    childbirth: 'had_child',
+    // Conflicts
+    argument: 'first_conflict',
+    combat: 'first_conflict',
+};
+/**
+ * Infer milestone types from event types, checking against existing relationship milestones.
+ * Returns all applicable milestone types that don't already exist (multiple possible from one event).
+ */
+function inferMilestoneTypesFromEventTypes(eventTypes, existingRelationship) {
+    const existingMilestoneTypes = new Set(existingRelationship?.milestones.map(m => m.type) ?? []);
+    const milestoneTypes = [];
+    const addedTypes = new Set();
+    // Check for first_meeting if no existing relationship
+    if (!existingRelationship && !existingMilestoneTypes.has('first_meeting')) {
+        milestoneTypes.push('first_meeting');
+        addedTypes.add('first_meeting');
+    }
+    // Check all event types for potential milestones
+    for (const eventType of eventTypes) {
+        const milestoneType = EVENT_TYPE_TO_MILESTONE[eventType];
+        if (!milestoneType)
+            continue;
+        // Skip if already have this milestone in the relationship
+        if (existingMilestoneTypes.has(milestoneType))
+            continue;
+        // Skip if we've already added this milestone type in this batch
+        if (addedTypes.has(milestoneType))
+            continue;
+        milestoneTypes.push(milestoneType);
+        addedTypes.add(milestoneType);
+    }
+    return milestoneTypes;
+}
+/**
+ * Format character info for the milestone prompt.
+ */
+function formatCharacterForMilestone(char) {
+    const parts = [`${char.name}:`];
+    if (char.position) {
+        parts.push(`Position: ${char.position}`);
+    }
+    if (char.mood?.length) {
+        parts.push(`Mood: ${char.mood.join(', ')}`);
+    }
+    // Format outfit - only non-null slots
+    const outfitParts = [];
+    if (char.outfit) {
+        for (const [slot, item] of Object.entries(char.outfit)) {
+            if (item) {
+                outfitParts.push(`${slot}: ${item}`);
+            }
+        }
+    }
+    if (outfitParts.length > 0) {
+        parts.push(`Wearing: ${outfitParts.join(', ')}`);
+    }
+    return parts.join(' | ');
+}
+/**
+ * Format relationship feelings for the milestone prompt.
+ */
+function formatRelationshipForMilestone(relationship, char1, char2) {
+    const [a, b] = relationship.pair;
+    const parts = [`${a} & ${b} (${relationship.status}):`];
+    // Figure out which attitude is which
+    const aIsChar1 = a.toLowerCase() === char1.toLowerCase();
+    const aToB = relationship.aToB;
+    const bToA = relationship.bToA;
+    if (aIsChar1) {
+        if (aToB.feelings?.length) {
+            parts.push(`${char1} feels: ${aToB.feelings.join(', ')}`);
+        }
+        if (bToA.feelings?.length) {
+            parts.push(`${char2} feels: ${bToA.feelings.join(', ')}`);
+        }
+    }
+    else {
+        if (bToA.feelings?.length) {
+            parts.push(`${char1} feels: ${bToA.feelings.join(', ')}`);
+        }
+        if (aToB.feelings?.length) {
+            parts.push(`${char2} feels: ${aToB.feelings.join(', ')}`);
+        }
+    }
+    return parts.join(' | ');
+}
+/**
+ * Map milestone types to the event types that provide relevant details.
+ */
+const MILESTONE_TO_EVENT_TYPE = {
+    // Physical intimacy
+    first_touch: ['intimate_touch'],
+    first_kiss: ['intimate_kiss'],
+    first_embrace: ['intimate_embrace'],
+    first_heated: ['intimate_heated'],
+    // Sexual milestones
+    first_foreplay: ['intimate_foreplay'],
+    first_oral: ['intimate_oral'],
+    first_manual: ['intimate_manual'],
+    first_penetrative: ['intimate_penetrative'],
+    first_climax: ['intimate_climax'],
+    // Emotional
+    confession: ['confession'],
+    emotional_intimacy: ['emotional'],
+    // Secrets
+    secret_shared: ['secret_shared'],
+    secret_revealed: ['secret_revealed'],
+    // Commitment
+    promise_made: ['promise'],
+    betrayal: ['betrayal'],
+    // Life events
+    promised_exclusivity: ['exclusivity'],
+    marriage: ['marriage'],
+    pregnancy: ['pregnancy'],
+    had_child: ['childbirth'],
+    // Conflicts
+    first_conflict: ['argument', 'combat'],
+};
+/**
+ * Get relevant event details for a milestone type.
+ */
+function getEventDetailsForMilestone(milestoneType, eventDetails) {
+    const relevantEventTypes = MILESTONE_TO_EVENT_TYPE[milestoneType] ?? [];
+    const details = [];
+    for (const eventType of relevantEventTypes) {
+        if (eventDetails[eventType]) {
+            details.push(eventDetails[eventType]);
+        }
+    }
+    return details.length > 0 ? details.join('; ') : '';
+}
+/**
+ * Extract a grounded description for a milestone from the messages.
+ */
+async function extractMilestoneDescription(milestoneType, characterPair, messages, currentTime, location, characters, relationship, eventDetails, abortSignal) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getSettings)();
+    // Format time of day
+    const hour = currentTime.hour;
+    const timeOfDay = hour < 6
+        ? 'late night'
+        : hour < 9
+            ? 'early morning'
+            : hour < 12
+                ? 'morning'
+                : hour < 14
+                    ? 'midday'
+                    : hour < 17
+                        ? 'afternoon'
+                        : hour < 20
+                            ? 'evening'
+                            : 'night';
+    // Format location
+    const locationStr = [location.area, location.place, location.position]
+        .filter(Boolean)
+        .join(' - ');
+    // Format props
+    const propsStr = location.props?.length ? location.props.join(', ') : 'none specified';
+    // Format character info for the pair
+    const [char1Name, char2Name] = characterPair;
+    const char1 = characters.find(c => c.name.toLowerCase() === char1Name.toLowerCase());
+    const char2 = characters.find(c => c.name.toLowerCase() === char2Name.toLowerCase());
+    const charactersStr = [
+        char1 ? formatCharacterForMilestone(char1) : `${char1Name}: (no details)`,
+        char2 ? formatCharacterForMilestone(char2) : `${char2Name}: (no details)`,
+    ].join('\n');
+    // Format relationship feelings
+    const relationshipStr = relationship
+        ? formatRelationshipForMilestone(relationship, char1Name, char2Name)
+        : `${char1Name} & ${char2Name}: no established relationship`;
+    // Get relevant event details for this milestone type
+    const eventDetailStr = getEventDetailsForMilestone(milestoneType, eventDetails);
+    const prompt = (0,_prompts__WEBPACK_IMPORTED_MODULE_1__.getPrompt)('milestone_description')
+        .replace(/\{\{milestoneType\}\}/g, milestoneType.replace(/_/g, ' '))
+        .replace(/\{\{characterPair\}\}/g, `${characterPair[0]} and ${characterPair[1]}`)
+        .replace(/\{\{timeOfDay\}\}/g, timeOfDay)
+        .replace(/\{\{location\}\}/g, locationStr)
+        .replace(/\{\{props\}\}/g, propsStr)
+        .replace(/\{\{characters\}\}/g, charactersStr)
+        .replace(/\{\{relationship\}\}/g, relationshipStr)
+        .replace(/\{\{eventDetail\}\}/g, eventDetailStr || 'none')
+        .replace('{{messages}}', messages);
+    // Use messages directly without wrapping in system prompt
+    const llmMessages = (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.buildExtractionMessages)('You are extracting factual descriptions of story moments. Be concise and accurate.', prompt);
+    try {
+        const response = await (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.makeGeneratorRequest)(llmMessages, {
+            profileId: settings.profileId,
+            maxTokens: 200, // Shorter response expected
+            temperature: (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getTemperature)('milestone_description'),
+            abortSignal,
+        });
+        // Clean up the response - remove any quotes or JSON formatting
+        return response
+            .trim()
+            .replace(/^["']|["']$/g, '')
+            .replace(/^description:\s*/i, '');
+    }
+    catch (error) {
+        console.warn('[BlazeTracker] Milestone description extraction failed:', error);
+        // Return a basic fallback description
+        return `A significant ${milestoneType.replace(/_/g, ' ')} moment between ${characterPair[0]} and ${characterPair[1]}.`;
+    }
+}
+/**
+ * Create full milestone events with descriptions extracted from the messages.
+ */
+async function createMilestonesWithDescriptions(milestoneTypes, characterPair, messages, currentTime, location, characters, relationship, eventDetails, messageId, abortSignal) {
+    // Extract descriptions in parallel for all milestones
+    const descriptionPromises = milestoneTypes.map(type => extractMilestoneDescription(type, characterPair, messages, currentTime, location, characters, relationship, eventDetails, abortSignal));
+    const descriptions = await Promise.all(descriptionPromises);
+    // Format location string for storage
+    const locationStr = [location.area, location.place].filter(Boolean).join(' - ');
+    return milestoneTypes.map((type, index) => ({
+        type,
+        description: descriptions[index],
+        timestamp: currentTime,
+        location: locationStr,
+        messageId,
+    }));
+}
+/**
+ * Find an existing relationship for a pair (case-insensitive).
+ */
+function findRelationshipForPair(relationships, pair) {
+    return relationships.find(r => (r.pair[0].toLowerCase() === pair[0].toLowerCase() &&
+        r.pair[1].toLowerCase() === pair[1].toLowerCase()) ||
+        (r.pair[0].toLowerCase() === pair[1].toLowerCase() &&
+            r.pair[1].toLowerCase() === pair[0].toLowerCase()));
+}
+function validateEventDetails(data) {
+    if (!data || !(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data)) {
+        return undefined;
+    }
+    const details = {};
+    for (const [key, value] of Object.entries(data)) {
+        if (typeof value === 'string' && value.trim()) {
+            details[key] = value.trim();
+        }
+    }
+    return Object.keys(details).length > 0 ? details : undefined;
+}
+/**
+ * Parse a single pair from data.
+ */
+function parseSinglePair(pair) {
+    if (!Array.isArray(pair) || pair.length < 2)
+        return null;
+    const char1 = typeof pair[0] === 'string' ? pair[0].trim() : '';
+    const char2 = typeof pair[1] === 'string' ? pair[1].trim() : '';
+    if (char1 && char2)
+        return [char1, char2];
+    return null;
+}
+/**
+ * Validate eventPairs - supports both single pair and array of pairs per event type.
+ */
+function validateEventPairs(data, eventTypes) {
+    const pairs = {};
+    if (!data || !(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data)) {
+        return pairs;
+    }
+    for (const eventType of eventTypes) {
+        const value = data[eventType];
+        if (!Array.isArray(value) || value.length < 2)
+            continue;
+        // Check if it's an array of pairs [[char1, char2], [char3, char4]]
+        if (Array.isArray(value[0])) {
+            const multiplePairs = [];
+            for (const item of value) {
+                const parsed = parseSinglePair(item);
+                if (parsed)
+                    multiplePairs.push(parsed);
+            }
+            if (multiplePairs.length > 0) {
+                pairs[eventType] = multiplePairs;
+            }
+        }
+        else {
+            // Single pair [char1, char2]
+            const parsed = parseSinglePair(value);
+            if (parsed) {
+                pairs[eventType] = parsed;
+            }
+        }
+    }
+    return pairs;
+}
+/**
+ * Normalize eventPairs to always return an array of pairs for easier processing.
+ */
+function normalizePairs(value) {
+    if (value.length === 0)
+        return [];
+    // Check if it's array of pairs or single pair
+    if (Array.isArray(value[0])) {
+        return value;
+    }
+    return [value];
+}
+function validateEventData(data, _relationships) {
+    if (!(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data)) {
+        return null;
+    }
+    const summary = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asString)(data.summary, '');
+    if (!summary.trim()) {
+        return null;
+    }
+    const eventTypes = validateEventTypes(data.eventTypes);
+    const eventPairs = validateEventPairs(data.eventPairs, eventTypes);
+    const eventDetails = validateEventDetails(data.eventDetails);
+    const witnesses = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(data.witnesses);
+    const relationshipSignals = validateRelationshipSignals(data.relationshipSignals);
+    return {
+        summary,
+        eventTypes,
+        eventPairs,
+        eventDetails,
+        witnesses,
+        relationshipSignals,
+    };
+}
+function validateRelationshipSignal(data) {
+    if (!data || !(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data)) {
+        return undefined;
+    }
+    // Validate pair
+    const pair = data.pair;
+    if (!Array.isArray(pair) || pair.length !== 2) {
+        return undefined;
+    }
+    const char1 = typeof pair[0] === 'string' ? pair[0] : '';
+    const char2 = typeof pair[1] === 'string' ? pair[1] : '';
+    if (!char1 || !char2) {
+        return undefined;
+    }
+    // Sort the pair alphabetically
+    const sortedPair = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_5__.sortPair)(char1, char2);
+    // Validate changes
+    let changes;
+    if (Array.isArray(data.changes)) {
+        changes = data.changes
+            .filter(_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)
+            .map(c => ({
+            from: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asString)(c.from, ''),
+            toward: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asString)(c.toward, ''),
+            feeling: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asString)(c.feeling, ''),
+        }))
+            .filter(c => c.from && c.toward && c.feeling);
+        if (changes.length === 0) {
+            changes = undefined;
+        }
+    }
+    // Only return signal if we have changes
+    if (!changes) {
+        return undefined;
+    }
+    return {
+        pair: sortedPair,
+        changes,
+    };
+}
+function validateRelationshipSignals(data) {
+    if (!Array.isArray(data)) {
+        return undefined;
+    }
+    const signals = data
+        .map(item => validateRelationshipSignal(item))
+        .filter((s) => s !== undefined);
+    return signals.length > 0 ? signals : undefined;
+}
+function isNoEventResponse(summary) {
+    const noEventPhrases = [
+        'no significant event',
+        'no notable event',
+        'no major event',
+        'nothing significant',
+        'nothing notable',
+        'routine conversation',
+        'casual conversation',
+        'n/a',
+        'none',
+    ];
+    const lower = summary.toLowerCase().trim();
+    return noEventPhrases.some(phrase => lower.includes(phrase) || lower === phrase);
+}
+// ============================================
+// Helper Functions
+// ============================================
+function formatRelationshipsForPrompt(relationships) {
+    if (relationships.length === 0) {
+        return 'No established relationships yet.';
+    }
+    return relationships
+        .map(r => {
+        const [charA, charB] = r.pair;
+        const aFeelings = r.aToB.feelings.join(', ') || 'neutral';
+        const bFeelings = r.bToA.feelings.join(', ') || 'neutral';
+        return `${charA} & ${charB} (${r.status}): ${charA} feels ${aFeelings}; ${charB} feels ${bFeelings}`;
+    })
+        .join('\n');
+}
 
 
 /***/ },
@@ -38340,13 +40849,13 @@ const LOCATION_SCHEMA = {
 };
 const LOCATION_EXAMPLE = JSON.stringify({
     area: 'Downtown Seattle',
-    place: 'The Rusty Nail bar',
-    position: 'Corner booth near the jukebox',
+    place: 'The Rusty Nail Bar',
+    position: 'Corner booth',
     props: [
         'Jukebox playing soft rock',
-        'Empty beer glasses',
+        'Empty beer glasses on the table',
         'Bowl of peanuts',
-        'Flickering neon sign',
+        'Flickering neon sign above the bar',
     ],
 }, null, 2);
 // ============================================
@@ -38399,6 +40908,498 @@ function validateLocation(data) {
         place: obj.place,
         position: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asString)(obj.position, 'Main area'),
         props: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(obj.props, 10),
+    };
+}
+
+
+/***/ },
+
+/***/ "./src/extractors/extractRelationships.ts"
+/*!************************************************!*\
+  !*** ./src/extractors/extractRelationships.ts ***!
+  \************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   RELATIONSHIP_SCHEMA: () => (/* binding */ RELATIONSHIP_SCHEMA),
+/* harmony export */   extractInitialRelationship: () => (/* binding */ extractInitialRelationship),
+/* harmony export */   refreshRelationship: () => (/* binding */ refreshRelationship),
+/* harmony export */   updateRelationshipFromSignal: () => (/* binding */ updateRelationshipFromSignal)
+/* harmony export */ });
+/* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
+/* harmony import */ var _prompts__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./prompts */ "./src/extractors/prompts.ts");
+/* harmony import */ var _utils_generator__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../utils/generator */ "./src/utils/generator.ts");
+/* harmony import */ var _utils_json__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../utils/json */ "./src/utils/json.ts");
+/* harmony import */ var _types_state__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../types/state */ "./src/types/state.ts");
+/* harmony import */ var _state_relationships__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../state/relationships */ "./src/state/relationships.ts");
+/* harmony import */ var _state_events__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../state/events */ "./src/state/events.ts");
+// ============================================
+// Relationship Extractor
+// ============================================
+
+
+
+
+
+
+
+// ============================================
+// Schema & Examples
+// ============================================
+const RELATIONSHIP_SCHEMA = {
+    type: 'object',
+    description: 'Relationship state between two characters',
+    additionalProperties: false,
+    properties: {
+        status: {
+            type: 'string',
+            enum: [..._types_state__WEBPACK_IMPORTED_MODULE_4__.RELATIONSHIP_STATUSES],
+            description: 'Current relationship status',
+        },
+        attitudes: {
+            type: 'object',
+            description: "Each character's attitude toward the other. Keys are character names.",
+            additionalProperties: {
+                type: 'object',
+                properties: {
+                    toward: {
+                        type: 'string',
+                        description: 'The other character this attitude is directed at',
+                    },
+                    feelings: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'Current feelings toward the other character',
+                    },
+                    secrets: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'Things they know that the other character does not',
+                    },
+                    wants: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'What they want from this relationship',
+                    },
+                },
+            },
+        },
+        // Support legacy aToB/bToA format for backwards compatibility
+        aToB: {
+            type: 'object',
+            description: 'How the first character (alphabetically) feels about the second',
+            properties: {
+                feelings: {
+                    type: 'array',
+                    items: { type: 'string' },
+                },
+                secrets: {
+                    type: 'array',
+                    items: { type: 'string' },
+                },
+                wants: {
+                    type: 'array',
+                    items: { type: 'string' },
+                },
+            },
+        },
+        bToA: {
+            type: 'object',
+            description: 'How the second character (alphabetically) feels about the first',
+            properties: {
+                feelings: {
+                    type: 'array',
+                    items: { type: 'string' },
+                },
+                secrets: {
+                    type: 'array',
+                    items: { type: 'string' },
+                },
+                wants: {
+                    type: 'array',
+                    items: { type: 'string' },
+                },
+            },
+        },
+    },
+    required: ['status'],
+};
+function createRelationshipExample(char1, char2) {
+    return JSON.stringify({
+        status: 'friendly',
+        attitudes: {
+            [char1]: {
+                toward: char2,
+                feelings: ['trusting', 'curious'],
+                secrets: ['knows about their hidden talent'],
+                wants: ['friendship', 'adventure together'],
+            },
+            [char2]: {
+                toward: char1,
+                feelings: ['grateful', 'protective'],
+                secrets: [],
+                wants: ['loyalty', 'emotional support'],
+            },
+        },
+    }, null, 2);
+}
+// ============================================
+// Constants
+// ============================================
+const SYSTEM_PROMPT = 'You are a relationship analysis agent for roleplay. Extract and track character relationships with attention to asymmetry. Return only valid JSON.';
+/**
+ * Get a descriptive time of day phrase from hour.
+ */
+function getTimeOfDay(hour) {
+    if (hour >= 5 && hour < 12)
+        return 'in the morning';
+    if (hour >= 12 && hour < 17)
+        return 'in the afternoon';
+    if (hour >= 17 && hour < 21)
+        return 'in the evening';
+    return 'at night';
+}
+/**
+ * Extract the initial relationship state between two characters.
+ */
+async function extractInitialRelationship(params) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getSettings)();
+    const pair = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_5__.sortPair)(params.char1, params.char2);
+    const schemaStr = JSON.stringify(RELATIONSHIP_SCHEMA, null, 2);
+    const exampleStr = createRelationshipExample(pair[0], pair[1]);
+    const prompt = (0,_prompts__WEBPACK_IMPORTED_MODULE_1__.getPrompt)('relationship_initial')
+        .replace('{{messages}}', params.messages)
+        .replace('{{characterInfo}}', params.characterInfo)
+        .replace('{{schema}}', schemaStr)
+        .replace('{{schemaExample}}', exampleStr);
+    const llmMessages = (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.buildExtractionMessages)(SYSTEM_PROMPT, prompt);
+    try {
+        const response = await (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.makeGeneratorRequest)(llmMessages, {
+            profileId: settings.profileId,
+            maxTokens: settings.maxResponseTokens,
+            temperature: (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getTemperature)('relationship_initial'),
+            abortSignal: params.abortSignal,
+        });
+        const parsed = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.parseJsonResponse)(response, {
+            shape: 'object',
+            moduleName: 'BlazeTracker/Relationship',
+        });
+        const relationship = buildRelationship(pair, parsed, undefined, params.messageId);
+        // Automatically add first_meeting milestone for new relationships
+        if (relationship && params.messageId !== undefined && params.currentTime && params.currentLocation) {
+            const locationStr = [params.currentLocation.place, params.currentLocation.area]
+                .filter(Boolean)
+                .join(', ');
+            const timeOfDay = getTimeOfDay(params.currentTime.hour);
+            const description = `${pair[0]} and ${pair[1]} first appear together ${timeOfDay} at ${locationStr}.`;
+            (0,_state_relationships__WEBPACK_IMPORTED_MODULE_5__.addMilestone)(relationship, {
+                type: 'first_meeting',
+                description,
+                timestamp: params.currentTime,
+                location: locationStr,
+                messageId: params.messageId,
+            });
+        }
+        return relationship;
+    }
+    catch (error) {
+        console.warn('[BlazeTracker] Initial relationship extraction failed:', error);
+        return null;
+    }
+}
+/**
+ * Update a relationship based on recent events.
+ */
+async function refreshRelationship(params) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getSettings)();
+    const pair = params.relationship.pair;
+    const schemaStr = JSON.stringify(RELATIONSHIP_SCHEMA, null, 2);
+    const exampleStr = createRelationshipExample(pair[0], pair[1]);
+    const eventsStr = (0,_state_events__WEBPACK_IMPORTED_MODULE_6__.formatEventsForInjection)(params.events);
+    const previousStr = formatPreviousRelationship(params.relationship);
+    const prompt = (0,_prompts__WEBPACK_IMPORTED_MODULE_1__.getPrompt)('relationship_update')
+        .replace('{{previousState}}', previousStr)
+        .replace('{{currentEvents}}', eventsStr)
+        .replace('{{messages}}', params.messages)
+        .replace('{{schema}}', schemaStr)
+        .replace('{{schemaExample}}', exampleStr);
+    const llmMessages = (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.buildExtractionMessages)(SYSTEM_PROMPT, prompt);
+    try {
+        const response = await (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.makeGeneratorRequest)(llmMessages, {
+            profileId: settings.profileId,
+            maxTokens: settings.maxResponseTokens,
+            temperature: (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getTemperature)('relationship_update'),
+            abortSignal: params.abortSignal,
+        });
+        const parsed = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.parseJsonResponse)(response, {
+            shape: 'object',
+            moduleName: 'BlazeTracker/Relationship',
+        });
+        // Build updated relationship, preserving history
+        const updated = buildRelationship(pair, parsed, params.relationship, params.messageId);
+        // If this is a chapter boundary, add a history snapshot
+        if (params.isChapterBoundary && updated) {
+            // Note: Chapter index should be provided by caller if needed
+            // For now we skip the snapshot creation here
+        }
+        return updated;
+    }
+    catch (error) {
+        console.warn('[BlazeTracker] Relationship refresh failed:', error);
+        return null;
+    }
+}
+/**
+ * Apply a relationship signal from event extraction to update the relationship.
+ * This is a lighter-weight update that doesn't require an LLM call.
+ */
+function updateRelationshipFromSignal(relationship, signal) {
+    // Create a copy to modify
+    const updated = { ...relationship };
+    updated.aToB = { ...updated.aToB };
+    updated.bToA = { ...updated.bToA };
+    updated.milestones = [...updated.milestones];
+    const [charA, charB] = updated.pair;
+    // Apply directional changes
+    if (signal.changes) {
+        for (const change of signal.changes) {
+            const fromLower = change.from.toLowerCase();
+            const towardLower = change.toward.toLowerCase();
+            // Determine direction
+            if (fromLower === charA.toLowerCase() &&
+                towardLower === charB.toLowerCase()) {
+                // A's feeling toward B changed
+                if (!updated.aToB.feelings.includes(change.feeling)) {
+                    updated.aToB.feelings = [
+                        ...updated.aToB.feelings,
+                        change.feeling,
+                    ];
+                }
+            }
+            else if (fromLower === charB.toLowerCase() &&
+                towardLower === charA.toLowerCase()) {
+                // B's feeling toward A changed
+                if (!updated.bToA.feelings.includes(change.feeling)) {
+                    updated.bToA.feelings = [
+                        ...updated.bToA.feelings,
+                        change.feeling,
+                    ];
+                }
+            }
+        }
+    }
+    // Add milestones if provided and not duplicates
+    if (signal.milestones && signal.milestones.length > 0) {
+        for (const milestone of signal.milestones) {
+            const hasMilestone = updated.milestones.some(m => m.type === milestone.type);
+            if (!hasMilestone) {
+                updated.milestones = [...updated.milestones, milestone];
+            }
+        }
+    }
+    return updated;
+}
+// ============================================
+// Helpers
+// ============================================
+function formatPreviousRelationship(relationship) {
+    const [charA, charB] = relationship.pair;
+    const lines = [
+        `Characters: ${charA} & ${charB}`,
+        `Status: ${relationship.status}`,
+        '',
+        `${charA}'s attitude toward ${charB}:`,
+        `  Feelings: ${relationship.aToB.feelings.join(', ') || 'none'}`,
+        `  Secrets: ${relationship.aToB.secrets.join('; ') || 'none'}`,
+        `  Wants: ${relationship.aToB.wants.join(', ') || 'none'}`,
+        '',
+        `${charB}'s attitude toward ${charA}:`,
+        `  Feelings: ${relationship.bToA.feelings.join(', ') || 'none'}`,
+        `  Secrets: ${relationship.bToA.secrets.join('; ') || 'none'}`,
+        `  Wants: ${relationship.bToA.wants.join(', ') || 'none'}`,
+    ];
+    if (relationship.milestones.length > 0) {
+        lines.push('');
+        lines.push('Milestones:');
+        for (const m of relationship.milestones) {
+            lines.push(`  - ${m.type}: ${m.description}`);
+        }
+    }
+    return lines.join('\n');
+}
+/**
+ * Find an attitude by character name (case-insensitive).
+ */
+function findAttitudeByName(attitudes, name) {
+    const lowerName = name.toLowerCase();
+    for (const [key, value] of Object.entries(attitudes)) {
+        if (key.toLowerCase() === lowerName) {
+            return value;
+        }
+    }
+    return null;
+}
+/**
+ * Infer minimum relationship status based on feelings.
+ */
+function inferMinimumStatus(feelings) {
+    const lower = feelings.map(f => f.toLowerCase()).join(' ');
+    if (/love|passionate|romantic|desire|intimate|adore/.test(lower))
+        return 'intimate';
+    if (/trust|care|protective|devoted|loyal|deep/.test(lower))
+        return 'close';
+    if (/like|enjoy|comfortable|fond|friendly|warm/.test(lower))
+        return 'friendly';
+    if (/hate|despise|enemy|loathe/.test(lower))
+        return 'hostile';
+    if (/suspicious|resentful|angry|bitter|distrust/.test(lower))
+        return 'strained';
+    return null;
+}
+/**
+ * Milestones that indicate a romantic relationship has begun.
+ * Without at least one of these, "intimate" status is not appropriate.
+ */
+const ROMANTIC_GATE_MILESTONES = new Set([
+    'first_kiss',
+    'first_date',
+    'first_i_love_you',
+    'promised_exclusivity',
+    'marriage',
+    // Sexual milestones
+    'first_foreplay',
+    'first_oral',
+    'first_manual',
+    'first_penetrative',
+    'first_climax',
+]);
+/**
+ * Infer maximum relationship status based on milestones.
+ * This caps status to prevent models from over-estimating relationship depth.
+ */
+function inferMaximumStatus(milestones) {
+    const milestoneTypes = new Set(milestones.map(m => m.type));
+    // Check for any romantic gate milestone
+    const hasRomanticMilestone = [...ROMANTIC_GATE_MILESTONES].some(m => milestoneTypes.has(m));
+    // If no romantic milestones at all, cap at "close" (deep friendship, not romantic)
+    if (!hasRomanticMilestone) {
+        return 'close';
+    }
+    return null; // No cap
+}
+/**
+ * Get numeric rank for status to compare relative closeness.
+ */
+function getStatusRank(status) {
+    const statusRank = {
+        hostile: -2,
+        strained: -1,
+        strangers: 0,
+        acquaintances: 1,
+        friendly: 2,
+        close: 3,
+        intimate: 4,
+        complicated: 0,
+    };
+    return statusRank[status];
+}
+/**
+ * Get status from rank.
+ */
+function getStatusFromRank(rank) {
+    const rankToStatus = {
+        [-2]: 'hostile',
+        [-1]: 'strained',
+        0: 'strangers',
+        1: 'acquaintances',
+        2: 'friendly',
+        3: 'close',
+        4: 'intimate',
+    };
+    return rankToStatus[rank] ?? 'acquaintances';
+}
+function buildRelationship(pair, data, existing, messageId) {
+    if (!(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data)) {
+        return null;
+    }
+    const [charA, charB] = pair;
+    let aToB;
+    let bToA;
+    // Try new attitudes format first
+    if ((0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(data.attitudes)) {
+        const attitudes = data.attitudes;
+        const charAAttitude = findAttitudeByName(attitudes, charA);
+        const charBAttitude = findAttitudeByName(attitudes, charB);
+        aToB = validateAttitude(charAAttitude);
+        bToA = validateAttitude(charBAttitude);
+    }
+    else {
+        // Fall back to legacy aToB/bToA format
+        aToB = validateAttitude(data.aToB);
+        bToA = validateAttitude(data.bToA);
+    }
+    // Validate status
+    let status = validateStatus(data.status);
+    // Infer minimum status from feelings if status seems too low
+    const minFromA = inferMinimumStatus(aToB.feelings);
+    const minFromB = inferMinimumStatus(bToA.feelings);
+    let currentRank = getStatusRank(status);
+    const minRank = Math.max(minFromA ? getStatusRank(minFromA) : -999, minFromB ? getStatusRank(minFromB) : -999);
+    // Upgrade status if feelings suggest deeper connection
+    if (minRank > currentRank && minRank !== -999) {
+        currentRank = minRank;
+        status = getStatusFromRank(currentRank);
+    }
+    // Apply maximum cap based on milestones (only for positive statuses)
+    // We need the existing relationship's milestones to check this
+    if (existing && currentRank > 0) {
+        const maxStatus = inferMaximumStatus(existing.milestones);
+        if (maxStatus) {
+            const maxRank = getStatusRank(maxStatus);
+            if (currentRank > maxRank) {
+                status = maxStatus;
+            }
+        }
+    }
+    // Determine if status changed
+    const statusChanged = !existing || existing.status !== status;
+    // Start with existing or create new
+    let relationship;
+    if (existing) {
+        relationship = {
+            ...existing,
+            status,
+            aToB,
+            bToA,
+        };
+        // Add a new version if status actually changed
+        if (statusChanged && messageId !== undefined) {
+            (0,_state_relationships__WEBPACK_IMPORTED_MODULE_5__.addRelationshipVersion)(relationship, messageId);
+        }
+    }
+    else {
+        relationship = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_5__.createRelationship)(pair[0], pair[1], status, messageId);
+        relationship.aToB = aToB;
+        relationship.bToA = bToA;
+    }
+    return relationship;
+}
+function validateStatus(value) {
+    if (typeof value === 'string' &&
+        _types_state__WEBPACK_IMPORTED_MODULE_4__.RELATIONSHIP_STATUSES.includes(value)) {
+        return value;
+    }
+    return 'acquaintances';
+}
+function validateAttitude(value) {
+    if (!(0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.isObject)(value)) {
+        return (0,_state_relationships__WEBPACK_IMPORTED_MODULE_5__.createEmptyAttitude)();
+    }
+    return {
+        feelings: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(value.feelings),
+        secrets: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(value.secrets),
+        wants: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(value.wants),
     };
 }
 
@@ -38480,31 +41481,18 @@ const SCENE_SCHEMA = {
             },
             required: ['level', 'direction', 'type'],
         },
-        recentEvents: {
-            type: 'array',
-            description: 'List of significant recent events (max 5). Prune resolved/superseded events, keep most salient.',
-            items: {
-                type: 'string',
-                description: 'A significant event affecting the scene',
-            },
-            minItems: 1,
-            maxItems: 5,
-        },
+        // Note: recentEvents removed in v1.0.0, replaced by event extraction
     },
-    required: ['topic', 'tone', 'tension', 'recentEvents'],
+    required: ['topic', 'tone', 'tension'],
 };
 const SCENE_EXAMPLE = JSON.stringify({
-    topic: "Marcus's heist plans",
-    tone: 'Hushed, secretive',
+    topic: "Discussing Marcus's heist plans",
+    tone: 'Hushed, conspiratorial',
     tension: {
         level: 'tense',
         direction: 'escalating',
         type: 'negotiation',
     },
-    recentEvents: [
-        'Marcus invited Elena and Sarah to discuss a jewellery heist',
-        'Marcus discovered that Sarah has stolen a rare painting',
-    ],
 }, null, 2);
 // ============================================
 // Constants
@@ -38602,16 +41590,11 @@ function validateScene(data) {
     const type = VALID_TENSION_TYPES.includes(tensionData.type)
         ? tensionData.type
         : 'conversation';
-    // Validate recent events
-    let recentEvents = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asStringArray)(data.recentEvents, 5).filter(e => e.length > 0);
-    if (recentEvents.length === 0) {
-        recentEvents = ['Scene in progress'];
-    }
+    // Note: recentEvents removed in v1.0.0, replaced by currentEvents on TrackedState
     return {
         topic: data.topic,
         tone: (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.asString)(data.tone, 'neutral'),
         tension: { level, direction, type },
-        recentEvents,
     };
 }
 
@@ -38628,7 +41611,10 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   abortCurrentExtraction: () => (/* binding */ abortCurrentExtraction),
 /* harmony export */   extractState: () => (/* binding */ extractState),
+/* harmony export */   isBatchExtractionInProgress: () => (/* binding */ isBatchExtractionInProgress),
+/* harmony export */   setBatchExtractionInProgress: () => (/* binding */ setBatchExtractionInProgress),
 /* harmony export */   setupExtractionAbortHandler: () => (/* binding */ setupExtractionAbortHandler),
+/* harmony export */   updateSubsequentMessagesEvents: () => (/* binding */ updateSubsequentMessagesEvents),
 /* harmony export */   wasGenerationAborted: () => (/* binding */ wasGenerationAborted)
 /* harmony export */ });
 /* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
@@ -38638,11 +41624,23 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _extractClimate__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./extractClimate */ "./src/extractors/extractClimate.ts");
 /* harmony import */ var _extractCharacters__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./extractCharacters */ "./src/extractors/extractCharacters.ts");
 /* harmony import */ var _extractScene__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./extractScene */ "./src/extractors/extractScene.ts");
-/* harmony import */ var _utils_clothingMatch__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../utils/clothingMatch */ "./src/utils/clothingMatch.ts");
-/* harmony import */ var _extractionProgress__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./extractionProgress */ "./src/extractors/extractionProgress.ts");
+/* harmony import */ var _extractEvent__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./extractEvent */ "./src/extractors/extractEvent.ts");
+/* harmony import */ var _extractChapter__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./extractChapter */ "./src/extractors/extractChapter.ts");
+/* harmony import */ var _extractRelationships__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./extractRelationships */ "./src/extractors/extractRelationships.ts");
+/* harmony import */ var _utils_clothingMatch__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../utils/clothingMatch */ "./src/utils/clothingMatch.ts");
+/* harmony import */ var _extractionProgress__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./extractionProgress */ "./src/extractors/extractionProgress.ts");
+/* harmony import */ var _state_narrativeState__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../state/narrativeState */ "./src/state/narrativeState.ts");
+/* harmony import */ var _state_chapters__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../state/chapters */ "./src/state/chapters.ts");
+/* harmony import */ var _state_relationships__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../state/relationships */ "./src/state/relationships.ts");
 
 
 // Import extractors
+
+
+
+
+
+
 
 
 
@@ -38656,6 +41654,20 @@ __webpack_require__.r(__webpack_exports__);
 let currentAbortController = null;
 let extractionCount = 0;
 let generationWasStopped = false;
+let batchExtractionInProgress = false;
+/**
+ * Check if a batch extraction is currently in progress.
+ */
+function isBatchExtractionInProgress() {
+    return batchExtractionInProgress;
+}
+/**
+ * Set the batch extraction flag. Used by bt-extract-all to prevent
+ * GENERATION_ENDED handler from interfering.
+ */
+function setBatchExtractionInProgress(value) {
+    batchExtractionInProgress = value;
+}
 // ============================================
 // Send Button State Management
 // ============================================
@@ -38719,13 +41731,13 @@ function getDefaultLocation() {
         props: [],
     };
 }
-function getDefaultClimate() {
+function _getDefaultClimate() {
     return {
         weather: 'sunny',
         temperature: 70,
     };
 }
-function getDefaultCharacters() {
+function _getDefaultCharacters() {
     return [];
 }
 function getDefaultScene() {
@@ -38737,7 +41749,6 @@ function getDefaultScene() {
             direction: 'stable',
             type: 'conversation',
         },
-        recentEvents: ['Scene in progress'],
     };
 }
 // ============================================
@@ -38770,13 +41781,16 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         const shouldRunScene = settings.trackScene !== false &&
             (options.forceSceneExtraction ||
                 (0,_extractScene__WEBPACK_IMPORTED_MODULE_6__.shouldExtractScene)(messageId, isAssistantMessage));
+        // Determine if event extraction should run
+        const shouldRunEvent = settings.trackEvents !== false && isAssistantMessage;
         // Configure enabled steps for progress display
-        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setEnabledSteps)({
+        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_11__.setEnabledSteps)({
             time: settings.trackTime !== false,
             location: settings.trackLocation !== false,
             climate: settings.trackClimate !== false,
             characters: settings.trackCharacters !== false,
             scene: shouldRunScene,
+            event: shouldRunEvent,
         });
         // ========================================
         // STEP 0: Initialize time tracker from previous state
@@ -38784,6 +41798,10 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         if (previousState?.time) {
             (0,_extractTime__WEBPACK_IMPORTED_MODULE_2__.setTimeTrackerState)(previousState.time);
         }
+        // ========================================
+        // Get narrative state (needed for climate cache and relationships)
+        // ========================================
+        const narrativeState = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_12__.getOrInitializeNarrativeState)();
         // ========================================
         // Get message window for extraction
         // ========================================
@@ -38793,7 +41811,7 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         // ========================================
         let narrativeTime;
         if (settings.trackTime !== false) {
-            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('time');
+            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_11__.setExtractionStep)('time');
             narrativeTime = await (0,_extractTime__WEBPACK_IMPORTED_MODULE_2__.extractTime)(!isInitial, formattedMessages, abortController.signal);
         }
         else {
@@ -38805,7 +41823,7 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         // ========================================
         let location;
         if (settings.trackLocation !== false) {
-            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('location');
+            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_11__.setExtractionStep)('location');
             location = await (0,_extractLocation__WEBPACK_IMPORTED_MODULE_3__.extractLocation)(isInitial, formattedMessages, isInitial ? characterInfo : '', previousState?.location ?? null, abortController.signal);
         }
         else {
@@ -38816,12 +41834,32 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         // STEP 3: Extract Climate (if enabled)
         // ========================================
         let climate;
+        let weatherTransition = null;
         if (settings.trackClimate !== false) {
-            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('climate');
+            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_11__.setExtractionStep)('climate');
             // Climate extraction needs time and location - use defaults if not available
             const timeForClimate = narrativeTime ?? getDefaultTime();
             const locationForClimate = location ?? getDefaultLocation();
-            climate = await (0,_extractClimate__WEBPACK_IMPORTED_MODULE_4__.extractClimate)(isInitial, formattedMessages, timeForClimate, locationForClimate, isInitial ? characterInfo : '', previousState?.climate ?? null, abortController.signal);
+            const climateResult = await (0,_extractClimate__WEBPACK_IMPORTED_MODULE_4__.extractClimateWithContext)({
+                isInitial,
+                messages: formattedMessages,
+                narrativeTime: timeForClimate,
+                location: locationForClimate,
+                characterInfo: isInitial ? characterInfo : '',
+                previousClimate: previousState?.climate ?? null,
+                forecastCache: narrativeState.forecastCache,
+                locationMappings: narrativeState.locationMappings,
+                abortSignal: abortController.signal,
+            });
+            climate = climateResult.climate;
+            weatherTransition = climateResult.transition;
+            // Update narrative state caches if they changed
+            if (climateResult.forecastCache) {
+                narrativeState.forecastCache = climateResult.forecastCache;
+            }
+            if (climateResult.locationMappings) {
+                narrativeState.locationMappings = climateResult.locationMappings;
+            }
         }
         else {
             // Use previous or undefined
@@ -38832,7 +41870,7 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         // ========================================
         let characters;
         if (settings.trackCharacters !== false) {
-            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('characters');
+            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_11__.setExtractionStep)('characters');
             // Characters extraction uses location - use default if not available
             const locationForCharacters = location ?? getDefaultLocation();
             characters = await (0,_extractCharacters__WEBPACK_IMPORTED_MODULE_5__.extractCharacters)(isInitial, formattedMessages, locationForCharacters, isInitial ? userInfo : '', isInitial ? characterInfo : '', previousState?.characters ?? null, abortController.signal);
@@ -38843,9 +41881,6 @@ async function extractState(context, messageId, previousState, abortSignal, opti
                 const cleanup = cleanupOutfitsAndMoveProps(characters, location);
                 characters = cleanup.characters;
                 location = cleanup.location;
-                if (cleanup.movedItems.length > 0) {
-                    console.log('[BlazeTracker] Moved removed clothing to props:', cleanup.movedItems);
-                }
             }
         }
         else {
@@ -38857,7 +41892,7 @@ async function extractState(context, messageId, previousState, abortSignal, opti
         // ========================================
         let scene;
         if (shouldRunScene) {
-            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('scene');
+            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_11__.setExtractionStep)('scene');
             // Scene needs at least 2 messages for tension analysis
             const sceneMessages = formatMessagesForScene(context, messageId, lastXMessages, previousState);
             const isInitialScene = !previousState?.scene;
@@ -38870,27 +41905,243 @@ async function extractState(context, messageId, previousState, abortSignal, opti
             scene = previousState?.scene;
         }
         // ========================================
-        // STEP 6: Assemble Final State
+        // STEP 6: Extract Event (conditional)
         // ========================================
-        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('complete');
+        // Filter out any events from this messageId (handles re-extraction)
+        let currentEvents = (previousState?.currentEvents ?? []).filter(e => e.messageId !== messageId);
+        if (shouldRunEvent) {
+            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_11__.setExtractionStep)('event');
+            // Use effective values for event extraction
+            const timeForEvent = narrativeTime ?? getDefaultTime();
+            const locationForEvent = location ?? getDefaultLocation();
+            const sceneForEvent = scene ?? getDefaultScene();
+            const extractedEvent = await (0,_extractEvent__WEBPACK_IMPORTED_MODULE_7__.extractEvent)({
+                messages: formattedMessages,
+                messageId,
+                currentTime: timeForEvent,
+                currentLocation: locationForEvent,
+                currentTensionType: sceneForEvent.tension.type,
+                currentTensionLevel: sceneForEvent.tension.level,
+                relationships: narrativeState.relationships,
+                characters: characters ?? [],
+                abortSignal: abortController.signal,
+            });
+            if (extractedEvent) {
+                // Append the new event with messageId for re-extraction tracking
+                const eventWithId = {
+                    ...extractedEvent,
+                    messageId,
+                };
+                currentEvents = [...currentEvents, eventWithId];
+                // Apply relationship signal if present
+                if (extractedEvent.relationshipSignal &&
+                    settings.trackRelationships !== false) {
+                    const signal = extractedEvent.relationshipSignal;
+                    const [char1, char2] = signal.pair;
+                    let relationship = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_12__.getRelationship)(narrativeState, char1, char2);
+                    if (relationship) {
+                        // Pop version if re-extracting this message (swipe/re-extract)
+                        (0,_state_relationships__WEBPACK_IMPORTED_MODULE_14__.popVersionForMessage)(relationship, messageId);
+                        // Check if signal has milestones - if so, do a full LLM refresh
+                        const hasMilestones = signal.milestones &&
+                            signal.milestones.length > 0;
+                        if (hasMilestones) {
+                            const relationshipMessages = formatMessagesForRelationship(context, messageId, lastXMessages, relationship);
+                            const refreshed = await (0,_extractRelationships__WEBPACK_IMPORTED_MODULE_9__.refreshRelationship)({
+                                relationship,
+                                events: currentEvents,
+                                messages: relationshipMessages,
+                                messageId,
+                                abortSignal: abortController.signal,
+                            });
+                            if (refreshed) {
+                                // Apply milestones from signal (LLM might not include them)
+                                relationship =
+                                    (0,_extractRelationships__WEBPACK_IMPORTED_MODULE_9__.updateRelationshipFromSignal)(refreshed, signal);
+                            }
+                            else {
+                                // Fallback to simple update if refresh fails
+                                relationship =
+                                    (0,_extractRelationships__WEBPACK_IMPORTED_MODULE_9__.updateRelationshipFromSignal)(relationship, signal);
+                            }
+                        }
+                        else {
+                            // Simple update for non-milestone signals
+                            relationship = (0,_extractRelationships__WEBPACK_IMPORTED_MODULE_9__.updateRelationshipFromSignal)(relationship, signal);
+                        }
+                        (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_12__.updateRelationship)(narrativeState, relationship);
+                    }
+                    else {
+                        // Need to initialize this relationship first
+                        const relationshipMessages = formatMessagesForRelationship(context, messageId, lastXMessages, undefined);
+                        const newRelationship = await (0,_extractRelationships__WEBPACK_IMPORTED_MODULE_9__.extractInitialRelationship)({
+                            char1,
+                            char2,
+                            messages: relationshipMessages,
+                            characterInfo: isInitial
+                                ? characterInfo
+                                : '',
+                            messageId,
+                            currentTime: narrativeTime,
+                            currentLocation: location,
+                            abortSignal: abortController.signal,
+                        });
+                        if (newRelationship) {
+                            // Apply the signal to the new relationship
+                            const withSignal = (0,_extractRelationships__WEBPACK_IMPORTED_MODULE_9__.updateRelationshipFromSignal)(newRelationship, signal);
+                            (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_12__.updateRelationship)(narrativeState, withSignal);
+                        }
+                    }
+                }
+            }
+        }
+        // ========================================
+        // STEP 6.3: Initialize Missing Relationships
+        // ========================================
+        // Check if there are character pairs that don't have relationships yet
+        if (settings.trackRelationships !== false && characters && characters.length >= 2) {
+            const characterNames = characters.map(c => c.name);
+            const unestablishedPairs = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_14__.findUnestablishedPairs)(characterNames, narrativeState.relationships);
+            // Limit to initializing one relationship per extraction to avoid slowdown
+            if (unestablishedPairs.length > 0) {
+                const [char1, char2] = unestablishedPairs[0];
+                const relationshipMessages = formatMessagesForRelationship(context, messageId, lastXMessages, undefined);
+                const newRelationship = await (0,_extractRelationships__WEBPACK_IMPORTED_MODULE_9__.extractInitialRelationship)({
+                    char1,
+                    char2,
+                    messages: relationshipMessages,
+                    characterInfo: isInitial ? characterInfo : '',
+                    messageId,
+                    currentTime: narrativeTime,
+                    currentLocation: location,
+                    abortSignal: abortController.signal,
+                });
+                if (newRelationship) {
+                    (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_12__.updateRelationship)(narrativeState, newRelationship);
+                }
+            }
+        }
+        // ========================================
+        // STEP 6.5: Check Chapter Boundary
+        // ========================================
+        let currentChapter = previousState?.currentChapter ?? 0;
+        let chapterEnded = undefined;
+        // Only check for chapter boundary if we have a previous state (not initial extraction)
+        if (previousState && currentEvents.length > 0) {
+            const boundaryCheck = (0,_state_chapters__WEBPACK_IMPORTED_MODULE_13__.checkChapterBoundary)(previousState.location, location, previousState.time, narrativeTime);
+            if (boundaryCheck.triggered) {
+                // Get the time range from events
+                const startTime = currentEvents[0]?.timestamp ??
+                    previousState.time ??
+                    getDefaultTime();
+                const endTime = narrativeTime ?? getDefaultTime();
+                const primaryLocation = previousState.location
+                    ? `${previousState.location.area} - ${previousState.location.place}`
+                    : 'Unknown';
+                // Extract chapter summary via LLM
+                const chapterResult = await (0,_extractChapter__WEBPACK_IMPORTED_MODULE_8__.extractChapterBoundary)({
+                    events: currentEvents,
+                    narrativeState,
+                    chapterIndex: currentChapter,
+                    startTime,
+                    endTime,
+                    primaryLocation,
+                    abortSignal: abortController.signal,
+                });
+                if (chapterResult.isChapterBoundary && chapterResult.chapter) {
+                    // Store chapter ended summary for display
+                    chapterEnded = {
+                        index: currentChapter,
+                        title: chapterResult.chapter.title,
+                        summary: chapterResult.chapter.summary,
+                        eventCount: currentEvents.length,
+                        reason: boundaryCheck.reason,
+                    };
+                    // Add chapter to narrative state
+                    (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_12__.addChapter)(narrativeState, chapterResult.chapter);
+                    await (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_12__.saveNarrativeState)(narrativeState);
+                    // Increment chapter counter and clear current events
+                    currentChapter++;
+                    currentEvents = [];
+                }
+            }
+        }
+        // ========================================
+        // STEP 7: Assemble Final State
+        // ========================================
+        (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_11__.setExtractionStep)('complete');
         const state = {
             time: narrativeTime,
             location,
             climate,
             scene,
             characters,
+            currentChapter,
+            currentEvents: currentEvents.length > 0 ? currentEvents : undefined,
+            chapterEnded,
         };
-        return { state, raw: rawResponses };
+        return {
+            state,
+            raw: rawResponses,
+            weatherTransition: weatherTransition ?? undefined,
+        };
     }
     finally {
         extractionCount--;
         if (extractionCount === 0) {
             setSendButtonState(false);
-            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_8__.setExtractionStep)('idle');
+            (0,_extractionProgress__WEBPACK_IMPORTED_MODULE_11__.setExtractionStep)('idle');
         }
         if (currentAbortController === abortController) {
             currentAbortController = null;
         }
+    }
+}
+// ============================================
+// Re-extraction Event Cleanup
+// ============================================
+/**
+ * Update subsequent messages after re-extracting a message.
+ * Removes old events from the re-extracted messageId and optionally adds the new event.
+ */
+function updateSubsequentMessagesEvents(context, reExtractedMessageId, newEvent) {
+    // Iterate through all messages after the re-extracted one
+    for (let i = reExtractedMessageId + 1; i < context.chat.length; i++) {
+        const message = context.chat[i];
+        const stateData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_1__.getMessageState)(message);
+        if (!stateData?.state?.currentEvents) {
+            continue;
+        }
+        // Filter out events from the re-extracted messageId
+        const filteredEvents = stateData.state.currentEvents.filter((e) => e.messageId !== reExtractedMessageId);
+        // If we have a new event and it should be included (before any chapter boundary that cleared events)
+        // Add it to the filtered list if this message's events include events after the new one
+        let updatedEvents = filteredEvents;
+        if (newEvent) {
+            // Insert the new event at the right position (by messageId order)
+            const insertIndex = filteredEvents.findIndex((e) => (e.messageId ?? 0) > reExtractedMessageId);
+            if (insertIndex === -1) {
+                // No events after this one, append
+                updatedEvents = [...filteredEvents, newEvent];
+            }
+            else {
+                // Insert before events from later messages
+                updatedEvents = [
+                    ...filteredEvents.slice(0, insertIndex),
+                    newEvent,
+                    ...filteredEvents.slice(insertIndex),
+                ];
+            }
+        }
+        // Update the message state
+        const newStateData = {
+            ...stateData,
+            state: {
+                ...stateData.state,
+                currentEvents: updatedEvents.length > 0 ? updatedEvents : undefined,
+            },
+        };
+        (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_1__.setMessageState)(message, newStateData);
     }
 }
 /**
@@ -38955,6 +42206,34 @@ function prepareExtractionContext(context, messageId, lastXMessages, previousSta
     const characterInfo = `Name: ${context.name2}\nDescription: ${charDescription}`;
     return { formattedMessages, characterInfo, userInfo };
 }
+/**
+ * Format messages for relationship extraction.
+ * Uses messages since the last status change (or lastXMessages, whichever is smaller).
+ * Ensures a minimum of MIN_RELATIONSHIP_MESSAGES for context.
+ */
+function formatMessagesForRelationship(context, messageId, lastXMessages, relationship) {
+    const MIN_RELATIONSHIP_MESSAGES = 3;
+    // Calculate the start based on last version's messageId
+    let statusChangeStart = 0;
+    const lastVersionMessageId = relationship
+        ? (0,_state_relationships__WEBPACK_IMPORTED_MODULE_14__.getLatestVersionMessageId)(relationship)
+        : undefined;
+    if (lastVersionMessageId !== undefined) {
+        // Start from the message after the last status change
+        statusChangeStart = lastVersionMessageId + 1;
+    }
+    // Calculate start: take minimum of (messages since status change, lastXMessages)
+    // But ensure we have at least MIN_RELATIONSHIP_MESSAGES
+    const minStart = Math.max(0, messageId - MIN_RELATIONSHIP_MESSAGES + 1);
+    const limitStart = Math.max(0, messageId - lastXMessages);
+    // Take the later of: limit start or status change start
+    // This ensures we don't exceed lastXMessages
+    const constrainedStart = Math.max(limitStart, statusChangeStart);
+    // But ensure we have at least MIN_RELATIONSHIP_MESSAGES
+    const effectiveStart = Math.min(constrainedStart, minStart);
+    const chatMessages = context.chat.slice(effectiveStart, messageId + 1);
+    return chatMessages.map(msg => `${msg.name}: ${msg.mes}`).join('\n\n');
+}
 // ============================================
 // Outfit Cleanup Post-Processing
 // ============================================
@@ -38970,16 +42249,7 @@ const REMOVED_PATTERNS = [
 /**
  * Values that should be treated as null (no item).
  */
-const NULL_VALUES = new Set([
-    'none',
-    'nothing',
-    'bare',
-    'naked',
-    'n/a',
-    'na',
-    '-',
-    '',
-]);
+const NULL_VALUES = new Set(['none', 'nothing', 'bare', 'naked', 'n/a', 'na', '-', '']);
 /**
  * Post-process characters to fix outfit items that the LLM marked as removed
  * but didn't set to null. Moves removed items to location props if not already there.
@@ -38991,7 +42261,17 @@ function cleanupOutfitsAndMoveProps(characters, location) {
         if (!char.outfit)
             return char;
         const newOutfit = { ...char.outfit };
-        const outfitSlots = ['head', 'jacket', 'torso', 'legs', 'underwear', 'socks', 'footwear'];
+        const outfitSlots = [
+            'head',
+            'neck',
+            'jacket',
+            'back',
+            'torso',
+            'legs',
+            'underwear',
+            'socks',
+            'footwear',
+        ];
         for (const slot of outfitSlots) {
             const value = newOutfit[slot];
             if (value === null || value === undefined)
@@ -39012,7 +42292,7 @@ function cleanupOutfitsAndMoveProps(characters, location) {
                     newOutfit[slot] = null;
                     // Add to props if we have a real item name and it's not already there
                     if (itemName && !NULL_VALUES.has(itemName.toLowerCase())) {
-                        if (!(0,_utils_clothingMatch__WEBPACK_IMPORTED_MODULE_7__.propAlreadyExists)(itemName, char.name, existingProps)) {
+                        if (!(0,_utils_clothingMatch__WEBPACK_IMPORTED_MODULE_10__.propAlreadyExists)(itemName, char.name, existingProps)) {
                             const propEntry = `${char.name}'s ${itemName}`;
                             movedItems.push(propEntry);
                             existingProps.add(propEntry.toLowerCase());
@@ -39025,9 +42305,7 @@ function cleanupOutfitsAndMoveProps(characters, location) {
         return { ...char, outfit: newOutfit };
     });
     // Build new props array if we added items
-    const newProps = movedItems.length > 0
-        ? [...(location.props || []), ...movedItems]
-        : location.props;
+    const newProps = movedItems.length > 0 ? [...(location.props || []), ...movedItems] : location.props;
     return {
         characters: processedCharacters,
         location: { ...location, props: newProps },
@@ -39355,9 +42633,17 @@ let enabledSteps = {
     climate: true,
     characters: true,
     scene: true,
+    event: true,
 };
 // All possible extraction steps (in order)
-const ALL_EXTRACTION_STEPS = ['time', 'location', 'climate', 'characters', 'scene'];
+const ALL_EXTRACTION_STEPS = [
+    'time',
+    'location',
+    'climate',
+    'characters',
+    'scene',
+    'event',
+];
 // ============================================
 // Public API
 // ============================================
@@ -39422,6 +42708,8 @@ function getStepLabel(step) {
             return 'Extracting characters...';
         case 'scene':
             return 'Extracting scene...';
+        case 'event':
+            return 'Extracting events...';
         case 'complete':
             return 'Complete';
     }
@@ -39505,6 +42793,56 @@ const COMMON_PLACEHOLDERS = {
         description: 'Brief summary of characters present with moods/activities',
         example: 'Elena: anxious, hopeful - Watching the door\nMarcus: scheming - Drinking wine',
     },
+    currentRelationships: {
+        name: '{{currentRelationships}}',
+        description: 'Current relationship states between characters',
+        example: 'Elena & Marcus (complicated): Elena feels trusting, hopeful; Marcus feels suspicious, curious',
+    },
+    currentEvents: {
+        name: '{{currentEvents}}',
+        description: 'Recent events in the current chapter',
+        example: '- Marcus revealed his true identity\n- Elena agreed to help with the heist',
+    },
+    chapterSummaries: {
+        name: '{{chapterSummaries}}',
+        description: 'Summaries of previous chapters',
+        example: 'Chapter 1: Elena and Marcus meet at the bar...',
+    },
+    milestoneType: {
+        name: '{{milestoneType}}',
+        description: 'The type of milestone to describe (e.g., first_kiss, first_embrace)',
+        example: 'first_kiss',
+    },
+    characterPair: {
+        name: '{{characterPair}}',
+        description: 'The two characters involved in the milestone',
+        example: 'Elena and Marcus',
+    },
+    timeOfDay: {
+        name: '{{timeOfDay}}',
+        description: 'The time of day when the milestone occurred',
+        example: 'evening',
+    },
+    props: {
+        name: '{{props}}',
+        description: 'Nearby objects/props in the scene',
+        example: 'worn leather couch, coffee table, dim lamp',
+    },
+    characters: {
+        name: '{{characters}}',
+        description: 'Character positions, moods, and attire',
+        example: 'Elena: Position: sitting on couch | Mood: nervous, hopeful | Wearing: torso: blue dress',
+    },
+    relationship: {
+        name: '{{relationship}}',
+        description: 'Current relationship status and feelings between characters',
+        example: 'Elena & Marcus (close): Elena feels: trusting, attracted | Marcus feels: protective, conflicted',
+    },
+    eventDetail: {
+        name: '{{eventDetail}}',
+        description: 'Specific detail about what happened (e.g., what secret was shared)',
+        example: "Elena's past as a thief",
+    },
 };
 // ============================================
 // Default Prompts
@@ -39532,6 +42870,112 @@ const DEFAULT_PROMPTS = {
 - Always provide complete values for all fields - never omit anything.
 - Use 24-hour format for the hour field.
 </instructions>
+
+<examples>
+<example>
+<input>
+*The first snow of the season was falling outside the coffee shop window, fat flakes drifting lazily under the streetlights. Elena wrapped her hands around her pumpkin spice latte, watching the evening crowd hurry past with their collars turned up against the cold. It was barely past five, but the sun had already set—one of those November days that made her wish she'd moved somewhere warmer.*
+
+*Her phone buzzed: a text from Marcus saying he was running late, stuck in traffic from the corporate holiday party he'd been dreading all week. She smiled and texted back that she'd order him something warm. The barista had just put up the Christmas decorations—a little early, but Elena didn't mind. The twinkling lights reflected off the dark window, making the shop feel cozy despite the chill creeping in around the door frame.*
+</input>
+<output>
+{
+  "year": 2024,
+  "month": 11,
+  "day": 15,
+  "hour": 17,
+  "minute": 15,
+  "period": "evening",
+  "season": "late autumn"
+}
+</output>
+<explanation>
+EXPLICIT clues:
+- "first snow of the season" + "November days" → month is 11 (November)
+- "barely past five, but the sun had already set" → hour is 17 (5 PM), early sunset confirms late autumn
+- "evening crowd" → period is "evening"
+
+INFERRED values:
+- year: Not specified, use current/reasonable modern year (2024)
+- day: Not specified, default to mid-month (15)
+- minute: "barely past five" suggests just after the hour (15)
+- season: "late autumn" - November with first snow, not quite winter yet
+
+Context clues that CONFIRM the inference:
+- Pumpkin spice latte (seasonal fall drink)
+- Corporate holiday party (November-December timing)
+- Christmas decorations going up early (pre-December)
+- Cold weather, collars turned up
+</explanation>
+</example>
+
+<example>
+<input>
+*The summer sun blazed overhead as Marcus hauled the last cooler out of the truck bed. It was barely noon, but the Fourth of July heat was already oppressive—had to be pushing ninety-five in the shade, if there'd been any shade to speak of. The beach parking lot shimmered with heat mirages, and he could feel the asphalt burning through his sandals.*
+
+*Down by the water, Elena and the kids had already claimed their spot, the red-white-and-blue umbrella visible even from here. She waved, and he could see Sophie jumping up and down with excitement, probably begging to go in the water before lunch. He checked his phone—12:17—and started the long trudge across the sand.*
+</input>
+<output>
+{
+  "year": 2024,
+  "month": 7,
+  "day": 4,
+  "hour": 12,
+  "minute": 17,
+  "period": "midday",
+  "season": "summer"
+}
+</output>
+<explanation>
+EXPLICIT clues:
+- "Fourth of July" → month: 7, day: 4
+- "barely noon" and "12:17" on phone → hour: 12, minute: 17
+- "summer sun" → season: "summer"
+
+INFERRED values:
+- year: Not specified, use reasonable modern year (2024)
+- period: "midday" - noon timeframe
+
+Context clues that CONFIRM:
+- Extreme heat (95°F) typical of July
+- Beach trip with family (common July 4th activity)
+- Patriotic umbrella colors (holiday-appropriate)
+</explanation>
+</example>
+
+<example>
+<input>
+*The cherry blossoms were in full bloom along the Potomac, their delicate pink petals drifting down like snow onto the jogging path. Elena stretched her calves against a park bench, watching the early morning runners pass by in the golden dawn light. It was the perfect time of year for this—not too hot yet, the air fresh and cool, the city just starting to wake up.*
+
+*Her fitness tracker showed 6:47 AM and a respectable heart rate after her warm-up. In the distance, she could see the Washington Monument catching the first rays of sunlight, and beyond it, the dome of the Capitol building. A few dog walkers ambled past, coffee cups in hand, taking advantage of the quiet before the tourist crowds arrived.*
+</input>
+<output>
+{
+  "year": 2024,
+  "month": 4,
+  "day": 8,
+  "hour": 6,
+  "minute": 47,
+  "period": "early morning",
+  "season": "spring"
+}
+</output>
+<explanation>
+EXPLICIT clues:
+- "cherry blossoms in full bloom" → late March to mid-April (peak bloom in DC)
+- "6:47 AM" on fitness tracker → hour: 6, minute: 47
+- "early morning runners" + "golden dawn light" → period: "early morning"
+
+INFERRED values:
+- year: Modern year (2024) - Washington Monument, fitness tracker suggest contemporary
+- month: 4 (April) - cherry blossom peak season
+- day: 8 - mid-peak bloom period, reasonable default
+- season: "spring" - cherry blossoms, "not too hot yet," fresh cool air
+
+Location clues (Washington DC) help date the cherry blossoms specifically - they bloom late March through mid-April there.
+</explanation>
+</example>
+</examples>
 
 <scene_opening>
 {{messages}}
@@ -39579,6 +43023,154 @@ Extract the narrative date and time as valid JSON:`,
 - Return 0 for all fields if no time has passed.
 </instructions>
 
+<examples>
+<example>
+<current_time>Tuesday, March 12, 2024 at 10:30 PM</current_time>
+<input>
+*Elena yawned and stretched, her eyes heavy after the long day. The movie credits were rolling on the TV, but neither of them had really been watching for the last half hour.*
+
+Elena: "I should probably head to bed. Early meeting tomorrow."
+
+Marcus: "Yeah, me too." *He clicked off the TV and stood, offering her a hand.* "I'll lock up."
+
+*They made their way upstairs, taking turns in the bathroom. By the time Elena had finished her skincare routine and climbed into bed, Marcus was already half-asleep, the lamp on his side still on.*
+
+Elena: *turning off the lamp* "Night."
+
+Marcus: *mumbling* "Night..."
+
+*The morning sun streaming through a gap in the curtains woke Elena before her alarm. She blinked at the clock—6:47 AM—and groaned. Still thirteen minutes before she actually needed to be up. Beside her, Marcus was snoring softly, completely dead to the world.*
+</input>
+<output>
+{
+  "days": 0,
+  "hours": 8,
+  "minutes": 17
+}
+</output>
+<explanation>
+This is an OVERNIGHT time skip:
+- currentTime: 10:30 PM Tuesday
+- They went to bed shortly after (maybe 15-20 min for bathroom routine)
+- Elena wakes at 6:47 AM
+- Total elapsed: approximately 8 hours 17 minutes
+
+The scene explicitly moves from "heading to bed" at night to "morning sun" waking her at 6:47 AM. We calculate from 10:30 PM to 6:47 AM = 8h 17m.
+
+Key indicators of overnight skip:
+- Going to bed at night
+- "Morning sun streaming through curtains"
+- Specific wake-up time given (6:47 AM)
+- "Before her alarm" implies morning routine starting
+</explanation>
+</example>
+
+<example>
+<current_time>Saturday, June 8, 2024 at 2:15 PM</current_time>
+<input>
+*The argument had been building for twenty minutes now, voices rising with each exchange. Elena stood by the window, arms crossed, while Marcus paced the length of the living room.*
+
+Marcus: "I just don't understand why you didn't tell me about the job offer!"
+
+Elena: "Because I knew you'd react exactly like this!"
+
+Marcus: "Like what? Like someone who thought we made decisions together?"
+
+*Elena flinched. That one landed. She turned away from him, staring out at the street below without really seeing it.*
+
+Elena: "I haven't even decided if I'm taking it yet."
+
+Marcus: "But you're considering it. You're considering moving across the country and you didn't think that was worth mentioning?"
+
+*The silence stretched between them, heavy and painful. Finally, Elena spoke, her voice smaller than before.*
+
+Elena: "I was scared. I didn't know how to bring it up."
+
+Marcus: *sighing heavily, running a hand through his hair* "I just... I need a minute." *He grabbed his jacket from the couch.* "I'm going for a walk."
+
+*The door closed behind him with a quiet click that somehow felt louder than all the shouting.*
+</input>
+<output>
+{
+  "days": 0,
+  "hours": 0,
+  "minutes": 25
+}
+</output>
+<explanation>
+This is REAL-TIME dialogue with stated duration:
+- "The argument had been building for twenty minutes now" establishes base time
+- The rest of the exchange takes another ~5 minutes of heated dialogue
+- Total: approximately 25 minutes
+
+NO time skip occurs - this is a continuous scene. The time represents:
+- 20 minutes of prior argument (mentioned)
+- ~5 minutes of the dialogue we see
+- Marcus leaving at the end
+
+Key principle: Emotional conversations feel longer but don't actually take much clock time. An intense 5-minute argument can feel like an hour.
+</explanation>
+</example>
+
+<example>
+<current_time>Monday, September 16, 2024 at 9:00 AM</current_time>
+<input>
+*Elena grabbed her laptop bag and headed for the door, already running late for the presentation.*
+
+Elena: "I'll see you tonight!"
+
+Marcus: *from the kitchen* "Good luck! You've got this!"
+
+*The commute was brutal—an accident on the highway had traffic backed up for miles. Elena spent forty-five minutes crawling along, mentally rehearsing her talking points and trying not to check the clock every thirty seconds. By the time she finally pulled into the parking garage, she had exactly three minutes to get upstairs.*
+
+*She power-walked through the lobby, badge already in hand, and caught the elevator just as the doors were closing. The conference room was on the twelfth floor. She watched the numbers climb with growing anxiety—8, 9, 10, 11, 12—and practically sprinted down the hallway when the doors opened.*
+
+*She slid into the conference room at 9:58 AM, two minutes before her slot. Her boss raised an eyebrow but said nothing. Elena set up her laptop with slightly shaking hands and took a deep breath. She'd made it.*
+</input>
+<output>
+{
+  "days": 0,
+  "hours": 0,
+  "minutes": 58
+}
+</output>
+<explanation>
+Time skip with EXPLICIT endpoint:
+- Starts: 9:00 AM (currentTime, she's "already running late")
+- Ends: 9:58 AM (explicitly stated - "slid into the conference room at 9:58 AM")
+- Total: 58 minutes
+
+Breakdown of time passage:
+- Brief goodbye at home: 1-2 min
+- 45 minutes of commute (explicitly stated)
+- Parking, walking, elevator: ~10 min
+- Total checks out: 2 + 45 + 10 ≈ 57-58 minutes
+
+When EXACT times are given, use them for precision rather than estimating.
+</explanation>
+</example>
+
+<bad_example>
+<current_time>Tuesday, March 12, 2024 at 10:30 PM</current_time>
+<input>
+*Elena yawned...* [overnight sleep scene] *...woke at 6:47 AM*
+</input>
+<output>
+{
+  "days": 1,
+  "hours": 0,
+  "minutes": 0
+}
+</output>
+<why_bad>
+- Used "days: 1" but only 8 hours passed (10:30 PM to 6:47 AM)
+- Should be: days: 0, hours: 8, minutes: 17
+- "Next day" doesn't mean 24 hours - calculate actual elapsed time
+- Always compute from current_time to the scene's end time
+</why_bad>
+</bad_example>
+</examples>
+
 <current_time>
 {{currentTime}}
 </current_time>
@@ -39612,12 +43204,185 @@ Based on the actual content of the messages above, extract the time delta as val
 
 <instructions>
 - Determine where this scene takes place.
-- The 'area' should be a town, city or region (e.g. 'Huntsville, AL', 'London, Great Britain', 'Mt. Doom, Middle Earth', 'Ponyville, Equestria')
-- The 'place' should be a building or sub-section (e.g. 'John's Warehouse', 'Fleet Street McDonalds', 'Slime-Covered Cave', 'School of Friendship')
-- The 'position' should be a location within the place (e.g. 'Manager's Office', 'The Corner Booth', 'Underground River Bed', 'Rarity's Classroom')
-- Props are nearby items that affect or could affect the scene - be specific about their state.
-- If location is not explicit, infer from context clues: character descriptions, activities, mentioned objects.
+- The 'area' should be neighborhood + city + country/region (e.g. 'Downtown, Huntsville, AL', 'Farringdon, London, UK', 'Mordor, Middle Earth', 'Ponyville, Equestria'). Always include the country or region identifier.
+- The 'place' should be a SPECIFIC named location:
+  - For buildings: Use FULL proper names (e.g. 'Pixar Animation Studios' NOT just 'Studio', 'The Rusty Nail Bar' NOT just 'Bar')
+  - For outdoor/street locations: Use street name + nearby landmark (e.g. 'Ferris Street (near Zenith nightclub)', 'Central Park West (by the fountain)', 'Baker Street (outside 221B)')
+  - NEVER use generic descriptions like 'Nightclub in a busy district' or 'Street in the city' - always invent a specific name
+- The 'position' should be a SPATIAL location within the place (e.g. 'Main lobby', 'Corner booth', 'Sidewalk near entrance'). Do NOT include character poses or actions in position.
+- Props rules (IMPORTANT):
+  - Props are PHYSICAL OBJECTS that characters could pick up or interact with
+  - Each prop should be ONE SINGLE ITEM (e.g. "Neon sign" not "Neon signs reflecting in puddles")
+  - NO sounds, smells, or atmosphere (e.g. NOT "Bass thumping" or "Smell of smoke")
+  - NO people or their activities (e.g. NOT "Smokers huddled by door" or "Idling taxis")
+  - NO clothing that characters are currently WEARING - that goes in character outfits
+  - Only include clothing as props if REMOVED and placed somewhere (e.g. "Discarded jacket on chair")
+- If location is not explicit, infer from context clues and INVENT specific names that fit the setting.
 </instructions>
+
+<examples>
+<example>
+<input>
+Elena: *She pushed through the revolving door into the Meridian Grand Hotel, shaking raindrops from her umbrella. The lobby stretched before her in all its art deco glory—geometric patterns in the marble floor, brass fixtures polished to a mirror shine, and a massive crystal chandelier casting prismatic light across the space. A string quartet played something classical near the fountain, their music competing with the murmur of well-dressed guests and the occasional ding of elevator arrivals.*
+
+*She spotted the concierge desk to her left, staffed by a woman in an immaculate uniform, and beyond it the entrance to what looked like a high-end restaurant. The check-in counter dominated the far wall, where a short queue of travelers waited with their luggage. Elena's heels clicked against the marble as she made her way toward the seating area near the windows, where oversized leather armchairs surrounded low coffee tables scattered with magazines.*
+
+"Impressive," *she murmured, taking in the fifteen-foot ceilings and the gallery of black-and-white photographs lining the walls.*
+</input>
+<output>
+{
+  "area": "Downtown, Chicago, IL",
+  "place": "Meridian Grand Hotel",
+  "position": "Main lobby near window seating area",
+  "props": ["Crystal chandelier", "Art deco marble floor", "Brass fixtures", "Fountain with string quartet nearby", "Oversized leather armchairs", "Low coffee tables with magazines", "Black-and-white photograph gallery"]
+}
+</output>
+<explanation>
+- area: Inferred as major city with grand hotels; "Downtown, Chicago, IL" includes neighborhood + city + state
+- place: Full proper name "Meridian Grand Hotel" extracted exactly as mentioned, not abbreviated to "Hotel" or "The Meridian"
+- position: "Main lobby near window seating area" - describes WHERE she is spatially, not WHAT she's doing (no "walking" or "taking in the view")
+- props: Selected the most scene-relevant items that characters might interact with. Excluded transient elements (the queue of travelers, the concierge herself) and focused on environmental features. Note specificity: "Art deco marble floor" not just "floor"
+</explanation>
+</example>
+
+<example>
+<input>
+*The submarine's control room was cramped and humid, every surface covered in switches, dials, and screens displaying sonar readouts. Captain Reyes stood at the periscope station, one eye pressed to the viewfinder while her XO monitored the depth gauge nearby. Red emergency lighting bathed everything in an ominous glow—they'd been running silent for six hours now, and the tension was palpable.*
+
+*Banks of monitors showed the surrounding ocean in ghostly green sonar imagery. The helm station dominated the front of the room, where two junior officers sat rigid at their controls. Overhead, pipes and cables snaked across the ceiling, occasionally dripping condensation onto the metal deck plates below. A navigation chart was spread across the plotting table, weighted down with coffee mugs and a brass compass.*
+
+*The air recycler hummed its constant drone, barely masking the distant ping of active sonar from somewhere above them.*
+
+Reyes: "Maintain current depth. Nobody makes a sound."
+</input>
+<output>
+{
+  "area": "Pacific Ocean, 200 meters depth",
+  "place": "USS Triton (Attack Submarine)",
+  "position": "Control room",
+  "props": ["Periscope station", "Sonar display monitors", "Helm control stations", "Navigation plotting table with charts", "Brass compass", "Depth gauge", "Red emergency lighting", "Overhead pipe network", "Air recycler"]
+}
+</output>
+<explanation>
+- area: For mobile locations like vehicles/vessels, area describes the broader environment ("Pacific Ocean, 200 meters depth")
+- place: Vessel name inferred as military submarine; given a reasonable designation. Full name includes vessel type for clarity
+- position: "Control room" - the specific compartment, not "standing at periscope" or "running silent"
+- props: Focused on interactive/notable equipment. Excluded people (XO, junior officers) and temporary states (coffee mugs as weights). Included atmospheric elements (red lighting, air recycler) that affect scene mood
+</explanation>
+</example>
+
+<example>
+<input>
+*Marcus found himself in what had clearly once been a grand ballroom, though decades of neglect had transformed it into something out of a gothic nightmare. Faded murals peeled from the walls in long strips, revealing water-stained plaster beneath. The parquet floor, once polished to a gleam, was now warped and broken in places, with weeds pushing through the gaps where it met the crumbling baseboards.*
+
+*Dust motes danced in the shafts of pale light filtering through broken windows high above. A massive fireplace dominated one wall, its marble mantle cracked and blackened with old soot. Someone had dragged a mattress into the corner—recent, by the look of it, with rumpled blankets and empty food cans scattered nearby. Graffiti covered the lower portions of the walls, tags and crude drawings layered over each other.*
+
+*The remnants of a crystal chandelier lay shattered in the center of the room, its brass frame twisted and tarnished. Marcus could hear pigeons cooing somewhere in the rafters above, and the distant sound of traffic from the street outside.*
+</input>
+<output>
+{
+  "area": "Old Town, Baltimore, MD",
+  "place": "Abandoned Harrington Estate",
+  "position": "Former grand ballroom",
+  "props": ["Peeling murals and water-stained walls", "Warped parquet floor with weeds", "Cracked marble fireplace (blackened)", "Recent mattress with blankets in corner", "Empty food cans", "Layered graffiti", "Shattered crystal chandelier (brass frame on floor)", "Broken high windows"]
+}
+</output>
+<explanation>
+- area: "Old Town, Baltimore, MD" - specific district + city + state inferred from context of historic estate
+- place: Named estate rather than just "abandoned building" - gives the location identity and history
+- position: "Former grand ballroom" - spatial designation with context about what the room was/is
+- props: Mixed permanent features (fireplace, floor) with signs of decay (peeling murals, shattered chandelier) AND evidence of recent habitation (mattress, food cans). Props tell the story of the location. Note state descriptors: "cracked," "blackened," "shattered"
+</explanation>
+</example>
+
+<example>
+<input>
+*The bass from the club behind them was still audible, a muffled thump-thump-thump that vibrated through the pavement. Elena stepped out into the cool night air, grateful to escape the crush of bodies inside. The street was quiet at this hour—just a few smokers huddled near the entrance and a taxi idling at the curb.*
+
+*Across the street, a kebab shop's neon sign flickered on and off, casting red and blue shadows on the wet pavement. The rain had stopped, but puddles still dotted the sidewalk, reflecting the glow of the streetlamps. A bouncer in a black jacket stood by the velvet rope, checking his phone while a couple argued nearby about whose turn it was to call an Uber.*
+
+*Elena pulled her jacket tighter against the chill and walked a few steps away from the crowd, past a shuttered newsagent and a graffiti-covered electrical box. The smell of cigarette smoke and frying meat mixed in the air.*
+</input>
+<output>
+{
+  "area": "Shoreditch, London, UK",
+  "place": "Kingsland Road (outside Vinyl Dreams nightclub)",
+  "position": "Sidewalk near shuttered newsagent",
+  "props": ["Kebab shop neon sign", "Streetlamp", "Velvet rope", "Electrical box", "Newsagent shutters"]
+}
+</output>
+<explanation>
+- area: "Shoreditch, London, UK" - specific neighborhood + city + country, inferred from nightclub culture context
+- place: "Kingsland Road (outside Vinyl Dreams nightclub)" - specific street name + nearby landmark, NOT generic "Street near nightclub" or "Outside a club"
+- position: "Sidewalk near shuttered newsagent" - spatial location on the street
+- props: ONLY physical objects characters could interact with. Each is ONE item. Excludes: people (bouncer, smokers), sounds (bass), atmosphere (puddles, reflections), worn clothing
+</explanation>
+</example>
+
+<bad_example>
+<output>
+{
+  "area": "City",
+  "place": "Hotel",
+  "position": "Walking through the lobby, looking around nervously while shaking off her umbrella"
+}
+</output>
+<why_bad>
+- area too vague: Should include neighborhood + city + state/country ("Downtown, Chicago, IL" not "City")
+- place too generic: Should use the full proper name ("Meridian Grand Hotel" not "Hotel")
+- position contains actions: "Walking through," "looking around nervously," and "shaking off umbrella" are character actions, not spatial locations. Should be "Main lobby" or "Lobby entrance"
+</why_bad>
+</bad_example>
+
+<bad_example>
+<output>
+{
+  "area": "London",
+  "place": "Nightclub in a busy district",
+  "position": "Outside near the entrance, under a flickering streetlamp"
+}
+</output>
+<why_bad>
+- area missing neighborhood and country: Should be "Shoreditch, London, UK" or "Soho, London, UK" - not just the city name
+- place is a generic description, not a specific name: "Nightclub in a busy district" should be a specific place like "Kingsland Road (outside Vinyl Dreams)" or "Greek Street (near The Blue Note)"
+- Always invent specific place names when not provided - never use generic descriptions
+</why_bad>
+</bad_example>
+
+<bad_example>
+<output>
+{
+  "area": "Downtown, Seattle, WA",
+  "place": "The Blue Moon Lounge",
+  "position": "Main bar area",
+  "props": ["Leather bar stools", "Neon signs", "Elena's red cocktail dress", "Marcus's gray suit jacket", "Martini glasses"]
+}
+</output>
+<why_bad>
+- props include clothing characters are WEARING: "Elena's red cocktail dress" and "Marcus's gray suit jacket" should NOT be in props - they belong in each character's outfit slots
+- Only include clothing in props if it has been REMOVED and placed somewhere (e.g., "Marcus's suit jacket on barstool", "Discarded scarf near entrance")
+- Clothing that characters are currently wearing goes in character outfit tracking, not location props
+</why_bad>
+</bad_example>
+
+<bad_example>
+<output>
+{
+  "area": "Shoreditch, London, UK",
+  "place": "Kingsland Road (outside Vinyl Dreams)",
+  "position": "Sidewalk near entrance",
+  "props": ["Flickering neon signs reflecting in puddles", "Bass thumping from nightclub entrance", "Smokers huddled by the door", "Idling taxis", "Clara's limited edition hat", "Matt's designer hoodie"]
+}
+</output>
+<why_bad>
+- "Flickering neon signs reflecting in puddles" combines multiple things - should be separate: "Neon sign" (puddles are not props)
+- "Bass thumping from nightclub entrance" is a SOUND, not a physical object - do not include sounds/atmosphere
+- "Smokers huddled by the door" and "Idling taxis" are PEOPLE and their activities - do not include people as props
+- "Clara's limited edition hat" and "Matt's designer hoodie" are clothing characters are WEARING - belongs in character outfits, not props
+- Correct props would be: "Neon sign", "Velvet rope", "Club entrance door", "Electrical box"
+</why_bad>
+</bad_example>
+</examples>
 
 <character_info>
 {{characterInfo}}
@@ -39653,11 +43418,149 @@ Extract the location as valid JSON:`,
 <instructions>
 - Determine if the location has changed from the previous state.
 - Track any movement: characters entering new rooms, traveling, position changes within a space.
+- The 'area' should be neighborhood + city + country/region (e.g. 'Downtown, Huntsville, AL', 'Farringdon, London, UK'). Always include country/region.
+- The 'place' should be a SPECIFIC named location:
+  - For buildings: Use FULL proper names (e.g. 'Meridian Grand Hotel' not 'Hotel')
+  - For outdoor/street locations: Use street name + nearby landmark (e.g. 'Kingsland Road (outside Vinyl Dreams nightclub)')
+  - NEVER use generic descriptions - always use or invent specific names
+- The 'position' should be a SPATIAL location only (e.g. 'Corner booth', 'Kitchen', 'Sidewalk near entrance'). Do NOT include character poses or actions.
+- Props rules (IMPORTANT):
+  - Props are PHYSICAL OBJECTS that characters could pick up or interact with
+  - Each prop should be ONE SINGLE ITEM (e.g. "Neon sign" not "Neon signs reflecting in puddles")
+  - NO sounds, smells, or atmosphere (e.g. NOT "Bass thumping" or "Smell of smoke")
+  - NO people or their activities (e.g. NOT "Smokers huddled by door")
+  - NO clothing that characters are currently WEARING - that goes in character outfits
+  - Only include clothing as props if REMOVED and placed somewhere (e.g. "Discarded jacket on chair")
 - Update props: new items introduced, items picked up/removed, items changing state.
 - If no location change occurred, return the previous location but consider prop changes.
 - Be careful to track items that have been picked up (remove from props) or put down (add to props).
-- Prune props that are no longer relevant to the scene.
 </instructions>
+
+<examples>
+<example>
+<input>
+*Elena finally let herself relax, kicking off her heels with a relieved sigh. They tumbled across the hardwood floor, coming to rest near the closet door. She shrugged out of her blazer and tossed it carelessly onto the armchair by the window, then padded over to the bed and flopped down face-first into the pillows.*
+
+*After a moment, she rolled onto her back and stared at the ceiling, her stockinged feet hanging off the edge of the mattress. The room was quiet except for the soft hum of the air conditioning and the muffled sounds of city traffic from far below. She reached over to the nightstand and grabbed her phone, scrolling through messages she'd been ignoring all day.*
+
+*The afternoon light filtered through the sheer curtains, casting long shadows across the Persian rug. Her laptop sat open on the desk across the room, screen dark but charging light blinking steadily. She should probably check her work email, but the thought made her groan and bury her face in the nearest pillow instead.*
+</input>
+<previous_location>
+{
+  "area": "Upper East Side, Manhattan, NY",
+  "place": "Elena's Apartment (Unit 12B)",
+  "position": "Entryway",
+  "props": ["Coat rack", "Mirror", "Small table with keys bowl", "Umbrella stand"]
+}
+</previous_location>
+<output>
+{
+  "area": "Upper East Side, Manhattan, NY",
+  "place": "Elena's Apartment (Unit 12B)",
+  "position": "Master bedroom",
+  "props": ["Queen bed with pillows", "Nightstand with phone charger", "Armchair by window with discarded blazer", "Black heels near closet door", "Persian rug", "Desk with laptop (charging)", "Sheer curtains", "Air conditioning unit"]
+}
+</output>
+<explanation>
+- position: Changed from "Entryway" to "Master bedroom" - she moved rooms. Note we don't say "lying on bed" (that's her pose, not her location)
+- props completely replaced: When moving to a new room, previous room's props (coat rack, mirror, etc.) are no longer relevant - we only track props in the CURRENT location
+- Removed clothing added to props: "Black heels near closet door" and "Armchair by window with discarded blazer" - both include WHERE the items ended up
+- New room props identified: Items she interacts with (bed, nightstand, phone) plus environmental details (rug, curtains, laptop) that could become relevant
+- State noted where relevant: "laptop (charging)" because the blinking light was mentioned and could matter
+</explanation>
+</example>
+
+<example>
+<input>
+*The storm had gotten worse since they'd arrived. Marcus stood at the cabin window, watching lightning illuminate the forest in staccato bursts. Rain hammered against the glass so hard he could feel the vibration through the frame. Behind him, Elena had gotten the old wood stove going—it crackled and popped, slowly pushing back against the chill that had seeped into the abandoned structure.*
+
+*She'd found some moth-eaten blankets in the closet and spread them on the dusty floor near the stove, creating a makeshift camp. Their wet jackets hung from nails in the wall, dripping steadily onto the warped floorboards. Marcus had dragged in some firewood from the covered porch, stacking it near the door where it could dry out.*
+
+*The cabin was sparse—just the one room with a rusted kitchenette in the corner and what might have once been a bed frame, now just bare springs and rotten wood. But it had a roof that mostly didn't leak, and right now that was enough.*
+
+Elena: "Come sit by the fire. You're not going to make the storm stop by glaring at it."
+</input>
+<previous_location>
+{
+  "area": "Cascade Mountains, Washington",
+  "place": "Forest Trail",
+  "position": "Rocky outcropping (seeking shelter)",
+  "props": ["Dense pine trees", "Trail marker", "Loose rocks", "Marcus's backpack"]
+}
+</previous_location>
+<output>
+{
+  "area": "Cascade Mountains, Washington",
+  "place": "Abandoned Ranger Cabin",
+  "position": "Main room",
+  "props": ["Wood stove (lit, crackling)", "Moth-eaten blankets on floor near stove", "Wet jackets hanging on wall nails", "Firewood stack by door", "Rain-streaked window", "Rusted kitchenette", "Broken bed frame", "Covered porch (exterior)"]
+}
+</output>
+<explanation>
+- area: Stays the same - they're still in the same mountain region
+- place: Changed from "Forest Trail" to "Abandoned Ranger Cabin" - they found shelter and moved indoors
+- position: "Main room" - simple spatial designation. NOT "standing at window" or "by the fire"
+- props transformation: Trail props completely replaced with cabin interior. Note we track:
+  * Items they brought/affected: "Wet jackets hanging on wall nails", "Firewood stack by door"
+  * Environmental features: "Wood stove (lit, crackling)", "Rain-streaked window"
+  * Potential interaction points: "Rusted kitchenette", "Broken bed frame", "Moth-eaten blankets"
+  * Connected spaces: "Covered porch (exterior)" mentioned for context since firewood came from there
+- State descriptors matter: "lit, crackling" for the stove, "wet" for jackets, "rusted" and "broken" for damaged items
+</explanation>
+</example>
+
+<example>
+<input>
+*Sarah carefully set down her coffee cup, leaving a ring on the manuscript pages scattered across the table. The interview had been going for nearly an hour now, and the small conference room felt increasingly claustrophobic. Detective Morrison sat across from her, his recorder blinking red between them, while his partner leaned against the wall by the door—blocking the exit, Sarah noted.*
+
+*The fluorescent lights buzzed overhead, one of them flickering intermittently in a way that was slowly driving her crazy. Someone had tried to make the room less institutional with a potted plant in the corner, but it was clearly fake and covered in dust. The blinds were drawn, cutting off any view of the bullpen outside, though she could hear phones ringing and people talking through the thin walls.*
+
+*Morrison slid another photograph across the table—the third one in the last ten minutes. Sarah forced herself not to react, keeping her hands flat on the cool surface of the table. The chair was deliberately uncomfortable, she realized. Everything about this room was designed to make people want to leave, to say whatever would get them out fastest.*
+</input>
+<previous_location>
+{
+  "area": "Downtown Precinct",
+  "place": "Central Police Station",
+  "position": "Main lobby waiting area",
+  "props": ["Plastic chairs", "Vending machines", "Bulletin board with wanted posters", "Front desk with duty officer"]
+}
+</previous_location>
+<output>
+{
+  "area": "Downtown Precinct",
+  "place": "Central Police Station",
+  "position": "Interview Room B",
+  "props": ["Metal table with scattered manuscript pages", "Coffee cup (with ring stain)", "Audio recorder (recording)", "Photographs (evidence)", "Uncomfortable metal chairs", "Flickering fluorescent lights", "Dusty fake plant in corner", "Drawn window blinds", "Single door (blocked by detective)"]
+}
+</output>
+<explanation>
+- area/place: Unchanged - still in same building, just different room
+- position: Changed from "Main lobby waiting area" to "Interview Room B" - specific room designation inferred from context (police station interview rooms are typically lettered/numbered)
+- props completely refreshed for new room:
+  * Interview-specific items: "Audio recorder (recording)", "Photographs (evidence)", "Metal table with scattered manuscript pages"
+  * Items characters placed: "Coffee cup (with ring stain)" - detail matters for scene continuity
+  * Environmental/atmospheric: "Flickering fluorescent lights", "Uncomfortable metal chairs", "Dusty fake plant"
+  * Tactical note: "Single door (blocked by detective)" - relevant to scene tension even though it involves a character's position
+- Previous room props (vending machines, bulletin board, etc.) completely removed - not in current location
+</explanation>
+</example>
+
+<bad_example>
+<output>
+{
+  "area": "Downtown Precinct",
+  "place": "Central Police Station",
+  "position": "Sitting nervously across from the detective, trying to stay calm",
+  "props": ["Plastic chairs", "Vending machines", "Bulletin board", "Audio recorder", "Photographs"]
+}
+</output>
+<why_bad>
+- position contains character state: "Sitting nervously" and "trying to stay calm" are character poses and emotions, not spatial locations. Should be "Interview Room B" or "Conference room"
+- props mixed from two rooms: "Plastic chairs" and "Vending machines" were in the lobby, not the interview room. When location changes, props should COMPLETELY update to the new room
+- props lack state/context: "Audio recorder" should note "(recording)", "Photographs" should note "(evidence)" for scene relevance
+</why_bad>
+</bad_example>
+</examples>
 
 <previous_location>
 {{previousState}}
@@ -39701,6 +43604,116 @@ Extract the current location as valid JSON:`,
 - Consider the hemisphere: December is winter in the northern hemisphere, summer in the southern.
 - Temperature should be in Fahrenheit.
 </instructions>
+
+<examples>
+<example>
+<narrative_time>Wednesday, January 15, 2024 at 7:30 PM</narrative_time>
+<location>Minneapolis, Minnesota - Elena's Apartment (Living room)</location>
+<input>
+*Elena pressed her forehead against the cold window, watching the snow pile up on the fire escape outside. The forecast had warned about this—the worst blizzard in a decade, they said. Already the cars parked on the street below were nothing but white lumps, and the wind was howling loud enough to hear through the double-paned glass.*
+
+*She pulled her cardigan tighter and retreated to the couch, where Marcus had made a nest of blankets. The radiator was clanking away in the corner, working overtime, but it could only do so much against a Minnesota winter.*
+
+Marcus: "Power company says to expect outages tonight." *He held up his phone.* "I filled the bathtub just in case."
+
+Elena: "Smart." *She curled up against him, stealing his warmth.* "I'm glad I'm not trying to drive in this."
+
+*Another gust of wind rattled the windows, and somewhere in the building, a door slammed.*
+</input>
+<output>
+{
+  "weather": "Heavy snowfall with blizzard conditions, strong winds",
+  "temperature": 68
+}
+</output>
+<explanation>
+WEATHER: Explicitly described - "worst blizzard in a decade," heavy snow visible on cars/fire escape, howling wind, windows rattling.
+
+TEMPERATURE: 68°F - This is INDOOR temperature:
+- They're inside the apartment (living room)
+- Radiator is "working overtime" but "can only do so much"
+- Elena is cold enough to pull cardigan tighter and seek Marcus's warmth
+- 68°F represents a slightly cool but still heated indoor space during a blizzard
+- Outside would be well below freezing (single digits or negative), but we report indoor temp since they're indoors
+
+Key principle: When characters are indoors, report indoor temperature but outdoor weather. The weather affects the scene (visible through windows, wind rattling them) but temperature should reflect their immediate environment.
+</explanation>
+</example>
+
+<example>
+<narrative_time>Saturday, August 3, 2024 at 2:15 PM</narrative_time>
+<location>Phoenix, Arizona - Desert Botanical Garden (Main pathway)</location>
+<input>
+*The heat was absolutely brutal. Marcus could feel sweat soaking through his shirt within minutes of leaving the air-conditioned visitor center. The sun beat down from a cloudless sky, reflecting off the pale gravel paths until he had to squint even with sunglasses.*
+
+*Elena had insisted on seeing the saguaro collection, and he'd agreed before checking the weather. 115 degrees, the sign at the entrance had warned. Even the cacti looked like they were struggling. They passed a family heading back toward the buildings, the kids red-faced and whining, one of them being carried.*
+
+Elena: *fanning herself with the park map* "Maybe we should have done this in the morning."
+
+Marcus: "You think?" *He pointed to a shaded ramada up ahead.* "Let's at least get out of direct sun."
+
+*They hurried to the shade, but it barely helped. The air itself felt like an oven, shimmering over the desert landscape in visible waves.*
+</input>
+<output>
+{
+  "weather": "Clear, cloudless, extreme sun exposure",
+  "temperature": 115
+}
+</output>
+<explanation>
+WEATHER: "Clear, cloudless, extreme sun exposure"
+- "cloudless sky" explicitly stated
+- Emphasis on brutal direct sunlight
+- No moisture, no clouds, no relief
+
+TEMPERATURE: 115°F - OUTDOOR temperature:
+- Explicitly stated on the entrance sign
+- They're outdoors on the garden pathway
+- Multiple heat indicators: soaking sweat, squinting, kids overheating, shimmering air
+- This is actual ambient temperature, not just "feels like"
+
+Phoenix in August commonly hits 115°F+. The scene confirms extreme heat through physical reactions (sweating through shirt, seeking shade desperately) and environmental details (shimmering air, heat waves).
+</explanation>
+</example>
+
+<example>
+<narrative_time>Friday, October 18, 2024 at 6:45 PM</narrative_time>
+<location>Portland, Oregon - Waterfront Park (Riverside path)</location>
+<input>
+*The rain had been falling steadily all afternoon, the kind of gray Pacific Northwest drizzle that wasn't heavy enough for an umbrella but somehow still got you soaked. Elena pulled up the hood of her rain jacket and fell into step beside Marcus, their boots splashing through shallow puddles on the riverside path.*
+
+*The Willamette River was high and fast-moving, swollen with runoff. Across the water, the lights of downtown Portland glowed soft and hazy through the mist. A few other hardy souls were out walking—joggers, mostly, seemingly immune to the weather.*
+
+Marcus: "I love this, you know." *He spread his arms, letting the rain hit his face.* "Everyone else hides from it, but this is real Portland."
+
+Elena: "You're insane." *But she was smiling.* "My socks are going to be wet for days."
+
+*A gust of wind blew spray off the river, adding to the general dampness. The temperature had dropped since sunset, and Elena could see her breath now, thin wisps of vapor disappearing into the gray.*
+</input>
+<output>
+{
+  "weather": "Steady light rain, misty, overcast",
+  "temperature": 48
+}
+</output>
+<explanation>
+WEATHER: "Steady light rain, misty, overcast"
+- "Gray Pacific Northwest drizzle" - classic description of light but persistent rain
+- "Mist" explicitly mentioned (downtown visible but hazy)
+- Rain steady enough to soak through clothes over time
+- Overcast implied by gray sky, no sun mentioned
+
+TEMPERATURE: 48°F - OUTDOOR temperature:
+- They're outside on the riverside path
+- Cool enough to see breath ("thin wisps of vapor")
+- Temperature "dropped since sunset" - evening in October
+- 48°F is typical for Portland in October evening with rain
+- Not cold enough for winter gear, but uncomfortable when wet
+
+Note the difference from indoor scenes: here we track actual outdoor temperature since they're outside in the weather.
+</explanation>
+</example>
+</examples>
 
 <narrative_time>
 {{narrativeTime}}
@@ -39752,6 +43765,143 @@ Extract the climate as valid JSON:`,
 - Temperature should be in Fahrenheit.
 </instructions>
 
+<examples>
+<example>
+<narrative_time>Saturday, August 3, 2024 at 2:45 PM</narrative_time>
+<location>Phoenix, Arizona - Desert Botanical Garden (Visitor Center cafe)</location>
+<previous_climate>
+{
+  "weather": "Clear, cloudless, extreme sun exposure",
+  "temperature": 115
+}
+</previous_climate>
+<input>
+*The air conditioning hit them like a wall of blessed relief as they pushed through the visitor center doors. Marcus stood just inside the entrance for a moment, arms spread, letting the cool air wash over his sweat-soaked shirt.*
+
+Marcus: "I'm never leaving this building."
+
+Elena: *laughing* "Dramatic." *She made a beeline for the water fountain, drinking deeply.* "But also same."
+
+*The cafe was sparsely populated—most sensible people had either come in the early morning or stayed home entirely. They found a table by the window, where they could watch the heat shimmer outside without being in it. A ceiling fan rotated lazily overhead, adding to the refrigerated chill.*
+
+Elena: "I think my skin is still radiating heat."
+
+Marcus: "Well, the sign says it's 72 in here, so you should cool down eventually." *He nodded toward a digital temperature display on the wall.*
+</input>
+<output>
+{
+  "weather": "Clear, cloudless, extreme sun exposure",
+  "temperature": 72
+}
+</output>
+<explanation>
+WEATHER: UNCHANGED - "Clear, cloudless, extreme sun exposure"
+- They moved indoors, but weather outside hasn't changed
+- Still visible through the window (heat shimmer)
+- Weather tracks outdoor conditions even when characters are inside
+
+TEMPERATURE: 115°F → 72°F - CHANGED due to moving indoors
+- Explicitly stated on digital display: 72°F
+- Strong AC indicated by "blessed relief" and "refrigerated chill"
+- Dramatic contrast between outdoor heat and indoor comfort
+- Temperature tracks characters' immediate environment
+
+This is the key indoor/outdoor distinction: when characters move inside, temperature changes to reflect their environment, but weather remains the outdoor condition.
+</explanation>
+</example>
+
+<example>
+<narrative_time>Wednesday, January 15, 2024 at 11:30 PM</narrative_time>
+<location>Minneapolis, Minnesota - Elena's Apartment (Living room)</location>
+<previous_climate>
+{
+  "weather": "Heavy snowfall with blizzard conditions, strong winds",
+  "temperature": 68
+}
+</previous_climate>
+<input>
+*The power had gone out two hours ago. Elena and Marcus huddled together on the couch under every blanket they owned, their breath visible in the flashlight beam. The radiator had gone cold and silent, and the temperature was dropping fast.*
+
+*Outside, the storm had intensified—if that was even possible. The wind was screaming now, a constant howl that made the old building creak and groan. Through the frosted window, Elena couldn't even see the building across the street anymore, just a wall of swirling white.*
+
+Marcus: *checking his phone* "Still no update on when power's coming back."
+
+Elena: *shivering* "How cold do you think it is in here now?"
+
+Marcus: "I'd guess low fifties? The pipes are going to freeze if this keeps up."
+
+*She pulled the blankets tighter, pressing herself against him. At least body heat was free.*
+</input>
+<output>
+{
+  "weather": "Severe blizzard, whiteout conditions, dangerously high winds",
+  "temperature": 52
+}
+</output>
+<explanation>
+WEATHER: Updated from "Heavy snowfall with blizzard conditions" → "Severe blizzard, whiteout conditions, dangerously high winds"
+- Storm has intensified ("if that was even possible")
+- Visibility now zero (can't see building across street)
+- Wind upgraded from "strong" to "screaming" and "constant howl"
+- Weather can change during scenes; track these updates
+
+TEMPERATURE: 68°F → 52°F - DROPPED due to power outage
+- Power out for 2 hours, radiator cold
+- Breath now visible indoors (wasn't before)
+- Marcus estimates "low fifties"
+- Temperature dropping because heating failed
+- Still indoor temp, but indoor conditions have changed dramatically
+
+Both fields changed this time: weather intensified AND indoor temperature dropped. Track each independently based on what the scene describes.
+</explanation>
+</example>
+
+<example>
+<narrative_time>Friday, October 18, 2024 at 9:30 PM</narrative_time>
+<location>Portland, Oregon - Marcus's House (Enclosed back porch)</location>
+<previous_climate>
+{
+  "weather": "Steady light rain, misty, overcast",
+  "temperature": 48
+}
+</previous_climate>
+<input>
+*The rain had finally stopped, though water still dripped from the gutters and the trees in Marcus's backyard. Elena stood on the enclosed back porch, a mug of tea warming her hands, watching the clouds break apart to reveal patches of stars.*
+
+Marcus: *joining her* "Hey, look at that—you can actually see the moon."
+
+*It was true. The clouds were moving fast, pushed by upper-level winds, and a three-quarter moon was emerging from behind them. The air felt cleaner now, washed fresh by the rain, though it had gotten noticeably colder since the sky cleared.*
+
+Elena: "It's beautiful. But cold." *She pulled her sweater sleeves down over her hands.* "Probably thirty degrees colder than when we were at the waterfront."
+
+Marcus: "Clear skies do that. All the heat radiates away." *He put an arm around her.* "Want to go back inside?"
+
+Elena: "In a minute. I want to see if we can spot any constellations."
+</input>
+<output>
+{
+  "weather": "Clear and clearing, post-rain, partial moon visible",
+  "temperature": 45
+}
+</output>
+<explanation>
+WEATHER: "Steady light rain, misty, overcast" → "Clear and clearing, post-rain, partial moon visible"
+- Rain stopped (major change)
+- Clouds breaking up, moon and stars visible
+- "Post-rain" captures the recent weather context (water dripping, fresh air)
+
+TEMPERATURE: 48°F → 45°F - SLIGHT drop
+- They're on an ENCLOSED porch (semi-outdoor)
+- Clear skies = radiative cooling (Marcus explains this)
+- Elena notes it's "noticeably colder" since clouds cleared
+- ~3°F drop is realistic for clearing skies in evening
+- Not as cold as fully outdoors would be, but cooler than inside
+
+The enclosed porch is a middle ground - affected by outdoor temperature but somewhat sheltered. Temperature reflects this semi-outdoor environment.
+</explanation>
+</example>
+</examples>
+
 <narrative_time>
 {{narrativeTime}}
 </narrative_time>
@@ -39796,7 +43946,7 @@ Extract the current climate as valid JSON:`,
 <instructions>
 <general>
 - Extract all characters present in the scene.
-- For each character, determine their position, activity, mood, physical state, outfit, and dispositions.
+- For each character, determine their position, activity, mood, physical state, and outfit.
 - Make reasonable inferences where information is not explicit.
 </general>
 <outfit_rules>
@@ -39805,12 +43955,254 @@ Extract the current climate as valid JSON:`,
 - Be specific: 't-shirt' not 'default top' or 'unspecified top'.
 - Include underwear/socks with reasonable assumptions for clothed characters.
 - Fur, scales, and other anatomy do NOT count as outfit items.
+- If clothing is described as removed or off, set that slot to null.
+- neck slot: necklaces, chokers, scarves, ties, collars.
+- back slot: backpacks, quivers, cloaks, capes, messenger bags, holsters.
 </outfit_rules>
-<dispositions>
-- Only include dispositions for characters who know each other exists.
-- Feelings should be specific: 'suspicious', 'attracted', 'annoyed', not just 'positive'.
-</dispositions>
 </instructions>
+
+<examples>
+<example>
+<input>
+*The coffee shop was quiet for a Monday morning. Elena sat in her usual corner booth, laptop open but ignored as she stared out the rain-streaked window. She'd thrown on her favorite oversized cardigan over a simple white tank top before leaving the apartment, paired with the worn jeans she always reached for on days when she needed comfort. Her hair was still damp from the shower, pulled back in a messy ponytail that dripped occasionally onto her shoulders.*
+
+*She wrapped both hands around her latte, letting the warmth seep into her fingers. The shop's AC was cranked too high, as usual, and she wished she'd worn something warmer. Her phone buzzed on the table—probably Marcus again—but she couldn't bring herself to look at it yet. Instead, she watched a businessman outside struggle with his umbrella in the wind, his expensive suit getting splattered despite his efforts.*
+
+*Her laptop pinged with a new email notification. Work. Always work. Elena sighed and finally pulled the computer closer, resigned to dealing with whatever crisis had erupted overnight. Her reading glasses were somewhere in her bag, but she didn't feel like digging for them.*
+</input>
+<output>
+[{
+  "name": "Elena",
+  "position": "Corner booth by window",
+  "activity": "Reluctantly checking work emails, holding latte",
+  "mood": ["melancholy", "reluctant", "tired"],
+  "physicalState": ["cold", "damp hair"],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": "Oversized cardigan",
+    "back": null,
+    "torso": "White tank top",
+    "legs": "Worn comfortable jeans",
+    "underwear": "Cotton bra and panties",
+    "socks": "Ankle socks",
+    "footwear": "Canvas sneakers"
+  }
+}]
+</output>
+<explanation>
+- position: "Corner booth by window" - spatial location extracted from "usual corner booth" and "stared out the window"
+- activity: Combines her current action (checking emails) with physical detail (holding latte) to paint the scene
+- mood: Multiple moods captured - "melancholy" from window staring, "reluctant" from avoiding phone/emails, "tired" from overall tone
+- physicalState: "cold" (AC too high, wished for warmer clothes) and "damp hair" (still wet from shower)
+- outfit inference reasoning:
+  * jacket: "Oversized cardigan" explicitly mentioned
+  * torso: "White tank top" explicitly mentioned
+  * legs: "Worn jeans" explicitly mentioned, added "comfortable" based on context about comfort-seeking
+  * underwear: NOT mentioned, but inferred as "Cotton bra and panties" - simple, practical choice matching the casual comfort-focused outfit. A tank top requires a bra; the casual vibe suggests cotton over lace
+  * socks: NOT mentioned, but inferred as "Ankle socks" - jeans typically worn with socks; casual outfit suggests simple ankle socks
+  * footwear: NOT mentioned, but inferred as "Canvas sneakers" - casual comfort outfit + rainy day + jeans strongly suggests sneakers over heels or sandals
+  * neck: null - no neckwear mentioned or contextually implied
+  * back: null - she's sitting in a cafe, no bag/backpack mentioned
+- Key principle: NEVER use "unspecified" or "unknown" - always make a reasonable inference based on the outfit style, occasion, and character context
+</explanation>
+</example>
+
+<example>
+<input>
+*Detective Morrison entered the precinct looking like he hadn't slept in days—which, to be fair, he hadn't. His tie was loosened, top button undone, and his usually crisp white dress shirt had developed a concerning coffee stain near the pocket. The shoulder holster was visible under his rumpled gray suit jacket, service weapon a familiar weight against his ribs.*
+
+*He tossed his badge on the desk and dropped into his chair with a groan, the old springs protesting loudly. Three days on this case and they were no closer to finding the girl. The case files were still spread across his desk from last night, photos and reports mixed together in organized chaos that only made sense to him.*
+
+*His partner Chen looked up from her own desk, raising an eyebrow at his disheveled state. She was, as always, immaculately put together—pressed navy blazer, hair in a perfect bun, not a wrinkle in sight. How she managed it on the same hours he was working remained one of life's great mysteries.*
+
+Morrison: "Don't say it."
+Chen: "Wasn't going to say anything." *She slid a fresh coffee across the desk toward him.* "You look like hell, by the way."
+</input>
+<output>
+[{
+  "name": "Morrison",
+  "position": "At his desk",
+  "activity": "Just arrived, accepting coffee from partner",
+  "mood": ["exhausted", "frustrated", "grimly determined"],
+  "physicalState": ["sleep-deprived", "disheveled"],
+  "outfit": {
+    "head": null,
+    "neck": "Loosened striped tie",
+    "jacket": "Rumpled gray suit jacket",
+    "back": null,
+    "torso": "White dress shirt (coffee-stained, top button undone)",
+    "legs": "Gray suit trousers",
+    "underwear": "White undershirt, boxers",
+    "socks": "Black dress socks",
+    "footwear": "Black leather oxfords"
+  }
+},
+{
+  "name": "Chen",
+  "position": "At her desk across from Morrison",
+  "activity": "Offering coffee to partner, light teasing",
+  "mood": ["alert", "professional", "slightly amused"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": "Simple gold chain necklace",
+    "jacket": "Pressed navy blazer",
+    "back": null,
+    "torso": "White silk blouse",
+    "legs": "Navy dress trousers",
+    "underwear": "Seamless nude bra and panties",
+    "socks": "Sheer nude knee-highs",
+    "footwear": "Navy low heels"
+  }
+}]
+</output>
+<explanation>
+TWO characters extracted - both detectives present in the scene.
+
+Morrison:
+- physicalState: "sleep-deprived" and "disheveled" - multiple states can coexist
+- outfit details: State descriptors in parentheses - "(coffee-stained, top button undone)" for the shirt
+- legs: "Gray suit trousers" inferred to match the "gray suit jacket" - suits come as sets
+- underwear: "White undershirt, boxers" - male detective in a suit would typically wear an undershirt; boxers are standard professional default for men
+- socks: "Black dress socks" - standard with suit and dark shoes
+- footwear: "Black leather oxfords" - classic detective/professional male footwear, matches suit
+
+Chen:
+- mood includes "slightly amused" from her teasing
+- outfit is described as immaculate/pressed - reflects personality
+- torso: "White silk blouse" inferred - blazers typically worn over blouses in professional settings; silk matches her put-together appearance
+- underwear: "Seamless nude bra and panties" - professional women often wear seamless undergarments under fitted clothing to avoid visible lines
+- socks: "Sheer nude knee-highs" - professional women in trousers often wear knee-highs rather than full pantyhose for comfort
+- footwear: "Navy low heels" - matches the navy blazer, professional but practical for detective work
+
+Key inference principles:
+1. Match underwear formality to outfit formality (silk blouse → nicer undergarments)
+2. Consider practicality (detective work → low heels, not stilettos)
+3. Color coordinate where logical (navy suit pieces together)
+4. Account for gender norms in professional settings
+</explanation>
+</example>
+
+<example>
+<input>
+*The Pikachu bounced excitedly around the Pokemon Center lobby, cheeks sparking with barely contained electricity. Its trainer, a young woman with bright pink hair, was trying desperately to calm it down before it short-circuited the healing machines again.*
+
+Nurse Joy: "Perhaps some fresh air would help? The courtyard is lovely this time of day."
+
+*The trainer—her name tag read 'Zoe'—sighed and scooped up the energetic electric mouse, tucking it under her arm like a fuzzy yellow football. She was dressed for travel: sturdy hiking boots, cargo shorts with about a million pockets, and a fitted black athletic top that had seen better days. A large backpack sat on the bench behind her, covered in patches from different gym badges and travel destinations.*
+
+Zoe: "Sorry, he gets like this after battles. Too much energy and nowhere to put it."
+
+*The Pikachu's ears twitched, and it let out a cheerful 'Pika!' before settling down slightly, though its tail still wagged against Zoe's hip.*
+</input>
+<output>
+[{
+  "name": "Pikachu",
+  "position": "Being held under Zoe's arm",
+  "activity": "Calming down after excitement, tail wagging",
+  "mood": ["excited", "energetic", "happy"],
+  "physicalState": ["excess electrical charge"],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": null,
+    "legs": null,
+    "underwear": null,
+    "socks": null,
+    "footwear": null
+  }
+},
+{
+  "name": "Zoe",
+  "position": "Near Pokemon Center lobby bench",
+  "activity": "Holding Pikachu, apologizing to Nurse Joy",
+  "mood": ["exasperated", "apologetic", "fond"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": "Large travel backpack (on bench)",
+    "torso": "Black fitted athletic top (worn)",
+    "legs": "Cargo shorts with multiple pockets",
+    "underwear": "Sports bra and athletic briefs",
+    "socks": "Thick hiking socks",
+    "footwear": "Sturdy hiking boots"
+  }
+},
+{
+  "name": "Nurse Joy",
+  "position": "Behind Pokemon Center counter",
+  "activity": "Suggesting the courtyard, being helpful",
+  "mood": ["patient", "helpful", "professional"],
+  "physicalState": [],
+  "outfit": {
+    "head": "Nurse cap",
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Pink nurse uniform dress",
+    "legs": "Pink nurse uniform dress",
+    "underwear": "White practical bra and panties",
+    "socks": "White knee-high stockings",
+    "footwear": "White nursing shoes"
+  }
+}]
+</output>
+<explanation>
+THREE characters extracted, including the Pokemon:
+
+Pikachu (non-human):
+- ALL outfit slots are null - Pokemon don't wear clothes by default
+- physicalState: "excess electrical charge" - this IS tracked for non-humans as it's a relevant physical condition
+- mood still tracked normally - Pokemon have emotions
+
+Zoe (Pokemon trainer):
+- outfit matches "dressed for travel" description with practical/athletic theme
+- underwear: "Sports bra and athletic briefs" - inferred from athletic top and active lifestyle. Someone in hiking gear and athletic wear would wear athletic undergarments, not lace
+- socks: "Thick hiking socks" - hiking boots require substantial socks; this is a practical inference
+- State descriptor "(worn)" added to athletic top since text mentioned "had seen better days"
+
+Nurse Joy (uniform character):
+- Iconic uniform character - nurse cap, pink dress, white accessories
+- torso AND legs both list "Pink nurse uniform dress" - it's a single garment covering both
+- underwear: "White practical bra and panties" - professional medical setting suggests practical, likely white to not show under uniform
+- socks: "White knee-high stockings" - traditional nurse uniform includes white stockings
+- footwear: "White nursing shoes" - comfortable, professional medical footwear
+
+Key species principle: Pokemon, animals, and non-humanoid creatures get null for ALL outfit slots unless they're explicitly wearing something (like a Pokemon costume or accessory). But they still have mood and physicalState.
+</explanation>
+</example>
+
+<bad_example>
+<output>
+[{
+  "name": "Elena",
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": "Cardigan",
+    "back": null,
+    "torso": "Tank top",
+    "legs": "Jeans",
+    "underwear": "Unspecified undergarments",
+    "socks": "Unknown",
+    "footwear": "Shoes"
+  }
+}]
+</output>
+<why_bad>
+- "Unspecified undergarments" and "Unknown" are NEVER acceptable - always infer based on outfit style and context
+- Outfit items lack detail: "Cardigan" should be "Oversized cardigan", "Tank top" should be "White tank top", "Jeans" should be "Worn comfortable jeans"
+- "Shoes" is too vague - specify the type based on outfit context (sneakers, heels, boots, etc.)
+- Missing state descriptors where relevant
+- Should infer: casual outfit = cotton underwear, ankle socks, canvas sneakers
+</why_bad>
+</bad_example>
+</examples>
 
 <character_info>
 {{userInfo}}
@@ -39854,26 +44246,1114 @@ Extract all characters as valid JSON array:`,
 <general>
 - Start from the previous state and apply changes from the messages.
 - Watch for: characters entering/exiting, position changes, mood shifts, outfit changes.
-- Remove characters who have left the scene. Add characters who have entered.
 </general>
+<presence_tracking>
+CRITICAL: Track which characters are PRESENT in the scene.
+
+REMOVE characters who have LEFT:
+- Walked out of the building/location entirely
+- Went to another room AND closed the door behind them
+- Drove/ran/walked away out of sight
+- Any situation where POV character can no longer see or interact with them
+
+ADD characters who have ENTERED:
+- Arrived at the location (came home, walked in, etc.)
+- Came into the room from elsewhere in the building
+- Appeared/showed up in the scene
+
+If a character leaves, they should NOT be in the output array.
+If a character enters, ADD them with inferred state from context.
+</presence_tracking>
 <outfit_tracking>
 - If clothing is removed, set that slot to null.
 - Add removed clothing to location props (handled separately, just set slot to null here).
 - Do NOT suffix with '(off)', '(removed)' - just set to null.
 - Be specific about partially removed items: 'white panties (pulled aside)'.
 - Track which foot if only one shoe/sock remains.
+- neck slot: necklaces, chokers, scarves, ties, collars.
+- back slot: backpacks, quivers, cloaks, capes, messenger bags.
 </outfit_tracking>
 <position_and_mood>
 - Update positions as characters move.
 - Update moods based on dialogue, reactions, internal thoughts.
-- Update dispositions as relationships evolve.
 </position_and_mood>
 <pruning>
-- Update goals as they're achieved or abandoned.
 - Clear physical states that have resolved.
-- Keep dispositions current - remove outdated feelings, add new ones.
 </pruning>
 </instructions>
+
+<examples>
+<example>
+<input>
+*Elena stretched her arms over her head with a yawn, then reached down to unzip her boots. The left one came off easily, thudding to the floor beside the couch, but the right one's zipper stuck halfway. She muttered a curse and tugged harder until it finally gave way, sending her sock-clad foot free.*
+
+*She wiggled her toes gratefully and pulled her legs up onto the cushions, tucking them beneath her. The blazer she'd been wearing all day felt suddenly suffocating, so she shrugged out of it and tossed it over the back of the couch. Much better. She loosened the top two buttons of her blouse, feeling like she could finally breathe.*
+
+Marcus: *glancing up from his laptop* "Long day?"
+
+Elena: "You have no idea." *She pulled the elastic from her hair, shaking her ponytail loose and running her fingers through it.* "Peterson had me in meetings from nine to six. I think I've permanently lost feeling in my feet."
+
+*She rubbed her neck, tilting her head from side to side to work out the knots. The headache that had been building all afternoon was finally starting to fade now that she was home.*
+</input>
+<previous_state>
+[{
+  "name": "Elena",
+  "position": "Standing in the entryway",
+  "activity": "Just arriving home",
+  "mood": ["tired", "stressed"],
+  "physicalState": ["tension headache"],
+  "outfit": {
+    "head": "Hair in ponytail",
+    "neck": "Pearl earrings and simple silver necklace",
+    "jacket": "Charcoal gray blazer",
+    "back": null,
+    "torso": "White silk blouse",
+    "legs": "Black pencil skirt",
+    "underwear": "Nude seamless bra and panties",
+    "socks": "Sheer black knee-highs",
+    "footwear": "Black leather ankle boots"
+  }
+},
+{
+  "name": "Marcus",
+  "position": "On the living room couch",
+  "activity": "Working on laptop",
+  "mood": ["focused", "relaxed"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Navy henley shirt",
+    "legs": "Gray sweatpants",
+    "underwear": "Boxer briefs",
+    "socks": "White athletic socks",
+    "footwear": null
+  }
+}]
+</previous_state>
+<output>
+[{
+  "name": "Elena",
+  "position": "Curled up on the couch",
+  "activity": "Decompressing, talking with Marcus",
+  "mood": ["exhausted", "relieved", "comfortable"],
+  "physicalState": ["sore feet", "neck tension", "headache fading"],
+  "outfit": {
+    "head": null,
+    "neck": "Pearl earrings and simple silver necklace",
+    "jacket": null,
+    "back": null,
+    "torso": "White silk blouse (top buttons undone)",
+    "legs": "Black pencil skirt",
+    "underwear": "Nude seamless bra and panties",
+    "socks": "Sheer black knee-highs",
+    "footwear": null
+  }
+},
+{
+  "name": "Marcus",
+  "position": "On the living room couch",
+  "activity": "Working on laptop, chatting with Elena",
+  "mood": ["focused", "relaxed", "attentive"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Navy henley shirt",
+    "legs": "Gray sweatpants",
+    "underwear": "Boxer briefs",
+    "socks": "White athletic socks",
+    "footwear": null
+  }
+}]
+</output>
+<explanation>
+Multiple changes tracked for Elena:
+
+POSITION changed: "Standing in the entryway" → "Curled up on the couch" - she moved and changed posture
+
+MOOD evolved: "tired, stressed" → "exhausted, relieved, comfortable" - same base tiredness but context shifted to being home
+
+PHYSICAL STATE updated:
+- "tension headache" → "headache fading" - still present but improving, as noted in text
+- Added "sore feet" and "neck tension" - explicitly mentioned complaints
+
+OUTFIT changes (4 items affected):
+1. head: "Hair in ponytail" → null - she removed the elastic and let her hair down
+2. jacket: "Charcoal gray blazer" → null - tossed over back of couch (FULLY removed = null)
+3. torso: "White silk blouse" → "White silk blouse (top buttons undone)" - PARTIALLY changed, so we keep the item but add state descriptor
+4. footwear: "Black leather ankle boots" → null - both boots removed (note: we don't need to track each boot separately since both were removed)
+
+Items that did NOT change remain exactly as they were: legs, underwear, socks
+
+Marcus: Minimal changes - just added "attentive" to mood since he asked about her day. Everything else unchanged.
+
+Key principles demonstrated:
+- Fully removed items → null (blazer, boots, hair elastic)
+- Partially modified items → keep item with state descriptor (blouse with buttons undone)
+- Hair accessories count as "head" slot
+- Physical states can be updated/evolved, not just added/removed
+</explanation>
+</example>
+
+<example>
+<input>
+*The rain had soaked through everything. Marcus peeled off his ruined leather jacket—beyond saving at this point—and dropped it in a wet heap by the door. His t-shirt underneath was plastered to his skin, and he grabbed the hem and pulled it over his head without ceremony, revealing the fresh bandage wrapped around his ribs.*
+
+Elena: *eyes widening* "Jesus, what happened to you?"
+
+Marcus: "Just a scratch." *He kicked off his waterlogged boots, grimacing as he put weight on his left ankle.* "The other guy looks worse."
+
+*He limped toward the bathroom, leaving a trail of wet footprints on the hardwood. His jeans hung heavy with water, but he couldn't deal with those until he got somewhere with a towel. His socks squelched with every step—definitely ruined.*
+
+Elena: "Marcus, that bandage is bleeding through. Sit down, let me look at it."
+
+*He paused at the bathroom door, one hand braced against the frame. In the better lighting, Elena could see the bruise forming along his jaw and the split in his lip that was still seeping.*
+
+Marcus: "I'm fine. Just need to dry off."
+</input>
+<previous_state>
+[{
+  "name": "Marcus",
+  "position": "Outside, approaching the building",
+  "activity": "Making his way home in the rain",
+  "mood": ["determined", "pained"],
+  "physicalState": ["injured ribs (bandaged)"],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": "Black leather jacket",
+    "back": null,
+    "torso": "Gray cotton t-shirt",
+    "legs": "Dark blue jeans",
+    "underwear": "Black boxer briefs",
+    "socks": "Black crew socks",
+    "footwear": "Brown leather boots"
+  }
+},
+{
+  "name": "Elena",
+  "position": "In the apartment living room",
+  "activity": "Waiting anxiously",
+  "mood": ["worried", "anxious"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Oversized band t-shirt",
+    "legs": "Cotton sleep shorts",
+    "underwear": "Cotton panties, no bra",
+    "socks": null,
+    "footwear": null
+  }
+}]
+</previous_state>
+<output>
+[{
+  "name": "Marcus",
+  "position": "At bathroom doorway",
+  "activity": "Refusing medical attention, bracing against door frame",
+  "mood": ["stubborn", "pained", "dismissive"],
+  "physicalState": ["injured ribs (bandaged, bleeding through)", "sprained left ankle", "bruised jaw", "split lip (bleeding)", "soaking wet"],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": null,
+    "legs": "Dark blue jeans (waterlogged)",
+    "underwear": "Black boxer briefs",
+    "socks": "Black crew socks (soaked, ruined)",
+    "footwear": null
+  }
+},
+{
+  "name": "Elena",
+  "position": "In the apartment living room",
+  "activity": "Trying to get Marcus to accept help",
+  "mood": ["alarmed", "worried", "frustrated"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Oversized band t-shirt",
+    "legs": "Cotton sleep shorts",
+    "underwear": "Cotton panties, no bra",
+    "socks": null,
+    "footwear": null
+  }
+}]
+</output>
+<explanation>
+Significant changes to Marcus after a rough encounter:
+
+POSITION: "Outside, approaching the building" → "At bathroom doorway" - tracked his movement through the scene
+
+ACTIVITY: Updated to current action with posture detail
+
+MOOD: "determined, pained" → "stubborn, pained, dismissive" - evolved based on his dialogue and refusal of help
+
+PHYSICAL STATE (major updates):
+- "injured ribs (bandaged)" → "injured ribs (bandaged, bleeding through)" - state worsened/more visible
+- Added "sprained left ankle" - grimacing when putting weight on it
+- Added "bruised jaw" - Elena sees it in better lighting
+- Added "split lip (bleeding)" - seeping mentioned
+- Added "soaking wet" - general state from rain
+
+OUTFIT changes with STATE DESCRIPTORS:
+- jacket: "Black leather jacket" → null - removed and dropped (described as ruined, but that's the location prop system's concern)
+- torso: "Gray cotton t-shirt" → null - pulled off, revealing bandage
+- legs: "Dark blue jeans" → "Dark blue jeans (waterlogged)" - NOT removed but state changed significantly
+- socks: "Black crew socks" → "Black crew socks (soaked, ruined)" - still wearing them but state matters
+- footwear: "Brown leather boots" → null - kicked off
+
+Elena's changes are minor:
+- mood: "worried, anxious" → "alarmed, worried, frustrated" - escalated upon seeing his condition
+- activity: Updated to reflect her current action
+- Everything else unchanged
+
+Key principles:
+- Use state descriptors for items affected but not removed: "(waterlogged)", "(soaked, ruined)"
+- Physical states can stack - list all relevant conditions
+- Update physical state descriptors when conditions change: "(bandaged)" → "(bandaged, bleeding through)"
+- Track position changes through the scene
+</explanation>
+</example>
+
+<example>
+<input>
+*The dance studio mirrors reflected their movements as Elena helped Sarah through the routine one more time. Sarah had finally gotten the hang of the footwork, her sneakers squeaking against the polished floor as she spun. But the August heat was brutal even with the AC running, and both women were feeling it.*
+
+Elena: "Take five, you've earned it." *She grabbed her water bottle from the bench and took a long drink, then poured some over the back of her neck.* "God, it's like a sauna in here."
+
+*Sarah flopped down onto the floor, sprawling on her back with her arms spread wide. She pulled her tank top away from her skin, fanning herself with the fabric.*
+
+Sarah: "I don't know how you do this for a living. I'm dying."
+
+*Elena laughed and sat down beside her, stretching her legs out. She reached down and pulled off her dance sneakers, peeling away the damp socks underneath and tossing them toward her bag. Her feet were red and sore from two hours of practice.*
+
+Sarah: *sitting up and doing the same* "Yeah, okay, that's a good idea." *She kicked off her own sneakers but left her socks on, too tired to bother.*
+
+*They sat in companionable silence for a moment, catching their breath. Elena pulled her damp sports bra strap away from her shoulder, unsticking it from her skin with a grimace.*
+</input>
+<previous_state>
+[{
+  "name": "Elena",
+  "position": "Center of dance floor",
+  "activity": "Teaching dance routine",
+  "mood": ["patient", "encouraging", "focused"],
+  "physicalState": ["sweating"],
+  "outfit": {
+    "head": "Hair in high bun",
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Black sports bra",
+    "legs": "Gray yoga leggings",
+    "underwear": "Athletic thong",
+    "socks": "White no-show dance socks",
+    "footwear": "Black dance sneakers"
+  }
+},
+{
+  "name": "Sarah",
+  "position": "Center of dance floor",
+  "activity": "Learning dance routine, practicing spins",
+  "mood": ["determined", "slightly frustrated", "improving"],
+  "physicalState": ["sweating", "tired"],
+  "outfit": {
+    "head": "Ponytail",
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Light blue tank top",
+    "legs": "Black athletic shorts",
+    "underwear": "Sports bra and boyshorts",
+    "socks": "White ankle socks",
+    "footwear": "White running sneakers"
+  }
+}]
+</previous_state>
+<output>
+[{
+  "name": "Elena",
+  "position": "Sitting on dance floor near bench",
+  "activity": "Taking a break, cooling off",
+  "mood": ["relaxed", "amused", "overheated"],
+  "physicalState": ["sweating heavily", "sore feet", "overheated"],
+  "outfit": {
+    "head": "Hair in high bun",
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Black sports bra (damp)",
+    "legs": "Gray yoga leggings",
+    "underwear": "Athletic thong",
+    "socks": null,
+    "footwear": null
+  }
+},
+{
+  "name": "Sarah",
+  "position": "Sitting on dance floor",
+  "activity": "Taking a break, recovering",
+  "mood": ["exhausted", "relieved", "companionable"],
+  "physicalState": ["sweating heavily", "exhausted", "overheated"],
+  "outfit": {
+    "head": "Ponytail",
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Light blue tank top (pulled away from skin)",
+    "legs": "Black athletic shorts",
+    "underwear": "Sports bra and boyshorts",
+    "socks": "White ankle socks",
+    "footwear": null
+  }
+}]
+</output>
+<explanation>
+Both characters taking a break with different clothing changes:
+
+ELENA:
+- position: Moved from "Center of dance floor" to "Sitting on dance floor near bench"
+- physicalState: Expanded from just "sweating" to "sweating heavily", "sore feet", "overheated" - conditions worsened/more detailed
+- outfit changes:
+  * torso: Added state "(damp)" - the sports bra is wet from sweat (pulling strap away from skin)
+  * socks: "White no-show dance socks" → null - explicitly removed and tossed toward bag
+  * footwear: "Black dance sneakers" → null - pulled off
+  * head stays "Hair in high bun" - not mentioned as changed
+
+SARAH:
+- position: Changed to floor from standing/dancing
+- physicalState: "sweating, tired" → "sweating heavily, exhausted, overheated" - more intense after practice
+- outfit changes:
+  * torso: Added state "(pulled away from skin)" - she's fanning herself with it
+  * footwear: "White running sneakers" → null - kicked off
+  * socks: UNCHANGED at "White ankle socks" - explicitly mentioned she left them on ("too tired to bother")
+
+Key principles demonstrated:
+- When text explicitly says someone DIDN'T remove something, keep it
+- State descriptors for how clothing is currently being worn: "(pulled away from skin)"
+- Physical states can intensify: "sweating" → "sweating heavily"
+- Both characters can have outfit changes in the same message - track each separately
+</explanation>
+</example>
+
+<example type="character_leaving">
+<input>
+*The argument had gone on long enough. Marcus slammed his palm against the table.*
+
+Marcus: "I can't do this right now." *He pushed back from the table, chair scraping loudly against the floor.* "I need some air."
+
+*Without waiting for a response, he grabbed his jacket from the back of the chair and strode toward the front door. Elena started to follow, but he held up a hand without turning around.*
+
+Marcus: "Don't."
+
+*The door opened, closed firmly behind him. Through the window, Elena watched him disappear down the street, his shoulders hunched against the cold night air.*
+
+*Lily reached over and put a hand on Elena's arm.*
+
+Lily: "Give him time. He'll come around."
+
+Elena: *sinking back into her chair, voice hollow* "Will he though?"
+</input>
+<previous_state>
+[{
+  "name": "Marcus",
+  "position": "At kitchen table",
+  "activity": "Arguing with Elena",
+  "mood": ["angry", "frustrated", "hurt"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Gray sweater",
+    "legs": "Dark jeans",
+    "underwear": "Boxer briefs",
+    "socks": "Black socks",
+    "footwear": "Boots"
+  }
+},
+{
+  "name": "Elena",
+  "position": "At kitchen table",
+  "activity": "Arguing with Marcus",
+  "mood": ["defensive", "upset", "pleading"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Cream sweater",
+    "legs": "Leggings",
+    "underwear": "Bra and panties",
+    "socks": "Fuzzy socks",
+    "footwear": null
+  }
+},
+{
+  "name": "Lily",
+  "position": "At kitchen table",
+  "activity": "Witnessing the argument",
+  "mood": ["uncomfortable", "worried"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Green cardigan over white tee",
+    "legs": "Jeans",
+    "underwear": "Bra and panties",
+    "socks": "Ankle socks",
+    "footwear": "Canvas sneakers"
+  }
+}]
+</previous_state>
+<output>
+[{
+  "name": "Elena",
+  "position": "At kitchen table",
+  "activity": "Processing Marcus leaving",
+  "mood": ["defeated", "hurt", "hollow"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Cream sweater",
+    "legs": "Leggings",
+    "underwear": "Bra and panties",
+    "socks": "Fuzzy socks",
+    "footwear": null
+  }
+},
+{
+  "name": "Lily",
+  "position": "At kitchen table",
+  "activity": "Comforting Elena",
+  "mood": ["sympathetic", "concerned"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Green cardigan over white tee",
+    "legs": "Jeans",
+    "underwear": "Bra and panties",
+    "socks": "Ankle socks",
+    "footwear": "Canvas sneakers"
+  }
+}]
+</output>
+<explanation>
+CHARACTER LEAVING SCENE (3 → 2 characters):
+- Marcus LEFT THE SCENE entirely (went out the front door, watched disappearing down street)
+- He is REMOVED from the output array - do not include characters who have left
+- His jacket was picked up but he left with it - this is NOT a prop left behind
+
+Elena and Lily remain:
+- Elena's mood shifted from "defensive, upset, pleading" → "defeated, hurt, hollow"
+- Lily's activity updated to "Comforting Elena", mood shifted to "sympathetic, concerned"
+- Both outfits unchanged
+
+Key principle: When a character LEAVES (exits building, goes outside, walks away out of sight), REMOVE them from the array entirely.
+</explanation>
+</example>
+
+<example type="character_leaving_room">
+<input>
+*The tension in the bedroom was suffocating. Sarah finally threw up her hands.*
+
+Sarah: "I can't talk about this anymore tonight."
+
+*She grabbed her phone from the nightstand and walked out of the bedroom, bare feet padding down the hallway. Jake heard the bathroom door close, then the lock click into place. A moment later, the shower started running.*
+
+*Jake sat on the edge of the bed, staring at the empty doorway. His brother Mike, who had been awkwardly pretending to read in the corner armchair, finally looked up.*
+
+Mike: "Dude... what did you do?"
+
+Jake: "I don't want to talk about it."
+</input>
+<previous_state>
+[{
+  "name": "Jake",
+  "position": "Sitting on edge of bed",
+  "activity": "Having difficult conversation with Sarah",
+  "mood": ["guilty", "defensive"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "White undershirt",
+    "legs": "Pajama pants",
+    "underwear": "Boxers",
+    "socks": null,
+    "footwear": null
+  }
+},
+{
+  "name": "Sarah",
+  "position": "Standing by the window",
+  "activity": "Confronting Jake",
+  "mood": ["hurt", "angry", "exhausted"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Silk nightgown",
+    "legs": null,
+    "underwear": "Panties only",
+    "socks": null,
+    "footwear": null
+  }
+},
+{
+  "name": "Mike",
+  "position": "In corner armchair",
+  "activity": "Pretending to read, avoiding eye contact",
+  "mood": ["uncomfortable", "awkward"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Old band t-shirt",
+    "legs": "Basketball shorts",
+    "underwear": "Boxers",
+    "socks": null,
+    "footwear": null
+  }
+}]
+</previous_state>
+<output>
+[{
+  "name": "Jake",
+  "position": "Sitting on edge of bed",
+  "activity": "Staring at empty doorway",
+  "mood": ["guilty", "regretful", "closed off"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "White undershirt",
+    "legs": "Pajama pants",
+    "underwear": "Boxers",
+    "socks": null,
+    "footwear": null
+  }
+},
+{
+  "name": "Mike",
+  "position": "In corner armchair",
+  "activity": "Questioning Jake about what happened",
+  "mood": ["concerned", "curious", "awkward"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Old band t-shirt",
+    "legs": "Basketball shorts",
+    "underwear": "Boxers",
+    "socks": null,
+    "footwear": null
+  }
+}]
+</output>
+<explanation>
+CHARACTER LEAVING TO ANOTHER ROOM (3 → 2 characters):
+- Sarah left the bedroom, went down the hall, bathroom door closed and LOCKED
+- She is in a different room with a closed door = NO LONGER PRESENT
+- Remove her from the array - she's not in the scene anymore
+
+Jake and Mike remain:
+- Jake's activity and mood updated to reflect aftermath
+- Mike's activity updated to questioning, mood shifted
+- Both outfits unchanged
+
+Key principle: When someone goes to another room AND closes the door (especially locks it), they've left the scene. The POV character cannot see or directly interact with them.
+</explanation>
+</example>
+
+<example type="pov_moves_leaving_character_behind">
+<input>
+*The tension in the living room was unbearable. Rachel's roommate Dave had been hovering the entire time, making comments, and I'd finally had enough.*
+
+*I stood up and held out my hand to Rachel.*
+
+"Can we talk? Alone?"
+
+*Rachel glanced at Dave, then back at me. She took my hand and let me pull her up from the couch.*
+
+Rachel: "Yeah. Let's go to my room."
+
+*We walked down the hallway together. I could feel Dave's eyes on our backs. Rachel opened her bedroom door and we stepped inside. She closed it firmly behind us, and I heard her flip the lock.*
+
+*The bedroom was small but cozy - fairy lights strung above the bed, a pile of pillows, her guitar leaning against the wall.*
+
+Rachel: *leaning back against the door, finally relaxing* "God, I'm sorry about him. He means well, he's just..."
+
+"Overprotective?"
+
+Rachel: *laughing softly* "That's one word for it."
+</input>
+<previous_state>
+[{
+  "name": "User",
+  "position": "On the couch",
+  "activity": "Trying to have a conversation with Rachel",
+  "mood": ["frustrated", "tense", "hopeful"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Black button-up shirt",
+    "legs": "Dark jeans",
+    "underwear": "Boxer briefs",
+    "socks": "Black socks",
+    "footwear": null
+  }
+},
+{
+  "name": "Rachel",
+  "position": "On the couch next to User",
+  "activity": "Talking with User",
+  "mood": ["nervous", "apologetic", "interested"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Cropped sweater",
+    "legs": "High-waisted jeans",
+    "underwear": "Bra and panties",
+    "socks": "Ankle socks",
+    "footwear": null
+  }
+},
+{
+  "name": "Dave",
+  "position": "Armchair across from couch",
+  "activity": "Watching User and Rachel, making comments",
+  "mood": ["suspicious", "protective", "intrusive"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Gaming t-shirt",
+    "legs": "Sweatpants",
+    "underwear": "Boxers",
+    "socks": null,
+    "footwear": "Slippers"
+  }
+}]
+</previous_state>
+<output>
+[{
+  "name": "User",
+  "position": "Standing in Rachel's bedroom",
+  "activity": "Talking privately with Rachel",
+  "mood": ["relieved", "curious", "warm"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Black button-up shirt",
+    "legs": "Dark jeans",
+    "underwear": "Boxer briefs",
+    "socks": "Black socks",
+    "footwear": null
+  }
+},
+{
+  "name": "Rachel",
+  "position": "Leaning against bedroom door",
+  "activity": "Apologizing for Dave, relaxing now that they're alone",
+  "mood": ["relieved", "amused", "comfortable"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Cropped sweater",
+    "legs": "High-waisted jeans",
+    "underwear": "Bra and panties",
+    "socks": "Ankle socks",
+    "footwear": null
+  }
+}]
+</output>
+<explanation>
+POV CHARACTER MOVES WITH ANOTHER, LEAVING SOMEONE BEHIND (3 → 2 characters):
+- User and Rachel BOTH moved from living room to Rachel's bedroom
+- Door was closed AND locked behind them
+- Dave was left in the living room - he's no longer present in the current scene
+- REMOVE Dave from the array - the scene is now in the bedroom, not the living room
+
+User and Rachel remain (they moved together):
+- Both have updated positions reflecting the new room
+- Both have updated moods - relief at being alone
+- Outfits unchanged
+
+Key principle: The scene follows the POV character. When POV moves to a new room with someone and shuts the door, anyone left behind is removed from the array.
+</explanation>
+</example>
+
+<example type="character_entering">
+<input>
+*Elena was curled up on the couch reading when she heard keys in the front door. She set her book down, marking her place with a finger.*
+
+*Marcus stepped inside, stomping snow off his boots on the mat. His cheeks were red from the cold, and he was juggling grocery bags in both arms.*
+
+Marcus: "Little help?" *He nodded toward the kitchen, struggling not to drop anything.*
+
+Elena: *jumping up* "I didn't know you were going shopping!"
+
+*She hurried over to grab two of the bags, peeking inside.*
+
+Elena: "Did you get the—"
+
+Marcus: "Yes, I got your weird fancy cheese. And before you ask, yes, they had the good bread."
+</input>
+<previous_state>
+[{
+  "name": "Elena",
+  "position": "Curled up on the couch",
+  "activity": "Reading",
+  "mood": ["relaxed", "content"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Oversized hoodie",
+    "legs": "Yoga pants",
+    "underwear": "Sports bra and cotton panties",
+    "socks": "Thick wool socks",
+    "footwear": null
+  }
+}]
+</previous_state>
+<output>
+[{
+  "name": "Elena",
+  "position": "Near the front door",
+  "activity": "Helping Marcus with groceries",
+  "mood": ["pleasantly surprised", "helpful", "cheerful"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Oversized hoodie",
+    "legs": "Yoga pants",
+    "underwear": "Sports bra and cotton panties",
+    "socks": "Thick wool socks",
+    "footwear": null
+  }
+},
+{
+  "name": "Marcus",
+  "position": "Just inside front door",
+  "activity": "Arriving home with groceries",
+  "mood": ["cold but pleased", "playful"],
+  "physicalState": ["cheeks red from cold"],
+  "outfit": {
+    "head": null,
+    "neck": "Scarf",
+    "jacket": "Winter coat",
+    "back": null,
+    "torso": null,
+    "legs": "Jeans",
+    "underwear": null,
+    "socks": null,
+    "footwear": "Snow boots"
+  }
+}]
+</output>
+<explanation>
+CHARACTER ENTERING SCENE:
+- Marcus was NOT in previous state - he just arrived home
+- ADD him to the array with full state information
+- Infer reasonable outfit for context (winter, just came from outside)
+- Note visible physical states (red cheeks from cold)
+
+Elena updated:
+- Position moved from couch to near front door
+- Activity and mood updated
+- Outfit unchanged
+
+Key principle: When a character enters (arrives, comes through door, appears), ADD them to the array. Infer what you can about their state from context.
+</explanation>
+</example>
+
+<example type="character_entering_room">
+<input>
+*Jake had been working at his desk for hours when the study door creaked open. He glanced up to see Sarah peeking in, two mugs in her hands.*
+
+Sarah: "Peace offering?" *She held up the mugs.* "I made hot chocolate. The good kind, with the little marshmallows."
+
+*Jake leaned back in his chair, rubbing his tired eyes.*
+
+Jake: "I thought you were asleep."
+
+Sarah: *padding over in her slippers* "Couldn't sleep. And I felt bad about earlier." *She set one mug on his desk, wrapping both hands around her own.* "Can we talk? Actually talk this time?"
+
+*She perched on the arm of the leather chair in the corner, tucking her feet up under her robe.*
+</input>
+<previous_state>
+[{
+  "name": "Jake",
+  "position": "At desk in study",
+  "activity": "Working on laptop",
+  "mood": ["focused", "tired", "distracted"],
+  "physicalState": ["eye strain"],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "White undershirt",
+    "legs": "Pajama pants",
+    "underwear": "Boxers",
+    "socks": null,
+    "footwear": null
+  }
+}]
+</previous_state>
+<output>
+[{
+  "name": "Jake",
+  "position": "Leaning back in desk chair",
+  "activity": "Talking with Sarah",
+  "mood": ["tired", "cautious", "receptive"],
+  "physicalState": ["eye strain", "tired eyes"],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "White undershirt",
+    "legs": "Pajama pants",
+    "underwear": "Boxers",
+    "socks": null,
+    "footwear": null
+  }
+},
+{
+  "name": "Sarah",
+  "position": "Perched on arm of leather chair",
+  "activity": "Offering peace, wanting to talk",
+  "mood": ["apologetic", "hopeful", "nervous"],
+  "physicalState": [],
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": "Fluffy robe",
+    "back": null,
+    "torso": null,
+    "legs": null,
+    "underwear": null,
+    "socks": null,
+    "footwear": "Slippers"
+  }
+}]
+</output>
+<explanation>
+CHARACTER ENTERING FROM ANOTHER ROOM:
+- Sarah was NOT present before (she was in bed/elsewhere in house)
+- She opened the door and came into the study = now present
+- ADD her to the array
+- Outfit inferred from context (robe, slippers = nightwear, came from bedroom)
+
+Jake updated:
+- Position detail added (leaning back)
+- Mood shifted to reflect the interruption and conversation
+- Added "tired eyes" to physical state (rubbing eyes)
+
+Key principle: When someone enters from another room (opens door, comes in), add them. They are now present and interactable.
+</explanation>
+</example>
+
+<bad_example type="missing_entering_character">
+<input>
+*The front door burst open and both Marcus and his sister Emma tumbled in, laughing and shaking snow off their coats.*
+
+Marcus: "Elena! You're not going to believe what happened at the store!"
+
+Emma: *still giggling* "Tell her about the shopping cart!"
+
+*Elena looked up from her book, eyebrows raised at the commotion.*
+</input>
+<previous_state>
+[{
+  "name": "Elena",
+  "position": "On the couch",
+  "activity": "Reading",
+  "mood": ["relaxed"],
+  "physicalState": [],
+  "outfit": { "torso": "Sweater", "legs": "Leggings" }
+}]
+</previous_state>
+<wrong_output>
+[{
+  "name": "Elena",
+  "position": "On the couch",
+  "activity": "Looking up at Marcus",
+  "mood": ["curious", "amused"],
+  "physicalState": [],
+  "outfit": { "torso": "Sweater", "legs": "Leggings" }
+},
+{
+  "name": "Marcus",
+  "position": "Just inside front door",
+  "activity": "Telling a story",
+  "mood": ["excited", "amused"],
+  "physicalState": ["snow in hair"],
+  "outfit": { "jacket": "Winter coat", "legs": "Jeans", "footwear": "Boots" }
+}]
+</wrong_output>
+<why_bad>
+MISSING CHARACTER - Emma entered too but is not in the output!
+- Both Marcus AND Emma came through the door together
+- Emma is speaking, laughing, interacting - she is clearly present
+- The output only includes Marcus, forgetting Emma entirely
+- CORRECT output should include all 3 characters: Elena, Marcus, AND Emma
+</why_bad>
+</bad_example>
+
+<bad_example type="character_not_removed">
+<input>
+*The argument reached its peak. Sarah grabbed her keys from the counter.*
+
+Sarah: "I can't be here right now. I'm going for a drive."
+
+*She didn't wait for Jake's response, just walked out the front door. Through the window, Jake watched her car back out of the driveway and disappear down the street.*
+
+*Mike, who had been frozen in the kitchen doorway the whole time, finally exhaled.*
+
+Mike: "Dude... that was intense."
+</input>
+<previous_state>
+[{
+  "name": "Jake",
+  "position": "In the living room",
+  "activity": "Arguing with Sarah",
+  "mood": ["angry", "defensive"],
+  "physicalState": [],
+  "outfit": { "torso": "T-shirt", "legs": "Jeans" }
+},
+{
+  "name": "Sarah",
+  "position": "In the living room",
+  "activity": "Arguing with Jake",
+  "mood": ["furious", "hurt"],
+  "physicalState": [],
+  "outfit": { "torso": "Blouse", "legs": "Skirt" }
+},
+{
+  "name": "Mike",
+  "position": "Kitchen doorway",
+  "activity": "Awkwardly witnessing",
+  "mood": ["uncomfortable"],
+  "physicalState": [],
+  "outfit": { "torso": "Hoodie", "legs": "Shorts" }
+}]
+</previous_state>
+<wrong_output>
+[{
+  "name": "Jake",
+  "position": "In the living room",
+  "activity": "Watching Sarah leave",
+  "mood": ["stunned", "regretful"],
+  "physicalState": [],
+  "outfit": { "torso": "T-shirt", "legs": "Jeans" }
+},
+{
+  "name": "Sarah",
+  "position": "Left the house",
+  "activity": "Driving away",
+  "mood": ["upset"],
+  "physicalState": [],
+  "outfit": { "torso": "Blouse", "legs": "Skirt" }
+},
+{
+  "name": "Mike",
+  "position": "Kitchen doorway",
+  "activity": "Commenting on the situation",
+  "mood": ["relieved", "concerned"],
+  "physicalState": [],
+  "outfit": { "torso": "Hoodie", "legs": "Shorts" }
+}]
+</wrong_output>
+<why_bad>
+CHARACTER NOT REMOVED - Sarah left but is still in the output!
+- Sarah walked out the front door, got in her car, and drove away
+- She is GONE from the scene - not in the house anymore
+- The output incorrectly keeps her with "position: Left the house"
+- NEVER use position to indicate someone left - REMOVE them from the array entirely
+- CORRECT output should only include Jake and Mike (2 characters, not 3)
+</why_bad>
+</bad_example>
+
+<bad_example type="outfit_descriptors">
+<output>
+[{
+  "name": "Elena",
+  "outfit": {
+    "head": null,
+    "neck": null,
+    "jacket": null,
+    "back": null,
+    "torso": "Sports bra (removed from shoulder)",
+    "legs": null,
+    "underwear": null,
+    "socks": "Dance socks (removed)",
+    "footwear": "Sneakers (off)"
+  }
+}]
+</output>
+<why_bad>
+- "(removed)" and "(off)" should NOT be used - set to null instead for fully removed items
+- "Sports bra (removed from shoulder)" is wrong - she just pulled the strap, the bra is still on. Should be "Black sports bra (damp)" since it's still being worn
+- Socks and footwear should be null, not have removal descriptors
+- Use state descriptors only for items still being worn: "(unbuttoned)", "(damp)", "(pulled aside)" - never "(removed)" or "(off)"
+</why_bad>
+</bad_example>
+</examples>
 
 <current_location>
 {{location}}
@@ -39915,7 +45395,7 @@ Extract updated characters as valid JSON array:`,
 <general>
 - Determine the topic, tone, tension, and significant events of the scene.
 - Topic should be 3-5 words summarizing the main focus.
-- Tone should be 2-3 words capturing the emotional atmosphere.
+- Tone should be 2-3 descriptive words capturing the emotional atmosphere (e.g. "Tense, suspicious" or "Warm, playful").
 </general>
 <tension>
 - Direction will be calculated automatically, but set your best guess.
@@ -39946,6 +45426,151 @@ Tension type describes the nature of what's driving the tension:
 - Maximum 5 events, prioritize the most important ones.
 </recent_events>
 </instructions>
+
+<examples>
+<example>
+<input>
+*The restaurant had finally emptied out, the last of the dinner crowd filtering into the rainy night outside. Elena sat across from Marcus in the corner booth, her wine glass mostly untouched, watching him struggle to find the right words. He'd asked her to dinner with that particular tone in his voice—the one that meant something important was coming—and she'd spent the entire meal waiting for the other shoe to drop.*
+
+*The candles on the table had burned down to stubs, casting flickering shadows across his face. Outside, thunder rumbled in the distance, and the rain intensified against the windows. A waiter hovered near the kitchen door, clearly wanting to close up but too polite to interrupt.*
+
+Elena: "Marcus, whatever it is, just say it. You've been dancing around something all night."
+
+Marcus: *finally meeting her eyes* "I'm leaving. The job in Tokyo—I took it." *He reached across the table, his fingers brushing against hers.* "But I don't want to go without you."
+
+*The words hung in the air between them. Elena felt her heart skip, her mind racing through a thousand implications—her career, her family, everything she'd built here. But looking at him now, vulnerable and hopeful and terrified all at once, she realized the answer wasn't as complicated as she'd thought.*
+</input>
+<output>
+{
+  "topic": "Life-changing proposal",
+  "tone": "Vulnerable, electric, bittersweet",
+  "tension": {"level": "charged", "type": "intimate", "direction": "escalating"}
+}
+</output>
+<explanation>
+TOPIC: "Life-changing proposal" - captures the weight of what's being asked (not just "dinner conversation" or "relationship talk"). The proposal isn't marriage, but it IS asking her to change her entire life.
+
+TONE: Three words to capture a complex emotional atmosphere:
+- "Vulnerable" - Marcus is exposing himself to rejection, Elena is confronting a huge decision
+- "Electric" - the air is charged with anticipation and significance
+- "Bittersweet" - whatever the answer, something will be lost (either the opportunity or her current life)
+
+TENSION analysis:
+- Level "charged": Intense emotions dominate. This is a pivotal moment—not yet at "volatile" (one word changes everything) but definitely beyond "tense" (stakes feel real)
+- Type "intimate": This is about emotional/relational closeness, not conflict. Despite the stakes, they're on the same side
+- Direction "escalating": Building toward a decision/revelation. The question has been asked; the answer will raise or resolve tension further
+
+Why NOT other levels:
+- Not "explosive" - the moment hasn't broken yet, she hasn't answered
+- Not "volatile" - there's no sense it could go violent or completely wrong
+- Not "tense" - too understated for this pivotal moment
+</explanation>
+</example>
+
+<example>
+<input>
+*The precinct bullpen was chaos—phones ringing, detectives shouting across desks, a suspect being dragged toward booking while screaming about his rights. But Captain Rodriguez's office was an island of deadly calm. Sarah sat in the hard plastic chair across from his desk, hands folded in her lap, expression carefully neutral.*
+
+*Rodriguez hadn't said a word since calling her in. He just sat there, reading through the file in front of him, occasionally making small noises of disapproval. The silence stretched unbearably. On the wall behind him, the clock ticked loud enough to hear—2:47 PM. She'd been sitting here for almost five minutes.*
+
+Rodriguez: *finally looking up* "Detective Chen. Thirteen years on the force. Exemplary record." *He closed the file with a soft thump.* "So explain to me why I have Internal Affairs breathing down my neck about a missing evidence log."
+
+Sarah: "Captain, I filed that log myself three days ago. Whatever discrepancy they found—"
+
+Rodriguez: *holding up a hand* "I've known you a long time, Chen. Which is why I'm giving you exactly one chance to tell me what really happened before this goes any further. Because right now?" *He leaned forward, his voice dropping.* "Right now, it looks like you made something disappear. And I need to know why."
+
+*The accusation landed like a punch. Sarah felt the blood drain from her face, her carefully maintained composure cracking at the edges.*
+</input>
+<output>
+{
+  "topic": "Internal affairs accusation",
+  "tone": "Ominous, suffocating, accusatory",
+  "tension": {"level": "tense", "type": "confrontation", "direction": "escalating"}
+}
+</output>
+<explanation>
+TOPIC: "Internal affairs accusation" - specific and consequential. Not just "meeting with captain" or "work trouble." The IA involvement and evidence tampering allegation are the core issue.
+
+TONE: Captures the oppressive atmosphere:
+- "Ominous" - the extended silence, the careful reading, the ticking clock all create dread
+- "Suffocating" - she's trapped, the room feels small despite the chaos outside, nowhere to go
+- "Accusatory" - Rodriguez isn't asking if something happened; he's telling her he knows and demanding explanation
+
+TENSION analysis:
+- Level "tense": Stakes feel real—career, reputation, possibly freedom are on the line. The confrontation is direct but still in the "explain yourself" phase
+- Type "confrontation": Direct opposition between authority figure and accused. Rodriguez has power; Sarah is defending herself
+- Direction "escalating": Building toward a breaking point. Rodriguez is offering "one chance" which implies escalation is coming if she doesn't satisfy him
+
+Why "tense" and not higher:
+- Not "charged": That would suggest emotional intensity dominating—this is more controlled, procedural despite the stakes
+- Not "volatile": Nobody's about to snap; this is deliberate pressure, not explosive emotion
+- Could become "volatile" or "charged" if she confesses or accuses back, but currently it's a calculated confrontation
+</explanation>
+</example>
+
+<example>
+<input>
+*The morning sun streamed through the kitchen windows as Elena padded in wearing Marcus's oversized t-shirt, her hair a mess from sleep. Marcus was already at the stove, the smell of bacon and coffee filling the apartment. He looked over his shoulder and grinned at her sleep-rumpled appearance.*
+
+Marcus: "There she is. I was about to send a search party."
+
+Elena: *yawning hugely* "What time is it?"
+
+Marcus: "Almost eleven. You were out cold." *He slid a mug of coffee across the counter toward her.* "I figured you earned it after last night."
+
+*She wrapped her hands around the warm mug, smiling into the steam. Through the window, she could see the city skyline glittering in the sunshine, the storm from last night nothing but a memory. Her phone buzzed on the counter—probably her sister checking in—but she ignored it. The real world could wait.*
+
+Elena: "Is that bacon I smell?"
+
+Marcus: "And pancakes. The good ones, with the chocolate chips." *He turned back to the stove, but not before she caught the soft expression on his face.* "Sit down, I'll bring you a plate."
+
+*She hopped onto one of the bar stools, tucking her bare feet under her, and watched him cook with a contentment she hadn't felt in years.*
+</input>
+<output>
+{
+  "topic": "Lazy morning after",
+  "tone": "Warm, domestic, contented",
+  "tension": {"level": "relaxed", "type": "intimate", "direction": "stable"}
+}
+</output>
+<explanation>
+TOPIC: "Lazy morning after" - captures the context (implied intimacy the night before) and current activity (casual, unhurried morning). Specific enough to be useful, not overly clinical.
+
+TONE: All positive, soft emotions:
+- "Warm" - physical (sun, coffee, cooking) and emotional (their dynamic)
+- "Domestic" - the comfortable ordinariness of the scene, making breakfast together
+- "Contented" - no urgency, no worry, just enjoying the moment
+
+TENSION analysis:
+- Level "relaxed": Low stakes, comfortable. Nothing pressing, nobody worried, just enjoying each other
+- Type "intimate": Despite the low tension, the TYPE is intimate—they're emotionally/physically close (she's wearing his shirt, he's making her favorite breakfast)
+- Direction "stable": No building or releasing of tension. The scene could continue like this indefinitely
+
+Key insight: Low tension doesn't mean the scene isn't meaningful or intimate. "Relaxed" + "intimate" captures a loving, comfortable relationship moment. Not every scene needs conflict.
+
+Why NOT other types:
+- Not "conversation" - that implies neutral exchange, but there's clear romantic intimacy here
+- Not "celebratory" - they're not celebrating anything specific, just enjoying normalcy
+</explanation>
+</example>
+
+<bad_example>
+<output>
+{
+  "topic": "Dinner",
+  "tone": "Romantic",
+  "tension": {"level": "moderate", "type": "emotional", "direction": "building"}
+}
+</output>
+<why_bad>
+- topic too vague: "Dinner" could be anything. Should capture what makes THIS dinner significant: "Life-changing proposal"
+- tone too simple: "Romantic" is one word and doesn't capture the complexity. Use 2-3 descriptive words: "Vulnerable, electric, bittersweet"
+- tension level invalid: "moderate" is not a valid level. Must use: relaxed, aware, guarded, tense, charged, volatile, explosive
+- tension type invalid: "emotional" is not a valid type. Must use: conversation, negotiation, confrontation, intimate, vulnerable, suspense, celebratory
+- direction invalid: "building" is not valid. Must use: escalating, stable, decreasing
+</why_bad>
+</bad_example>
+</examples>
 
 <character_info>
 {{userInfo}}
@@ -39988,7 +45613,7 @@ Extract the scene state as valid JSON:`,
 <instructions>
 <general>
 - Update topic if the focus has shifted.
-- Update tone if the emotional atmosphere has changed.
+- Update tone if the emotional atmosphere has changed. Use 2-3 descriptive words (e.g. "Tense, suspicious" or "Warm, playful").
 - Consider whether tension has increased, decreased, or remained stable.
 </general>
 <tension>
@@ -40024,6 +45649,210 @@ Tension type describes the nature of what's driving the tension:
 </recent_events>
 </instructions>
 
+<examples>
+<example>
+<input>
+*Elena set down her wine glass with deliberate care, her laughter from a moment ago fading as something shifted in her expression. Across the table, Marcus was still chuckling about the ridiculous mishap she'd just described—the time she'd accidentally called her boss "mom" in a board meeting—but Elena wasn't smiling anymore.*
+
+Elena: "Marcus, there's something I need to tell you." *She clasped her hands together on the table, knuckles whitening.* "About that night. The night you found me at the hotel."
+
+*The temperature in the room seemed to drop. Marcus's smile faltered, then disappeared entirely. He'd asked about that night a dozen times over the past six months, and she'd always deflected, always found a way to change the subject. The fact that she was bringing it up now...*
+
+Marcus: "Elena, you don't have to—"
+
+Elena: "Yes, I do." *She finally looked up at him, and he could see the fear there, the vulnerability she usually kept so carefully hidden.* "I wasn't there for a work conference. I was meeting someone. Someone I'd been talking to for months." *Her voice cracked.* "Someone I almost left you for."
+
+*The words hung between them like broken glass.*
+</input>
+<previous_scene>
+{
+  "topic": "Sharing embarrassing memories",
+  "tone": "Lighthearted, nostalgic, warm",
+  "tension": {"level": "relaxed", "type": "conversation", "direction": "stable"}
+}
+</previous_scene>
+<output>
+{
+  "topic": "Confession of almost-affair",
+  "tone": "Heavy, fearful, exposed",
+  "tension": {"level": "volatile", "type": "vulnerable", "direction": "escalating"}
+}
+</output>
+<explanation>
+DRAMATIC SHIFT in scene state:
+
+TOPIC: "Sharing embarrassing memories" → "Confession of almost-affair"
+- The subject matter has completely transformed from light anecdotes to a relationship-threatening revelation
+- Topic should reflect what the scene is NOW about, not what it started as
+
+TONE: "Lighthearted, nostalgic, warm" → "Heavy, fearful, exposed"
+- Complete tonal reversal - none of the original warmth remains
+- "Heavy" - the weight of the confession, the "broken glass" metaphor
+- "Fearful" - Elena's visible fear, her vulnerability
+- "Exposed" - she's revealing her deepest secret, making herself vulnerable
+
+TENSION changes:
+- Level: "relaxed" → "volatile" (jumped multiple levels)
+  * This isn't just "tense" - she's confessing to almost ending the relationship
+  * "Volatile" = one word changes everything, and her next words could destroy or save them
+- Type: "conversation" → "vulnerable"
+  * This is about exposure of secrets, emotional risk, not casual exchange
+  * She's asking for forgiveness by confessing, putting herself at his mercy
+- Direction: "stable" → "escalating"
+  * The revelation demands a response; tension is building toward Marcus's reaction
+
+Why "volatile" not "explosive":
+- "Explosive" is the moment itself - the fight breaking out, the breakdown happening
+- We're AT the edge of explosive, but Marcus hasn't reacted yet
+- His response could push it to "explosive" or start de-escalating
+</explanation>
+</example>
+
+<example>
+<input>
+*The shouting had finally stopped. Marcus stood by the window, his back to the room, shoulders tight with tension. Elena sat on the edge of the bed where she'd collapsed after their worst fight yet, mascara-streaked tears still drying on her cheeks. Neither of them had spoken in almost five minutes.*
+
+*Finally, Marcus turned around. His expression was unreadable, but when he spoke, his voice was quieter than she'd ever heard it.*
+
+Marcus: "I need to know one thing." *He crossed the room slowly, stopping a few feet from the bed.* "Did you love him?"
+
+Elena: *voice barely a whisper* "No." *She looked up at him, and for the first time tonight, she let him see everything—the regret, the shame, the desperate hope.* "I was lonely, and I was stupid, and I was looking for something I already had. But I never loved him." *She reached out tentatively.* "I love you. I've only ever loved you."
+
+*Marcus stared at her outstretched hand for a long moment. Then, slowly, he took it.*
+
+Marcus: "Then we figure this out." *He sat down beside her, still holding her hand.* "I don't know how yet, but... we figure it out."
+</input>
+<previous_scene>
+{
+  "topic": "Confession of almost-affair",
+  "tone": "Heavy, fearful, exposed",
+  "tension": {"level": "volatile", "type": "vulnerable", "direction": "escalating"}
+}
+</previous_scene>
+<output>
+{
+  "topic": "Choosing forgiveness",
+  "tone": "Raw, fragile, hopeful",
+  "tension": {"level": "charged", "type": "vulnerable", "direction": "decreasing"}
+}
+</output>
+<explanation>
+RESOLUTION beginning - tension decreasing but still intense:
+
+TOPIC: "Confession of almost-affair" → "Choosing forgiveness"
+- The confession has been made; now the scene is about his response
+- "Choosing forgiveness" captures that this is an active decision, not passive acceptance
+
+TONE: "Heavy, fearful, exposed" → "Raw, fragile, hopeful"
+- Still emotionally intense, but the quality has shifted
+- "Raw" - nerves exposed, both vulnerable, the aftermath of emotional upheaval
+- "Fragile" - this reconciliation could still shatter; they're being careful
+- "Hopeful" - he took her hand, they're going to try
+
+TENSION changes:
+- Level: "volatile" → "charged"
+  * Still intense emotions, but the immediate danger has passed
+  * "Volatile" (one word changes everything) → "charged" (emotions dominate, but there's direction)
+  * He's chosen to stay; that decision lowered the stakes
+- Type: Still "vulnerable"
+  * This remains about emotional exposure and risk
+  * She's still exposed; he's now exposed too by choosing forgiveness
+- Direction: "escalating" → "decreasing"
+  * The worst moment has passed
+  * They're moving toward resolution, not away from it
+  * Tension is releasing, though slowly
+
+Why not lower than "charged":
+- This isn't "tense" (still too raw for that measured feeling)
+- Definitely not "guarded" or "relaxed" - they just had their worst fight ever
+- The emotions are still overwhelming; they're just now moving in a positive direction
+</explanation>
+</example>
+
+<example>
+<input>
+*The apartment was chaos—balloons everywhere, streamers hanging from every surface, the kitchen counter covered in half-assembled party supplies. Elena stood in the middle of it all, hair in a messy bun, wearing an apron covered in frosting stains, looking utterly frazzled.*
+
+Elena: "The cake is lopsided, Marcus. LOPSIDED." *She gestured at the three-tier monstrosity on the counter.* "Sophie's going to be here in two hours and I haven't even started the frosting and the living room still needs—"
+
+Marcus: *catching her by the shoulders* "Hey. Breathe."
+
+Elena: *taking a shaky breath* "I just want it to be perfect. She only turns five once, and after the year she's had with the hospital and everything—"
+
+Marcus: "And she's going to love it." *He pulled her into a hug, despite the flour on her apron.* "She's going to love the lopsided cake and the slightly crooked streamers and the balloons that I definitely did not accidentally pop three of while inflating."
+
+Elena: *laughing despite herself* "Three?!"
+
+Marcus: "They were VERY aggressive balloons." *He kissed her forehead.* "Now put me to work. What needs frosting?"
+
+*Elena finally let some of the tension drain from her shoulders. It wasn't going to be perfect. But watching Marcus gamely attempt to wield a piping bag, she realized it was going to be exactly right.*
+</input>
+<previous_scene>
+{
+  "topic": "Birthday party crisis",
+  "tone": "Frantic, stressed, anxious",
+  "tension": {"level": "tense", "type": "suspense", "direction": "escalating"}
+}
+</previous_scene>
+<output>
+{
+  "topic": "Party preparation teamwork",
+  "tone": "Reassured, warm, playful",
+  "tension": {"level": "aware", "type": "conversation", "direction": "decreasing"}
+}
+</output>
+<explanation>
+STRESS → REASSURANCE transition:
+
+TOPIC: "Birthday party crisis" → "Party preparation teamwork"
+- The "crisis" has been reframed as manageable
+- Focus shifted from "everything is going wrong" to "we're doing this together"
+- Still party prep, but the framing is completely different
+
+TONE: "Frantic, stressed, anxious" → "Reassured, warm, playful"
+- Complete reversal through Marcus's intervention
+- "Reassured" - he calmed her down, validated her stress, offered help
+- "Warm" - the hug, the kiss, the physical comfort
+- "Playful" - the balloon joke, her laughing despite herself
+
+TENSION changes:
+- Level: "tense" → "aware"
+  * "Tense" = stakes feel real (party pressure, Sophie's health history)
+  * "Aware" = mild interest/attention, something noted but manageable
+  * Marcus successfully lowered the emotional temperature
+- Type: "suspense" → "conversation"
+  * "Suspense" was about uncertainty (will the party be okay?)
+  * Now it's just two people talking, working together
+  * The outcome is no longer in question - it'll be fine
+- Direction: "escalating" → "decreasing"
+  * She was spiraling; now she's grounded
+  * The stress is actively dissipating
+
+This shows how quickly tension can shift through emotional support - one conversation completely changed the scene's energy.
+</explanation>
+</example>
+
+<bad_example>
+<output>
+{
+  "topic": "Sharing embarrassing memories",
+  "tone": "Lighthearted, nostalgic, warm",
+  "tension": {"level": "relaxed", "type": "conversation", "direction": "stable"}
+}
+</output>
+<why_bad>
+This is just copying the previous_scene without analyzing the new messages!
+- The messages show a DRAMATIC confession about an almost-affair
+- Topic should change: "Sharing embarrassing memories" → "Confession of almost-affair"
+- Tone should change completely: "Lighthearted" → "Heavy, fearful, exposed"
+- Tension should jump dramatically: "relaxed" → "volatile", "conversation" → "vulnerable"
+- Direction should change: "stable" → "escalating"
+
+Always analyze what ACTUALLY happened in the recent_messages and update accordingly. Never just return the previous state unchanged when significant events occurred.
+</why_bad>
+</bad_example>
+</examples>
+
 <characters_present>
 {{charactersSummary}}
 </characters_present>
@@ -40045,6 +45874,708 @@ Tension type describes the nature of what's driving the tension:
 </output_example>
 
 Extract the updated scene state as valid JSON:`,
+    },
+    event_extract: {
+        key: 'event_extract',
+        name: 'Event - Extract',
+        description: 'Extracts significant events from recent messages with relationship signals',
+        defaultTemperature: 0.4,
+        placeholders: [
+            COMMON_PLACEHOLDERS.messages,
+            COMMON_PLACEHOLDERS.currentRelationships,
+            COMMON_PLACEHOLDERS.schema,
+            COMMON_PLACEHOLDERS.schemaExample,
+        ],
+        default: `Analyze these roleplay messages and extract any significant events that occurred. You must only return valid JSON with no commentary.
+
+<instructions>
+<general>
+- Identify significant events that affect the narrative, relationships, or character development.
+- A "significant event" is something consequential: a revelation, promise, conflict, intimate moment, discovery, or decision.
+- If nothing significant happened (just casual dialogue or routine actions), return a summary indicating no notable event.
+- Focus on what actually happened, not background information or internal thoughts alone.
+</general>
+
+<summary_guidelines>
+Write a DETAILED 2-sentence summary that captures:
+- Specifically what happened (actions, words, reactions)
+- Who was involved and their emotional state
+- The context and significance of the moment
+
+BAD (too vague): "They kissed."
+GOOD: "After weeks of tension, Elena finally pulled Marcus close and kissed him softly, her hands trembling against his chest. He responded by wrapping his arms around her waist and deepening the kiss, neither of them caring that they were standing in the middle of the crowded marketplace."
+
+BAD: "They had an argument."
+GOOD: "Marcus's accusation about the missing money sent Elena into a defensive rage, her voice rising as she threw the ledger across the table at him. The confrontation ended with her storming out into the rain, leaving Marcus alone with the shattered remnants of their partnership."
+</summary_guidelines>
+
+<event_types>
+Select ALL applicable event types (multiple can apply to one event):
+
+CONVERSATION & SOCIAL:
+- conversation: General dialogue, discussion, chatting
+- confession: Admitting feelings, confessing something, revealing truth
+- argument: Verbal conflict, heated disagreement
+- negotiation: Making deals, bargaining, compromising
+
+DISCOVERY & SECRETS:
+- discovery: Learning new information, revelation
+- secret_shared: Voluntarily sharing a secret with someone
+- secret_revealed: A secret being exposed (possibly unwillingly)
+
+EMOTIONAL:
+- emotional: Emotional vulnerability, showing feelings
+- supportive: Providing comfort, emotional support
+- rejection: Rejecting someone's advances or request
+- comfort: Comforting someone who is distressed
+- apology: Apologizing for something done wrong
+- forgiveness: Forgiving someone for a transgression
+
+BONDING & CONNECTION:
+- laugh: Sharing a genuine laugh, humor, joy together
+- gift: Giving or receiving a gift (offered to buy drinks/food, gave a present, brought flowers)
+- compliment: Giving sincere praise or compliment (complimented appearance, praised skills, admired qualities)
+- tease: Playful teasing, banter, jokes at someone's expense (not mean-spirited)
+- flirt: Flirtatious behavior, romantic advances (suggestive comments, winks, innuendo)
+- date: Going on a date or romantic outing
+- i_love_you: Saying "I love you" or equivalent declaration of love
+- sleepover: Sleeping over together (non-sexual, just sharing a bed/space)
+- shared_meal: Eating together (breakfast, lunch, dinner, coffee, drinks, snacks together)
+- shared_activity: Doing an activity together (games, hobbies, adventures, watching movies)
+
+ROMANTIC INTIMACY:
+- intimate_touch: Hand-holding, caressing, non-sexual physical affection
+- intimate_kiss: Kissing (any type)
+- intimate_embrace: Hugging, cuddling, holding each other
+- intimate_heated: Making out, heavy petting, grinding
+
+SEXUAL ACTIVITY (select all that apply):
+- intimate_foreplay: Teasing, undressing, building up to sex
+- intimate_oral: Oral sexual activity
+- intimate_manual: Manual stimulation (hands, fingers)
+- intimate_penetrative: Penetrative sex
+- intimate_climax: Orgasm, completion
+
+ACTION & DANGER:
+- action: Physical activity, doing something concrete
+- combat: Fighting, violence, physical conflict
+- danger: Threat, peril, risky situation
+
+COMMITMENTS:
+- decision: Making a significant choice
+- promise: Making a commitment or vow
+- betrayal: Breaking trust, backstabbing
+- lied: Telling a lie or deceiving someone (NOT for sharing true secrets)
+
+LIFE EVENTS:
+- exclusivity: Committing to an exclusive relationship
+- marriage: Getting married, wedding ceremony
+- pregnancy: Discovering or announcing pregnancy
+- childbirth: Having a baby, giving birth
+
+SOCIAL:
+- social: Meeting new people, group dynamics
+- achievement: Accomplishing a goal, success
+
+EXAMPLES of multi-select:
+- A kiss during a love confession = ["confession", "intimate_kiss", "emotional"]
+- Revealing a secret while being held = ["secret_shared", "intimate_embrace", "emotional"]
+- An argument that turns into a fight = ["argument", "combat"]
+- Sex scene = ["intimate_heated", "intimate_foreplay", "intimate_penetrative", "intimate_climax"] (select all that apply)
+
+IMPORTANT: Intimacy types are for ACTUAL physical contact, not discussing intimacy.
+- Talking about wanting to kiss someone = ["conversation"] or ["emotional"]
+- Actually kissing someone = ["intimate_kiss"]
+</event_types>
+
+<event_details>
+MANDATORY: You MUST provide an eventDetails entry for EVERY event type you select.
+Each entry should be a brief phrase (5-15 words) describing what specifically happened.
+
+Examples by type:
+- conversation: "discussed plans for the heist tomorrow night"
+- confession: "Elena admitted her romantic feelings for Marcus"
+- argument: "fought about whether to trust the informant"
+- discovery: "found the hidden compartment in the desk"
+- secret_shared: "Elena revealed her TRUE past as a thief"
+- secret_revealed: "Marcus's true identity as an agent was exposed"
+- emotional: "Elena broke down crying about her father"
+- supportive: "Marcus comforted Elena after her breakdown"
+- comfort: "held her while she cried about her past"
+- apology: "apologized for lying about his identity"
+- forgiveness: "forgave Marcus for the betrayal"
+- laugh: "shared a genuine laugh at his terrible joke"
+- gift: "gave her a hand-carved wooden pendant"
+- gift: "offered to buy her dinner at the café"
+- gift: "brought her favorite coffee as a surprise"
+- compliment: "told her she had the most beautiful smile"
+- compliment: "praised his bravery in facing the danger"
+- tease: "playfully mocked his cooking disaster"
+- tease: "joked about his terrible sense of direction"
+- flirt: "winked and suggested they find somewhere private"
+- flirt: "leaned in close while complimenting her eyes"
+- date: "went to the art museum together"
+- i_love_you: "told her he loved her for the first time"
+- sleepover: "fell asleep together on the couch"
+- shared_meal: "had dinner together at the candlelit restaurant"
+- shared_meal: "ate breakfast together at the café"
+- shared_meal: "grabbed coffee and chatted for hours"
+- shared_activity: "played cards together into the night"
+- shared_activity: "watched the sunset together from the rooftop"
+- intimate_kiss: "first kiss in the corner booth"
+- intimate_embrace: "held each other on the couch"
+- promise: "vowed to protect Elena no matter what"
+- betrayal: "sold the information to their enemies"
+- lied: "told Marcus she was a teacher when she's actually a spy"
+
+CRITICAL - SECRET_SHARED vs LIED:
+- secret_shared: Character shares a TRUE secret about themselves (real past, real identity, real feelings)
+- lied: Character tells something FALSE, deceives, or gives a cover story
+- If someone shares a fake backstory, that is "lied" NOT "secret_shared"
+- "secret_shared" is ONLY for truthful revelations
+
+SECRET_SHARED vs SECRET_REVEALED:
+- secret_shared: Character VOLUNTARILY tells someone their TRUE secret
+- secret_revealed: TRUE secret is EXPOSED (found out, overheard, discovered by accident, or told by a third party)
+</event_details>
+
+<event_pairs>
+MANDATORY: You MUST specify which two characters are involved in EACH event type.
+Different event types can involve different character pairs!
+
+FORMAT:
+- Single pair: "combat": ["User", "Thug"]
+- Multiple pairs (same event type): "combat": [["User", "Thug1"], ["User", "Thug2"]]
+
+EXAMPLE 1 - Single pair (confession between two people):
+eventTypes: ["confession", "emotional", "secret_shared"]
+eventPairs: {
+  "confession": ["Elena", "Marcus"],
+  "emotional": ["Elena", "Marcus"],
+  "secret_shared": ["Elena", "Marcus"]
+}
+
+EXAMPLE 2 - Combat with multiple enemies:
+eventTypes: ["combat", "danger"]
+eventPairs: {
+  "combat": [["Jake", "Thug1"], ["Jake", "Thug2"]],
+  "danger": ["Jake", "Thug1"]
+}
+
+EXAMPLE 3 - Mixed event (fight enemies, comfort ally):
+eventTypes: ["combat", "emotional", "supportive", "intimate_embrace"]
+eventPairs: {
+  "combat": ["Sarah", "Guard"],
+  "emotional": ["Sarah", "Alex"],
+  "supportive": ["Sarah", "Alex"],
+  "intimate_embrace": ["Sarah", "Alex"]
+}
+
+This is CRITICAL for tracking relationships correctly. Each event type MUST have its own pair entry.
+</event_pairs>
+
+<relationship_signals>
+If events affect relationships, include relationshipSignals (array - one per affected pair).
+Only include signals for MEANINGFUL relationship shifts, not routine interactions.
+
+FORMAT: Array of signal objects, each with a pair and changes array.
+
+EXAMPLE 1 - No relationship signal (routine combat with nameless enemies):
+relationshipSignals: []
+
+EXAMPLE 2 - Single signal (emotional moment between two characters):
+relationshipSignals: [
+  {
+    pair: ["Elena", "Marcus"],
+    changes: [
+      { from: "Elena", toward: "Marcus", feeling: "vulnerable" },
+      { from: "Marcus", toward: "Elena", feeling: "protective" }
+    ]
+  }
+]
+
+EXAMPLE 3 - Multiple signals (fight with named enemies who will remember):
+relationshipSignals: [
+  { pair: ["Jake", "Viper"], changes: [{ from: "Viper", toward: "Jake", feeling: "vengeful" }] },
+  { pair: ["Jake", "Razor"], changes: [{ from: "Razor", toward: "Jake", feeling: "fearful" }] }
+]
+
+EXAMPLE 4 - Mixed (combat with enemy, emotional support from ally):
+relationshipSignals: [
+  { pair: ["Sarah", "Alex"], changes: [
+    { from: "Alex", toward: "Sarah", feeling: "grateful" },
+    { from: "Sarah", toward: "Alex", feeling: "protective" }
+  ]}
+]
+(Note: No signal for Guard unless they're a recurring character)
+
+IMPORTANT: Only create relationship signals for characters who will appear again.
+Generic enemies, random NPCs, or one-off characters don't need signals.
+</relationship_signals>
+
+<witnesses>
+- Include all characters who witnessed or participated in the event.
+- This is important for dramatic irony (tracking who knows what).
+</witnesses>
+</instructions>
+
+<current_relationships>
+{{currentRelationships}}
+</current_relationships>
+
+<recent_messages>
+{{messages}}
+</recent_messages>
+
+<schema>
+{{schema}}
+</schema>
+
+<output_example>
+{{schemaExample}}
+</output_example>
+
+Extract the significant event (or indicate no significant event) as valid JSON:`,
+    },
+    chapter_boundary: {
+        key: 'chapter_boundary',
+        name: 'Chapter - Boundary Detection',
+        description: 'Determines if a chapter boundary has occurred and generates chapter summary',
+        defaultTemperature: 0.5,
+        placeholders: [
+            COMMON_PLACEHOLDERS.currentEvents,
+            COMMON_PLACEHOLDERS.currentRelationships,
+            COMMON_PLACEHOLDERS.schema,
+            COMMON_PLACEHOLDERS.schemaExample,
+        ],
+        default: `A potential chapter boundary has been detected (location change or time jump). Analyze whether this represents a true narrative chapter break and generate a chapter summary. You must only return valid JSON with no commentary.
+
+<instructions>
+<boundary_detection>
+- A true chapter boundary marks a significant narrative transition.
+- Time jumps of several hours or location changes to new areas often indicate chapters.
+- Minor movements within the same scene (e.g., moving to another room in the same building) are NOT chapter boundaries.
+- Consider if the narrative tone or focus has shifted significantly.
+</boundary_detection>
+<summary>
+- Write a 2-3 sentence summary of what happened in the chapter.
+- Focus on the most important events and character developments.
+- Include any relationship changes.
+</summary>
+<outcomes>
+- relationshipChanges: Note any significant shifts in how characters relate to each other.
+- secretsRevealed: Any secrets that came to light.
+- newComplications: New problems or tensions introduced.
+</outcomes>
+</instructions>
+
+<chapter_events>
+{{currentEvents}}
+</chapter_events>
+
+<current_relationships>
+{{currentRelationships}}
+</current_relationships>
+
+<schema>
+{{schema}}
+</schema>
+
+<output_example>
+{{schemaExample}}
+</output_example>
+
+Analyze the chapter boundary and generate summary as valid JSON:`,
+    },
+    relationship_initial: {
+        key: 'relationship_initial',
+        name: 'Relationship - Initial',
+        description: 'Extracts initial relationship state between two characters',
+        defaultTemperature: 0.6,
+        placeholders: [
+            COMMON_PLACEHOLDERS.messages,
+            COMMON_PLACEHOLDERS.characterInfo,
+            COMMON_PLACEHOLDERS.schema,
+            COMMON_PLACEHOLDERS.schemaExample,
+        ],
+        default: `Analyze this roleplay scene and extract the relationship between two characters. You must only return valid JSON with no commentary.
+
+<instructions>
+<general>
+- Determine the current status of the relationship (strangers, acquaintances, friendly, close, intimate, strained, hostile, complicated).
+- Extract how each character feels about the other (asymmetric feelings are common and important).
+- Note any secrets one character knows that the other doesn't.
+- Identify what each character wants from the relationship.
+</general>
+
+<status_guidelines>
+Status definitions and requirements:
+
+- strangers: Never met or just met, no rapport
+- acquaintances: Know each other casually, no strong bond
+- friendly: Positive rapport, enjoy each other's company
+- close: Deep friendship, trust, confide in each other. Maximum for platonic relationships.
+- intimate: ONLY for romantic/sexual relationships with explicit romantic actions (kiss, date, love confession, sex)
+- strained: Tension, unresolved conflict, damaged trust
+- hostile: Active antagonism, enemies
+- complicated: Mixed feelings, unclear relationship
+
+CRITICAL STATUS LIMITS:
+- "intimate" REQUIRES romantic actions to have occurred (first kiss, first date, love confession, sexual activity)
+- Sharing secrets or emotional vulnerability alone = "close" at most, NOT "intimate"
+- Caring about someone or wanting to help them = "friendly" or "close", NOT "intimate"
+- "intimate" means ROMANTIC relationship, not just emotional closeness
+
+Examples:
+- Characters shared deep secrets, support each other emotionally → "close" (not intimate - no romance)
+- Characters had their first kiss → can be "intimate"
+- Characters confessed romantic love → can be "intimate"
+- Characters care deeply about each other but no romantic actions → "close"
+- Characters are suspicious but talking → "strained" or "acquaintances"
+</status_guidelines>
+
+<asymmetry>
+- Each character's feelings may be very different from the other's.
+- One character might be trusting while the other is suspicious.
+- One might want romance while the other wants friendship.
+- Capture these differences accurately.
+</asymmetry>
+
+<output_format>
+Return attitudes using actual character names as keys:
+{
+  "status": "friendly",
+  "attitudes": {
+    "CharacterName1": {
+      "toward": "CharacterName2",
+      "feelings": ["trusting", "curious"],
+      "secrets": ["knows about their past"],
+      "wants": ["friendship"]
+    },
+    "CharacterName2": {
+      "toward": "CharacterName1",
+      "feelings": ["grateful", "protective"],
+      "secrets": [],
+      "wants": ["loyalty"]
+    }
+  }
+}
+
+IMPORTANT: Use the actual character names as keys, NOT "aToB" or "bToA".
+The "toward" field clarifies who the feelings are directed at.
+</output_format>
+
+<secrets>
+- Secrets are things one character knows about the other (or about a situation) that the other doesn't know.
+- This is crucial for dramatic irony in the narrative.
+- Only include actual secrets, not just information one character hasn't shared yet.
+</secrets>
+</instructions>
+
+<character_info>
+{{characterInfo}}
+</character_info>
+
+<scene_messages>
+{{messages}}
+</scene_messages>
+
+<schema>
+{{schema}}
+</schema>
+
+<output_example>
+{{schemaExample}}
+</output_example>
+
+Extract the relationship state as valid JSON:`,
+    },
+    relationship_update: {
+        key: 'relationship_update',
+        name: 'Relationship - Update',
+        description: 'Updates relationship state based on recent events',
+        defaultTemperature: 0.6,
+        placeholders: [
+            COMMON_PLACEHOLDERS.previousState,
+            COMMON_PLACEHOLDERS.currentEvents,
+            COMMON_PLACEHOLDERS.messages,
+            COMMON_PLACEHOLDERS.schema,
+            COMMON_PLACEHOLDERS.schemaExample,
+        ],
+        default: `Analyze recent events and update the relationship between two characters. You must only return valid JSON with no commentary.
+
+<instructions>
+<general>
+- Analyze the previous relationship state and recent events to determine the CURRENT state.
+- Update status if the relationship has progressed or deteriorated.
+- REPLACE feelings with what the character CURRENTLY feels - do NOT accumulate old feelings.
+  - If someone was "angry" but has forgiven, remove "angry" and add appropriate new feelings.
+  - Feelings should reflect the PRESENT emotional state, not a history of all feelings ever felt.
+- Add new secrets if one character learned something the other doesn't know.
+- Remove secrets that have been revealed or are no longer relevant.
+- Update wants based on how the relationship has evolved.
+</general>
+
+<feelings_guidance>
+CRITICAL: Feelings arrays should contain CURRENT feelings only, not accumulated history.
+
+WRONG approach (accumulating):
+- Previous: ["curious", "cautious"]
+- After bonding: ["curious", "cautious", "trusting", "warm"]  ← BAD: old feelings remain
+
+CORRECT approach (replacing):
+- Previous: ["curious", "cautious"]
+- After bonding: ["trusting", "warm", "comfortable"]  ← GOOD: reflects current state
+
+Think: "What does this character feel RIGHT NOW about the other person?"
+</feelings_guidance>
+
+<status_guidelines>
+Status definitions and requirements:
+
+- strangers: Never met or just met, no rapport
+- acquaintances: Know each other casually, no strong bond
+- friendly: Positive rapport, enjoy each other's company
+- close: Deep friendship, trust, confide in each other. Maximum for platonic relationships.
+- intimate: ONLY for romantic/sexual relationships with explicit romantic actions (kiss, date, love confession, sex)
+- strained: Tension, unresolved conflict, damaged trust
+- hostile: Active antagonism, enemies
+- complicated: Mixed feelings, unclear relationship
+
+CRITICAL STATUS LIMITS:
+- "intimate" REQUIRES romantic actions to have occurred (first kiss, first date, love confession, sexual activity)
+- Sharing secrets or emotional vulnerability alone = "close" at most, NOT "intimate"
+- Caring about someone or wanting to help them = "friendly" or "close", NOT "intimate"
+- "intimate" means ROMANTIC relationship, not just emotional closeness
+
+Examples:
+- Characters shared deep secrets, support each other emotionally → "close" (not intimate - no romance)
+- Characters had their first kiss → can be "intimate"
+- Characters confessed romantic love → can be "intimate"
+- Characters care deeply about each other but no romantic actions → "close"
+- Characters are suspicious but talking → "strained" or "acquaintances"
+</status_guidelines>
+
+<output_format>
+Return attitudes using actual character names as keys:
+{
+  "status": "close",
+  "attitudes": {
+    "CharacterName1": {
+      "toward": "CharacterName2",
+      "feelings": ["trusting", "protective", "grateful"],
+      "secrets": [],
+      "wants": ["continued friendship", "support"]
+    },
+    "CharacterName2": {
+      "toward": "CharacterName1",
+      "feelings": ["caring", "understanding", "hopeful"],
+      "secrets": [],
+      "wants": ["to help", "trust"]
+    }
+  }
+}
+
+IMPORTANT: Use the actual character names as keys, NOT "aToB" or "bToA".
+The "toward" field clarifies who the feelings are directed at.
+</output_format>
+
+<history>
+- If this is a chapter boundary update, include a history snapshot summarizing the relationship state at this point.
+</history>
+</instructions>
+
+<previous_relationship>
+{{previousState}}
+</previous_relationship>
+
+<recent_events>
+{{currentEvents}}
+</recent_events>
+
+<recent_messages>
+{{messages}}
+</recent_messages>
+
+<schema>
+{{schema}}
+</schema>
+
+<output_example>
+{{schemaExample}}
+</output_example>
+
+Extract the updated relationship state as valid JSON:`,
+    },
+    milestone_description: {
+        key: 'milestone_description',
+        name: 'Milestone - Description',
+        description: 'Extracts a concise, grounded description of a relationship milestone moment',
+        defaultTemperature: 0.5,
+        placeholders: [
+            COMMON_PLACEHOLDERS.messages,
+            COMMON_PLACEHOLDERS.milestoneType,
+            COMMON_PLACEHOLDERS.characterPair,
+            COMMON_PLACEHOLDERS.timeOfDay,
+            COMMON_PLACEHOLDERS.location,
+            COMMON_PLACEHOLDERS.props,
+            COMMON_PLACEHOLDERS.characters,
+            COMMON_PLACEHOLDERS.relationship,
+            COMMON_PLACEHOLDERS.eventDetail,
+        ],
+        default: `Extract a brief description of this {{milestoneType}} moment. Return ONLY the description text, no JSON, no quotes, no commentary.
+
+<context>
+<milestone_type>{{milestoneType}}</milestone_type>
+<character_pair>{{characterPair}}</character_pair>
+<time_of_day>{{timeOfDay}}</time_of_day>
+<location>{{location}}</location>
+<nearby_props>{{props}}</nearby_props>
+<event_detail>{{eventDetail}}</event_detail>
+<character_details>
+{{characters}}
+</character_details>
+<relationship_state>
+{{relationship}}
+</relationship_state>
+</context>
+
+<instructions>
+Write 1-2 sentences describing ONLY the specific {{milestoneType}} moment between {{characterPair}}.
+
+FOCUS: Describe the exact moment of the milestone - not the entire conversation or scene.
+- For first_kiss: describe the kiss itself, not everything that led to it
+- For secret_shared: describe what secret was shared (use the event_detail)
+- For first_embrace: describe the embrace itself
+
+REQUIREMENTS:
+- Use the event_detail field - it tells you exactly what happened
+- Reference location and time of day
+- Be factual and concise, not flowery
+- Write in past tense, third person
+- Do NOT summarize the whole scene - ONLY the milestone moment
+</instructions>
+
+<examples>
+<example milestone="first_kiss">
+<time_of_day>evening</time_of_day>
+<location>Downtown - The Blue Moon Bar - Corner booth</location>
+<props>half-empty glasses, dim overhead light</props>
+<character_details>
+Elena: Position: leaning across booth | Mood: nervous, anticipating | Wearing: torso: red blouse
+Marcus: Position: sitting across from her | Mood: intent, warm | Wearing: torso: dark suit jacket
+</character_details>
+<relationship_state>Elena & Marcus (close): Elena feels: attracted, hopeful | Marcus feels: protective, drawn</relationship_state>
+<messages>
+Elena: *She leaned closer across the booth* "I've been thinking about this all night."
+Marcus: *He reached over and cupped her cheek* "Me too." *He kissed her*
+</messages>
+<description>
+Elena and Marcus shared their first kiss in the corner booth of the Blue Moon Bar that evening, leaning across the table between their half-empty drinks.
+</description>
+</example>
+
+<example milestone="first_embrace">
+<time_of_day>afternoon</time_of_day>
+<location>Westside - Elena's Apartment - Living room</location>
+<props>couch, scattered tissues, muted TV</props>
+<character_details>
+Elena: Position: sitting on couch | Mood: devastated, vulnerable | Wearing: torso: oversized sweater
+Marcus: Position: sitting beside her | Mood: concerned, gentle | Wearing: torso: t-shirt, jacket: leather jacket
+</character_details>
+<relationship_state>Elena & Marcus (friendly): Elena feels: grateful, needing support | Marcus feels: protective, caring</relationship_state>
+<messages>
+Marcus: *He found her on the couch, crying* "Hey. I came as soon as I heard."
+Elena: *She looked up* "I didn't think you'd come."
+Marcus: *He sat beside her and pulled her into a hug* "Of course I came."
+</messages>
+<description>
+Marcus held Elena for the first time on her couch that afternoon, pulling her in while she cried about her father's diagnosis.
+</description>
+</example>
+
+<example milestone="first_conflict">
+<time_of_day>night</time_of_day>
+<location>Marcus's Office - Private study</location>
+<props>desk, papers, whiskey glass</props>
+<character_details>
+Elena: Position: standing at desk | Mood: furious, betrayed | Wearing: torso: work blouse
+Marcus: Position: behind desk | Mood: defensive, guilty | Wearing: torso: dress shirt, sleeves rolled
+</character_details>
+<relationship_state>Elena & Marcus (intimate): Elena feels: betrayed, hurt | Marcus feels: guilty, desperate</relationship_state>
+<messages>
+Elena: *She threw the documents on his desk* "You've been lying to me this whole time."
+Marcus: "I was trying to protect you—"
+Elena: "Don't. Just don't." *She walked out*
+</messages>
+<description>
+Their first real fight happened in Marcus's study when Elena confronted him with the documents proving his deception. She walked out before he could explain.
+</description>
+</example>
+
+<example milestone="confession">
+<time_of_day>morning</time_of_day>
+<location>Riverside Park - Bench near the fountain</location>
+<props>coffee cups, park bench</props>
+<character_details>
+Elena: Position: sitting on bench | Mood: nervous, determined | Wearing: jacket: light cardigan
+Marcus: Position: sitting beside her | Mood: attentive, curious | Wearing: torso: casual shirt
+</character_details>
+<relationship_state>Elena & Marcus (close): Elena feels: in love, scared | Marcus feels: comfortable, uncertain</relationship_state>
+<messages>
+Elena: *She stared at her coffee* "I need to tell you something."
+Marcus: *He waited*
+Elena: "I'm in love with you. I have been for a while."
+</messages>
+<description>
+Elena confessed her feelings on a park bench that morning, gripping her coffee cup as she finally admitted she'd been in love with Marcus for a while.
+</description>
+</example>
+
+<example milestone="first_laugh">
+<time_of_day>evening</time_of_day>
+<location>Downtown - Ramen Shop - Counter seats</location>
+<props>steaming ramen bowls, chopsticks, napkins</props>
+<character_details>
+Elena: Position: sitting at counter | Mood: amused, relaxed | Wearing: jacket: denim jacket
+Marcus: Position: sitting beside her | Mood: playful, grinning | Wearing: torso: hoodie
+</character_details>
+<relationship_state>Elena & Marcus (acquaintances): Elena feels: warming up, curious | Marcus feels: interested, comfortable</relationship_state>
+<messages>
+Marcus: *He slurped his noodles loudly, getting broth on his chin* "That's how you're supposed to eat ramen. Trust me."
+Elena: *She burst out laughing* "You look ridiculous."
+Marcus: *He grinned, not wiping his face* "But am I wrong?"
+</messages>
+<description>
+Their first genuine laugh together came at the ramen shop that evening when Marcus deliberately slurped his noodles and got broth all over his chin, making Elena burst out laughing despite herself.
+</description>
+</example>
+
+<example milestone="first_gift">
+<time_of_day>afternoon</time_of_day>
+<location>Elena's Apartment - Doorway</location>
+<props>doorframe, mailbox, potted plant</props>
+<character_details>
+Elena: Position: standing in doorway | Mood: surprised, touched | Wearing: torso: casual sweater
+Marcus: Position: standing at door | Mood: nervous, hopeful | Wearing: jacket: coat, torso: button-up
+</character_details>
+<relationship_state>Elena & Marcus (friendly): Elena feels: appreciating, curious | Marcus feels: eager, nervous</relationship_state>
+<messages>
+Marcus: *He held out a small wrapped box* "I saw this and thought of you."
+Elena: *She unwrapped it to find a vintage compass* "Marcus... this is beautiful."
+Marcus: "So you'll always find your way home."
+</messages>
+<description>
+Marcus gave Elena her first gift at her apartment door that afternoon—a vintage compass he'd found, saying it was so she'd always find her way home.
+</description>
+</example>
+</examples>
+
+<recent_messages>
+{{messages}}
+</recent_messages>
+
+Write the milestone description:`,
     },
 };
 // ============================================
@@ -40106,9 +46637,50 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../utils/messageState */ "./src/utils/messageState.ts");
 /* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
 /* harmony import */ var _utils_temperatures__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../utils/temperatures */ "./src/utils/temperatures.ts");
+/* harmony import */ var _state_narrativeState__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../state/narrativeState */ "./src/state/narrativeState.ts");
+/* harmony import */ var _state_chapters__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../state/chapters */ "./src/state/chapters.ts");
+/* harmony import */ var _state_events__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../state/events */ "./src/state/events.ts");
+/* harmony import */ var _state_relationships__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../state/relationships */ "./src/state/relationships.ts");
+/* harmony import */ var _weather__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../weather */ "./src/weather/index.ts");
 
 
 
+
+
+
+
+
+// ============================================
+// Helper Functions for Knowledge Gaps
+// ============================================
+/**
+ * Build knowledge gaps - events that present characters missed.
+ * Returns formatted strings describing what each present character doesn't know.
+ */
+function buildKnowledgeGaps(events, presentCharacters) {
+    const gaps = new Map();
+    // For each present character, find events they weren't witnesses to
+    for (const character of presentCharacters) {
+        const charLower = character.toLowerCase();
+        for (const event of events) {
+            const witnessLower = event.witnesses.map(w => w.toLowerCase());
+            if (!witnessLower.includes(charLower)) {
+                if (!gaps.has(character)) {
+                    gaps.set(character, []);
+                }
+                gaps.get(character).push(event.summary);
+            }
+        }
+    }
+    // Format as strings
+    const result = [];
+    for (const [character, missedEvents] of gaps) {
+        if (missedEvents.length > 0) {
+            result.push(`${character} was not present for: ${missedEvents.join('; ')}`);
+        }
+    }
+    return result;
+}
 const EXTENSION_KEY = 'blazetracker';
 const MONTH_NAMES = [
     'January',
@@ -40138,7 +46710,33 @@ function formatOutfit(outfit) {
 }
 function formatClimate(climate) {
     const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_1__.getSettings)();
-    return `${(0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_2__.formatTemperature)(climate.temperature, settings.temperatureUnit)}, ${climate.weather}`;
+    if ((0,_weather__WEBPACK_IMPORTED_MODULE_7__.isLegacyClimate)(climate)) {
+        // Legacy format: simple weather + temperature
+        return `${(0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_2__.formatTemperature)(climate.temperature, settings.temperatureUnit)}, ${climate.weather}`;
+    }
+    // Procedural format: more detailed
+    const parts = [];
+    // Temperature with feels like if significantly different
+    const tempStr = (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_2__.formatTemperature)(climate.temperature, settings.temperatureUnit);
+    if (Math.abs(climate.feelsLike - climate.temperature) > 5) {
+        const feelsLikeStr = (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_2__.formatTemperature)(climate.feelsLike, settings.temperatureUnit);
+        parts.push(`${tempStr} (feels like ${feelsLikeStr})`);
+    }
+    else {
+        parts.push(tempStr);
+    }
+    // Conditions
+    parts.push(climate.conditions);
+    // Wind if notable
+    if (climate.windSpeed >= 15) {
+        parts.push(`${Math.round(climate.windSpeed)} mph winds from ${climate.windDirection}`);
+    }
+    // Indoor note
+    if (climate.isIndoors && climate.indoorTemperature !== undefined) {
+        const outdoorStr = (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_2__.formatTemperature)(climate.outdoorTemperature, settings.temperatureUnit);
+        parts.push(`(${outdoorStr} outside)`);
+    }
+    return parts.join(', ');
 }
 function formatScene(scene) {
     const tensionParts = [
@@ -40146,13 +46744,9 @@ function formatScene(scene) {
         scene.tension.level,
         scene.tension.direction !== 'stable' ? scene.tension.direction : null,
     ].filter(Boolean);
-    let text = `Topic: ${scene.topic}
+    return `Topic: ${scene.topic}
 Tone: ${scene.tone}
 Tension: ${tensionParts.join(', ')}`;
-    if (scene.recentEvents.length > 0) {
-        text += `\nRecent events: ${scene.recentEvents.join('; ')}`;
-    }
-    return text;
 }
 function formatNarrativeDateTime(time) {
     const hour12 = time.hour % 12 || 12;
@@ -40176,44 +46770,78 @@ function getDayOrdinal(day) {
             return 'th';
     }
 }
-function formatStateForInjection(state) {
+function formatStateForInjection(state, narrativeState, options) {
     const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_1__.getSettings)();
     // Check what's enabled AND what data exists
     const hasTime = settings.trackTime !== false && state.time;
     const hasLocation = settings.trackLocation !== false && state.location;
     const hasClimate = settings.trackClimate !== false && state.climate;
     const hasScene = settings.trackScene !== false && state.scene;
-    const hasCharacters = settings.trackCharacters !== false && state.characters && state.characters.length > 0;
+    const hasCharacters = settings.trackCharacters !== false &&
+        state.characters &&
+        state.characters.length > 0;
+    const hasEvents = settings.trackEvents !== false &&
+        state.currentEvents &&
+        state.currentEvents.length > 0;
+    const hasRelationships = settings.trackRelationships !== false &&
+        narrativeState &&
+        narrativeState.relationships.length > 0;
+    const hasChapters = narrativeState && narrativeState.chapters.length > 0;
     // If nothing is tracked/available, return empty
-    if (!hasTime && !hasLocation && !hasClimate && !hasScene && !hasCharacters) {
+    if (!hasTime &&
+        !hasLocation &&
+        !hasClimate &&
+        !hasScene &&
+        !hasCharacters &&
+        !hasEvents &&
+        !hasRelationships &&
+        !hasChapters) {
         return '';
     }
-    let output = `[Scene State]`;
+    const sections = [];
+    // ========================================
+    // Previous Chapters (Story So Far)
+    // ========================================
+    if (hasChapters && narrativeState) {
+        const chapterLimit = settings.injectedChapters ?? 3;
+        const chaptersStr = (0,_state_chapters__WEBPACK_IMPORTED_MODULE_4__.formatChaptersForInjection)(narrativeState.chapters, chapterLimit);
+        if (chaptersStr !== 'No previous chapters.') {
+            sections.push(`[Story So Far]\n${chaptersStr}\n[/Story So Far]`);
+        }
+    }
+    // ========================================
+    // Current Scene State
+    // ========================================
+    let sceneOutput = `[Scene State]`;
     // Scene info first - it's the narrative context
     if (hasScene && state.scene) {
-        output += `\n${formatScene(state.scene)}`;
+        sceneOutput += `\n${formatScene(state.scene)}`;
     }
     // Time (if enabled and available)
     if (hasTime && state.time) {
         const timeStr = formatNarrativeDateTime(state.time);
-        output += `\nTime: ${timeStr}`;
+        sceneOutput += `\nTime: ${timeStr}`;
     }
     // Location (if enabled and available)
     if (hasLocation && state.location) {
-        const location = [state.location.area, state.location.place, state.location.position]
+        const location = [
+            state.location.area,
+            state.location.place,
+            state.location.position,
+        ]
             .filter(Boolean)
             .join(' - ');
-        output += `\nLocation: ${location}`;
+        sceneOutput += `\nLocation: ${location}`;
         // Props are part of location
         if (state.location.props && state.location.props.length > 0) {
             const props = state.location.props.join(', ');
-            output += `\nNearby objects: ${props}`;
+            sceneOutput += `\nNearby objects: ${props}`;
         }
     }
     // Climate (if enabled and available)
     if (hasClimate && state.climate) {
         const climate = formatClimate(state.climate);
-        output += `\nClimate: ${climate}`;
+        sceneOutput += `\nClimate: ${climate}`;
     }
     // Characters (if enabled and available)
     if (hasCharacters && state.characters) {
@@ -40224,32 +46852,61 @@ function formatStateForInjection(state) {
                 parts.push(`doing: ${char.activity}`);
             if (char.mood?.length)
                 parts.push(`mood: ${char.mood.join(', ')}`);
-            if (char.goals?.length)
-                parts.push(`goals: ${char.goals.join(', ')}`);
             if (char.physicalState?.length)
                 parts.push(`physical: ${char.physicalState.join(', ')}`);
             if (char.outfit)
                 parts.push(`wearing: ${formatOutfit(char.outfit)}`);
-            if (char.dispositions) {
-                const dispParts = Object.entries(char.dispositions).map(([name, feelings]) => `${name}: ${feelings.join(', ')}`);
-                if (dispParts.length)
-                    parts.push(`feelings: ${dispParts.join('; ')}`);
-            }
             return parts.join('; ');
         })
             .join('\n');
-        output += `\nCharacters present:\n${characters}`;
+        sceneOutput += `\nCharacters present:\n${characters}`;
     }
-    output += `\n[/Scene State]`;
-    return output;
+    sceneOutput += `\n[/Scene State]`;
+    sections.push(sceneOutput);
+    // ========================================
+    // Weather Transition (if procedural weather with change)
+    // ========================================
+    if (options?.weatherTransition &&
+        settings.useProceduralWeather &&
+        settings.injectWeatherTransitions) {
+        sections.push(`[Weather Change]\n${options.weatherTransition}\n[/Weather Change]`);
+    }
+    // ========================================
+    // Recent Events in Current Chapter
+    // ========================================
+    if (hasEvents && state.currentEvents) {
+        const eventsStr = (0,_state_events__WEBPACK_IMPORTED_MODULE_5__.formatEventsForInjection)(state.currentEvents);
+        sections.push(`[Recent Events]\n${eventsStr}\n[/Recent Events]`);
+        // Add witness absence notes for dramatic irony (if characters are tracked)
+        if (hasCharacters && state.characters) {
+            const presentCharacters = state.characters.map(c => c.name);
+            const knowledgeGaps = buildKnowledgeGaps(state.currentEvents, presentCharacters);
+            if (knowledgeGaps.length > 0) {
+                sections.push(`[Knowledge Gaps]\n${knowledgeGaps.join('\n')}\n[/Knowledge Gaps]`);
+            }
+        }
+    }
+    // ========================================
+    // Relationships (filtered for present characters)
+    // ========================================
+    if (hasRelationships && narrativeState) {
+        const presentCharacters = hasCharacters && state.characters
+            ? state.characters.map(c => c.name)
+            : undefined;
+        const relationshipsStr = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_6__.formatRelationshipsForPrompt)(narrativeState.relationships, presentCharacters, settings.includeRelationshipSecrets ?? true);
+        if (relationshipsStr !== 'No established relationships yet.') {
+            sections.push(`[Relationships]\n${relationshipsStr}\n[/Relationships]`);
+        }
+    }
+    return sections.join('\n\n');
 }
-function injectState(state) {
+function injectState(state, narrativeState, options) {
     const context = SillyTavern.getContext();
     if (!state) {
         context.setExtensionPrompt(EXTENSION_KEY, '', 0, 0);
         return;
     }
-    const formatted = formatStateForInjection(state);
+    const formatted = formatStateForInjection(state, narrativeState, options);
     // If nothing to inject, clear the prompt
     if (!formatted) {
         context.setExtensionPrompt(EXTENSION_KEY, '', 0, 0);
@@ -40260,16 +46917,17 @@ function injectState(state) {
     // Depth 0 = at the end (near most recent messages)
     context.setExtensionPrompt(EXTENSION_KEY, formatted, 1, // extension_prompt_types.IN_CHAT or similar
     0);
-    console.log('[BlazeTracker] Injected state into context');
 }
 function updateInjectionFromChat() {
     const context = SillyTavern.getContext();
-    // Find most recent state
+    // Get narrative state
+    const narrativeState = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_3__.getNarrativeState)();
+    // Find most recent tracked state
     for (let i = context.chat.length - 1; i >= 0; i--) {
         const message = context.chat[i];
         const stateData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_0__.getMessageState)(message);
         if (stateData?.state) {
-            injectState(stateData.state);
+            injectState(stateData.state, narrativeState);
             return;
         }
     }
@@ -40358,7 +47016,6 @@ async function migrateOldTimeFormats(context, profileId) {
         return false;
     }
     (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_2__.st_echo)?.('warning', '🔥 Updating date/time to v0.3.0 format.');
-    console.log('[BlazeTracker] Migrating old time formats to NarrativeDateTime...');
     // Get messages up to and including the first state for context
     const contextMessages = context.chat
         .slice(0, Math.min(firstOldStateIdx + 1, 5))
@@ -40368,7 +47025,6 @@ async function migrateOldTimeFormats(context, profileId) {
     let baselineTime;
     try {
         baselineTime = await (0,_extractors_extractTime__WEBPACK_IMPORTED_MODULE_1__.extractDateTime)(contextMessages, profileId);
-        console.log('[BlazeTracker] LLM inferred baseline date:', baselineTime);
     }
     catch (e) {
         console.error('[BlazeTracker] Failed to infer baseline date, using defaults:', e);
@@ -40423,7 +47079,6 @@ async function migrateOldTimeFormats(context, profileId) {
     // Save the chat to persist migrations
     const saveContext = SillyTavern.getContext();
     await saveContext.saveChat();
-    console.log('[BlazeTracker] Migration complete');
     return true;
 }
 
@@ -40461,6 +47116,17 @@ const defaultSettings = {
     trackClimate: true,
     trackCharacters: true,
     trackScene: true,
+    trackEvents: true,
+    trackRelationships: true,
+    // Weather settings
+    useProceduralWeather: true,
+    injectWeatherTransitions: true,
+    // Chapter settings
+    chapterTimeThreshold: 60,
+    injectedChapters: 3,
+    // Relationship settings
+    relationshipRefreshInterval: 10,
+    includeRelationshipSecrets: true,
     // Other defaults
     leapThresholdMinutes: 20,
     temperatureUnit: 'fahrenheit',
@@ -40476,10 +47142,16 @@ const defaultTemperatures = {
     location_update: 0.5,
     climate_initial: 0.3,
     climate_update: 0.3,
+    climate_location_map: 0.4,
     characters_initial: 0.7,
     characters_update: 0.7,
     scene_initial: 0.6,
     scene_update: 0.6,
+    event_extract: 0.4,
+    chapter_boundary: 0.5,
+    relationship_initial: 0.6,
+    relationship_update: 0.6,
+    milestone_description: 0.7,
 };
 /**
  * Get the temperature for a specific prompt key.
@@ -40500,7 +47172,3015 @@ function updateSetting(key, value) {
     const settings = settingsManager.getSettings();
     settings[key] = value;
     settingsManager.saveSettings();
-    console.log(`[BlazeTracker] Setting ${key} updated`);
+}
+
+
+/***/ },
+
+/***/ "./src/state/chapters.ts"
+/*!*******************************!*\
+  !*** ./src/state/chapters.ts ***!
+  \*******************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   checkChapterBoundary: () => (/* binding */ checkChapterBoundary),
+/* harmony export */   createEmptyChapter: () => (/* binding */ createEmptyChapter),
+/* harmony export */   createEmptyOutcomes: () => (/* binding */ createEmptyOutcomes),
+/* harmony export */   finalizeChapter: () => (/* binding */ finalizeChapter),
+/* harmony export */   formatChapterForPrompt: () => (/* binding */ formatChapterForPrompt),
+/* harmony export */   formatChaptersForInjection: () => (/* binding */ formatChaptersForInjection),
+/* harmony export */   formatDateTime: () => (/* binding */ formatDateTime),
+/* harmony export */   formatTimeElapsed: () => (/* binding */ formatTimeElapsed),
+/* harmony export */   getTimeDeltaMinutes: () => (/* binding */ getTimeDeltaMinutes)
+/* harmony export */ });
+/* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
+// ============================================
+// Chapter Utility Functions
+// ============================================
+
+// ============================================
+// Time Delta Calculations
+// ============================================
+/**
+ * Convert a NarrativeDateTime to total minutes since epoch (for comparison).
+ */
+function toMinutes(dt) {
+    // Simple conversion: assumes 30 days per month, 365 days per year
+    // This is approximate but sufficient for detecting large time jumps
+    const yearMinutes = dt.year * 365 * 24 * 60;
+    const monthMinutes = (dt.month - 1) * 30 * 24 * 60;
+    const dayMinutes = (dt.day - 1) * 24 * 60;
+    const hourMinutes = dt.hour * 60;
+    return yearMinutes + monthMinutes + dayMinutes + hourMinutes + dt.minute;
+}
+/**
+ * Calculate the time delta in minutes between two NarrativeDateTimes.
+ * Returns positive if 'to' is after 'from', negative otherwise.
+ */
+function getTimeDeltaMinutes(from, to) {
+    return toMinutes(to) - toMinutes(from);
+}
+/**
+ * Format a time delta in minutes to a human-readable string.
+ */
+function formatTimeElapsed(minutes) {
+    const absMinutes = Math.abs(minutes);
+    if (absMinutes < 60) {
+        return `${absMinutes} minute${absMinutes !== 1 ? 's' : ''}`;
+    }
+    const hours = Math.floor(absMinutes / 60);
+    const remainingMinutes = absMinutes % 60;
+    if (hours < 24) {
+        if (remainingMinutes === 0) {
+            return `${hours} hour${hours !== 1 ? 's' : ''}`;
+        }
+        return `${hours} hour${hours !== 1 ? 's' : ''}, ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
+    }
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    if (days < 7) {
+        if (remainingHours === 0) {
+            return `${days} day${days !== 1 ? 's' : ''}`;
+        }
+        return `${days} day${days !== 1 ? 's' : ''}, ${remainingHours} hour${remainingHours !== 1 ? 's' : ''}`;
+    }
+    const weeks = Math.floor(days / 7);
+    const remainingDays = days % 7;
+    if (remainingDays === 0) {
+        return `${weeks} week${weeks !== 1 ? 's' : ''}`;
+    }
+    return `${weeks} week${weeks !== 1 ? 's' : ''}, ${remainingDays} day${remainingDays !== 1 ? 's' : ''}`;
+}
+/**
+ * Check if a chapter boundary should be triggered based on location or time changes.
+ * @param previousLocation Previous location state
+ * @param currentLocation Current location state
+ * @param previousTime Previous narrative time
+ * @param currentTime Current narrative time
+ * @returns BoundaryCheckResult indicating if and why a boundary was triggered
+ */
+function checkChapterBoundary(previousLocation, currentLocation, previousTime, currentTime) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_0__.getSettings)();
+    const threshold = settings.chapterTimeThreshold ?? 60; // Default 60 minutes
+    let locationChanged = false;
+    let timeJumped = false;
+    let locationChange;
+    let timeJump;
+    // Check for significant location change (different area or place)
+    if (previousLocation && currentLocation) {
+        const areaChanged = previousLocation.area.toLowerCase() !== currentLocation.area.toLowerCase();
+        const placeChanged = previousLocation.place.toLowerCase() !==
+            currentLocation.place.toLowerCase();
+        if (areaChanged || placeChanged) {
+            locationChanged = true;
+            locationChange = {
+                from: `${previousLocation.area} - ${previousLocation.place}`,
+                to: `${currentLocation.area} - ${currentLocation.place}`,
+            };
+        }
+    }
+    // Check for time jump
+    if (previousTime && currentTime) {
+        const delta = getTimeDeltaMinutes(previousTime, currentTime);
+        if (delta >= threshold) {
+            timeJumped = true;
+            timeJump = {
+                minutes: delta,
+                formatted: formatTimeElapsed(delta),
+            };
+        }
+    }
+    // Determine result
+    if (locationChanged && timeJumped) {
+        return {
+            triggered: true,
+            reason: 'both',
+            locationChange,
+            timeJump,
+        };
+    }
+    else if (locationChanged) {
+        return {
+            triggered: true,
+            reason: 'location_change',
+            locationChange,
+        };
+    }
+    else if (timeJumped) {
+        return {
+            triggered: true,
+            reason: 'time_jump',
+            timeJump,
+        };
+    }
+    return { triggered: false };
+}
+// ============================================
+// Chapter Creation
+// ============================================
+/**
+ * Create a new chapter with default empty values.
+ */
+function createEmptyChapter(index) {
+    const now = {
+        year: new Date().getFullYear(),
+        month: 6,
+        day: 15,
+        hour: 12,
+        minute: 0,
+        second: 0,
+        dayOfWeek: 'Monday',
+    };
+    return {
+        index,
+        title: `Chapter ${index + 1}`,
+        summary: '',
+        timeRange: {
+            start: now,
+            end: now,
+        },
+        primaryLocation: 'Unknown',
+        events: [],
+        outcomes: createEmptyOutcomes(),
+    };
+}
+/**
+ * Create empty chapter outcomes.
+ */
+function createEmptyOutcomes() {
+    return {
+        relationshipChanges: [],
+        secretsRevealed: [],
+        newComplications: [],
+    };
+}
+/**
+ * Finalize a chapter with events and time range.
+ */
+function finalizeChapter(chapter, events, startTime, endTime, primaryLocation) {
+    return {
+        ...chapter,
+        events,
+        timeRange: {
+            start: startTime,
+            end: endTime,
+        },
+        primaryLocation,
+    };
+}
+// ============================================
+// Formatting
+// ============================================
+/**
+ * Format a chapter for display in prompts.
+ */
+function formatChapterForPrompt(chapter) {
+    const lines = [];
+    lines.push(`## Chapter ${chapter.index + 1}: ${chapter.title}`);
+    lines.push(`Location: ${chapter.primaryLocation}`);
+    lines.push(`Time: ${formatDateTime(chapter.timeRange.start)} - ${formatDateTime(chapter.timeRange.end)}`);
+    lines.push('');
+    lines.push(chapter.summary);
+    if (chapter.outcomes.relationshipChanges.length > 0) {
+        lines.push('');
+        lines.push(`Relationship changes: ${chapter.outcomes.relationshipChanges.join('; ')}`);
+    }
+    if (chapter.outcomes.secretsRevealed.length > 0) {
+        lines.push(`Secrets revealed: ${chapter.outcomes.secretsRevealed.join('; ')}`);
+    }
+    return lines.join('\n');
+}
+/**
+ * Format multiple chapters for injection.
+ */
+function formatChaptersForInjection(chapters, limit) {
+    if (chapters.length === 0) {
+        return 'No previous chapters.';
+    }
+    const toFormat = limit ? chapters.slice(-limit) : chapters;
+    return toFormat.map(formatChapterForPrompt).join('\n\n---\n\n');
+}
+/**
+ * Format a NarrativeDateTime for display.
+ */
+function formatDateTime(dt) {
+    const hour12 = dt.hour % 12 || 12;
+    const ampm = dt.hour < 12 ? 'AM' : 'PM';
+    const minute = dt.minute.toString().padStart(2, '0');
+    const months = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+    ];
+    return `${dt.dayOfWeek}, ${months[dt.month - 1]} ${dt.day}, ${dt.year} at ${hour12}:${minute} ${ampm}`;
+}
+
+
+/***/ },
+
+/***/ "./src/state/events.ts"
+/*!*****************************!*\
+  !*** ./src/state/events.ts ***!
+  \*****************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   createEvent: () => (/* binding */ createEvent),
+/* harmony export */   filterEventsByTensionLevel: () => (/* binding */ filterEventsByTensionLevel),
+/* harmony export */   filterEventsByTensionType: () => (/* binding */ filterEventsByTensionType),
+/* harmony export */   formatEvent: () => (/* binding */ formatEvent),
+/* harmony export */   formatEventTimestamp: () => (/* binding */ formatEventTimestamp),
+/* harmony export */   formatEventsForInjection: () => (/* binding */ formatEventsForInjection),
+/* harmony export */   getAbsentWitnesses: () => (/* binding */ getAbsentWitnesses),
+/* harmony export */   getAllWitnesses: () => (/* binding */ getAllWitnesses),
+/* harmony export */   getEventsForPair: () => (/* binding */ getEventsForPair),
+/* harmony export */   getRelationshipEvents: () => (/* binding */ getRelationshipEvents)
+/* harmony export */ });
+// ============================================
+// Event Utility Functions
+// ============================================
+/**
+ * Create a TimestampedEvent from parameters.
+ */
+function createEvent(params) {
+    const locationStr = typeof params.location === 'string'
+        ? params.location
+        : `${params.location.area} - ${params.location.place}`;
+    return {
+        timestamp: params.timestamp,
+        summary: params.summary,
+        eventTypes: params.eventTypes ?? ['conversation'],
+        tensionType: params.tensionType,
+        tensionLevel: params.tensionLevel,
+        witnesses: params.witnesses,
+        location: locationStr,
+        relationshipSignal: params.relationshipSignal,
+    };
+}
+// ============================================
+// Formatting
+// ============================================
+/**
+ * Format events for injection into prompts.
+ * @param events Array of events to format
+ * @param limit Maximum number of events to include (most recent)
+ * @param presentCharacters Characters currently present (for witness absence notes)
+ */
+function formatEventsForInjection(events, limit, presentCharacters) {
+    if (events.length === 0) {
+        return 'No recent events.';
+    }
+    const toFormat = limit ? events.slice(-limit) : events;
+    const presentSet = presentCharacters
+        ? new Set(presentCharacters.map(c => c.toLowerCase()))
+        : null;
+    return toFormat
+        .map((event, _index) => {
+        const lines = [];
+        // Event header with timestamp
+        lines.push(`[${formatEventTimestamp(event.timestamp)}]`);
+        // Summary
+        lines.push(event.summary);
+        // Tension info
+        lines.push(`Tension: ${event.tensionLevel} ${event.tensionType}`);
+        // Witnesses with absence notes
+        if (event.witnesses.length > 0) {
+            const witnessNotes = [];
+            for (const witness of event.witnesses) {
+                if (presentSet && !presentSet.has(witness.toLowerCase())) {
+                    witnessNotes.push(`${witness} (not present)`);
+                }
+                else {
+                    witnessNotes.push(witness);
+                }
+            }
+            lines.push(`Witnesses: ${witnessNotes.join(', ')}`);
+        }
+        // Location
+        lines.push(`Location: ${event.location}`);
+        return lines.join('\n');
+    })
+        .join('\n\n');
+}
+/**
+ * Format an event timestamp for display (compact format).
+ */
+function formatEventTimestamp(dt) {
+    const hour12 = dt.hour % 12 || 12;
+    const ampm = dt.hour < 12 ? 'AM' : 'PM';
+    const minute = dt.minute.toString().padStart(2, '0');
+    // Shorter day names
+    const dayAbbrev = {
+        Monday: 'Mon',
+        Tuesday: 'Tue',
+        Wednesday: 'Wed',
+        Thursday: 'Thu',
+        Friday: 'Fri',
+        Saturday: 'Sat',
+        Sunday: 'Sun',
+    };
+    const day = dayAbbrev[dt.dayOfWeek] || dt.dayOfWeek.slice(0, 3);
+    return `${day} ${hour12}:${minute} ${ampm}`;
+}
+/**
+ * Format a single event for display.
+ */
+function formatEvent(event) {
+    return `[${formatEventTimestamp(event.timestamp)}] ${event.summary} (${event.tensionLevel} ${event.tensionType})`;
+}
+// ============================================
+// Event Analysis
+// ============================================
+/**
+ * Get witnesses who are not currently present (for dramatic irony).
+ */
+function getAbsentWitnesses(event, presentCharacters) {
+    const presentSet = new Set(presentCharacters.map(c => c.toLowerCase()));
+    return event.witnesses.filter(w => !presentSet.has(w.toLowerCase()));
+}
+/**
+ * Get all unique witnesses across multiple events.
+ */
+function getAllWitnesses(events) {
+    const witnesses = new Set();
+    for (const event of events) {
+        for (const witness of event.witnesses) {
+            witnesses.add(witness);
+        }
+    }
+    return Array.from(witnesses);
+}
+/**
+ * Filter events by tension type.
+ */
+function filterEventsByTensionType(events, types) {
+    const typeSet = new Set(types);
+    return events.filter(e => typeSet.has(e.tensionType));
+}
+/**
+ * Filter events by tension level (at or above).
+ */
+function filterEventsByTensionLevel(events, minLevel) {
+    const levels = [
+        'relaxed',
+        'aware',
+        'guarded',
+        'tense',
+        'charged',
+        'volatile',
+        'explosive',
+    ];
+    const minIndex = levels.indexOf(minLevel);
+    return events.filter(e => levels.indexOf(e.tensionLevel) >= minIndex);
+}
+/**
+ * Get events with relationship signals.
+ */
+function getRelationshipEvents(events) {
+    return events.filter(e => e.relationshipSignal !== undefined);
+}
+/**
+ * Find events involving a specific character pair.
+ */
+function getEventsForPair(events, char1, char2) {
+    const pair = [char1.toLowerCase(), char2.toLowerCase()].sort();
+    return events.filter(e => {
+        if (!e.relationshipSignal)
+            return false;
+        const signalPair = e.relationshipSignal.pair.map(p => p.toLowerCase()).sort();
+        return signalPair[0] === pair[0] && signalPair[1] === pair[1];
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/state/narrativeState.ts"
+/*!*************************************!*\
+  !*** ./src/state/narrativeState.ts ***!
+  \*************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   NARRATIVE_STATE_VERSION: () => (/* reexport safe */ _types_state__WEBPACK_IMPORTED_MODULE_1__.NARRATIVE_STATE_VERSION),
+/* harmony export */   addChapter: () => (/* binding */ addChapter),
+/* harmony export */   getNarrativeState: () => (/* binding */ getNarrativeState),
+/* harmony export */   getOrInitializeNarrativeState: () => (/* binding */ getOrInitializeNarrativeState),
+/* harmony export */   getRelationship: () => (/* binding */ getRelationship),
+/* harmony export */   initializeNarrativeState: () => (/* binding */ initializeNarrativeState),
+/* harmony export */   migrateFromLegacyState: () => (/* binding */ migrateFromLegacyState),
+/* harmony export */   saveNarrativeState: () => (/* binding */ saveNarrativeState),
+/* harmony export */   setNarrativeState: () => (/* binding */ setNarrativeState),
+/* harmony export */   updateRelationship: () => (/* binding */ updateRelationship)
+/* harmony export */ });
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../constants */ "./src/constants.ts");
+/* harmony import */ var _types_state__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../types/state */ "./src/types/state.ts");
+// ============================================
+// Chat-Level Narrative State Management
+// ============================================
+
+
+// Re-export the version constant
+
+// ============================================
+// Storage Keys
+// ============================================
+const NARRATIVE_KEY = 'narrative';
+// ============================================
+// Public API
+// ============================================
+/**
+ * Get the narrative state from the chat.
+ * Returns null if no narrative state exists.
+ */
+function getNarrativeState() {
+    const context = SillyTavern.getContext();
+    const chat = context.chat;
+    if (!chat || chat.length === 0) {
+        return null;
+    }
+    // Narrative state is stored in the first message
+    const firstMessage = chat[0];
+    const storage = firstMessage.extra?.[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY];
+    if (!storage || !storage[NARRATIVE_KEY]) {
+        return null;
+    }
+    return storage[NARRATIVE_KEY];
+}
+/**
+ * Set the narrative state for the chat.
+ * Creates the storage structure if it doesn't exist.
+ */
+function setNarrativeState(state) {
+    const context = SillyTavern.getContext();
+    const chat = context.chat;
+    if (!chat || chat.length === 0) {
+        console.warn('[BlazeTracker] Cannot set narrative state: no chat messages');
+        return;
+    }
+    const firstMessage = chat[0];
+    if (!firstMessage.extra) {
+        firstMessage.extra = {};
+    }
+    if (!firstMessage.extra[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY]) {
+        firstMessage.extra[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY] = {};
+    }
+    firstMessage.extra[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY][NARRATIVE_KEY] = state;
+}
+/**
+ * Initialize a new narrative state with default values.
+ */
+function initializeNarrativeState() {
+    return {
+        version: _types_state__WEBPACK_IMPORTED_MODULE_1__.NARRATIVE_STATE_VERSION,
+        chapters: [],
+        relationships: [],
+        forecastCache: [],
+        locationMappings: [],
+    };
+}
+/**
+ * Get or initialize the narrative state.
+ * If no state exists, creates and saves a new one.
+ * Also handles migrations from older versions.
+ */
+function getOrInitializeNarrativeState() {
+    let state = getNarrativeState();
+    if (!state) {
+        state = initializeNarrativeState();
+        setNarrativeState(state);
+    }
+    else {
+        // Run migrations if needed
+        const migrated = migrateNarrativeState(state);
+        if (migrated) {
+            setNarrativeState(state);
+        }
+    }
+    return state;
+}
+/**
+ * Save the narrative state and persist the chat.
+ */
+async function saveNarrativeState(state) {
+    setNarrativeState(state);
+    const context = SillyTavern.getContext();
+    await context.saveChat();
+}
+// ============================================
+// Migration
+// ============================================
+/**
+ * Migrate narrative state from older versions to current.
+ * Returns true if any migration was performed.
+ */
+function migrateNarrativeState(state) {
+    let migrated = false;
+    // Version 1 -> 2: Add versions array to relationships with initial version from current state
+    if (!state.version || state.version < 2) {
+        for (const rel of state.relationships) {
+            if (!rel.versions) {
+                // Create initial version from current relationship state
+                // Use messageId 0 so it appears from the start of the chat
+                rel.versions = [
+                    {
+                        messageId: 0,
+                        status: rel.status,
+                        aToB: {
+                            feelings: [...rel.aToB.feelings],
+                            secrets: [...rel.aToB.secrets],
+                            wants: [...rel.aToB.wants],
+                        },
+                        bToA: {
+                            feelings: [...rel.bToA.feelings],
+                            secrets: [...rel.bToA.secrets],
+                            wants: [...rel.bToA.wants],
+                        },
+                        milestones: [...rel.milestones],
+                    },
+                ];
+            }
+        }
+        state.version = 2;
+        migrated = true;
+    }
+    return migrated;
+}
+/**
+ * Migrate from legacy state format (recentEvents in Scene) to new format.
+ * This should be called when opening a chat that may have old state.
+ */
+function migrateFromLegacyState() {
+    const context = SillyTavern.getContext();
+    const chat = context.chat;
+    // Start with empty narrative state
+    const state = initializeNarrativeState();
+    if (!chat || chat.length === 0) {
+        return state;
+    }
+    // Collect all legacy recentEvents from messages
+    const collectedEvents = [];
+    for (const message of chat) {
+        const storage = message.extra?.[_constants__WEBPACK_IMPORTED_MODULE_0__.EXTENSION_KEY];
+        if (!storage)
+            continue;
+        // Check all swipes
+        for (const swipeData of Object.values(storage)) {
+            if (typeof swipeData === 'object' &&
+                swipeData?.state?.scene?.recentEvents) {
+                const events = swipeData.state.scene.recentEvents;
+                if (Array.isArray(events)) {
+                    for (const event of events) {
+                        if (typeof event === 'string' &&
+                            !collectedEvents.includes(event)) {
+                            collectedEvents.push(event);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Note: We don't convert legacy string events to TimestampedEvents here
+    // because we don't have the timestamp/tension/location info.
+    // The legacy events are simply not migrated - new events will be extracted going forward.
+    return state;
+}
+// ============================================
+// Update Helpers
+// ============================================
+/**
+ * Add a chapter to the narrative state.
+ */
+function addChapter(state, chapter) {
+    state.chapters.push(chapter);
+}
+/**
+ * Update or add a relationship in the narrative state.
+ */
+function updateRelationship(state, relationship) {
+    const key = relationship.pair.join('|');
+    const existingIndex = state.relationships.findIndex(r => r.pair.join('|') === key);
+    if (existingIndex >= 0) {
+        state.relationships[existingIndex] = relationship;
+    }
+    else {
+        state.relationships.push(relationship);
+    }
+}
+/**
+ * Get a relationship by character pair.
+ */
+function getRelationship(state, char1, char2) {
+    const pair = [char1, char2].sort();
+    const key = pair.join('|');
+    return state.relationships.find(r => r.pair.join('|') === key) ?? null;
+}
+
+
+/***/ },
+
+/***/ "./src/state/relationships.ts"
+/*!************************************!*\
+  !*** ./src/state/relationships.ts ***!
+  \************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   addMilestone: () => (/* binding */ addMilestone),
+/* harmony export */   addRelationshipVersion: () => (/* binding */ addRelationshipVersion),
+/* harmony export */   clearAllMilestonesForMessage: () => (/* binding */ clearAllMilestonesForMessage),
+/* harmony export */   clearAllMilestonesSince: () => (/* binding */ clearAllMilestonesSince),
+/* harmony export */   clearMilestonesForMessage: () => (/* binding */ clearMilestonesForMessage),
+/* harmony export */   clearMilestonesSince: () => (/* binding */ clearMilestonesSince),
+/* harmony export */   compareNarrativeDateTime: () => (/* binding */ compareNarrativeDateTime),
+/* harmony export */   createEmptyAttitude: () => (/* binding */ createEmptyAttitude),
+/* harmony export */   createRelationship: () => (/* binding */ createRelationship),
+/* harmony export */   findUnestablishedPairs: () => (/* binding */ findUnestablishedPairs),
+/* harmony export */   formatRelationship: () => (/* binding */ formatRelationship),
+/* harmony export */   formatRelationshipsForPrompt: () => (/* binding */ formatRelationshipsForPrompt),
+/* harmony export */   getAttitudeDirection: () => (/* binding */ getAttitudeDirection),
+/* harmony export */   getLatestVersionMessageId: () => (/* binding */ getLatestVersionMessageId),
+/* harmony export */   getRelationshipAtMessage: () => (/* binding */ getRelationshipAtMessage),
+/* harmony export */   getRelationshipsAtMessage: () => (/* binding */ getRelationshipsAtMessage),
+/* harmony export */   hasMilestone: () => (/* binding */ hasMilestone),
+/* harmony export */   isDateTimeOnOrAfter: () => (/* binding */ isDateTimeOnOrAfter),
+/* harmony export */   narrativeDateTimeToNumber: () => (/* binding */ narrativeDateTimeToNumber),
+/* harmony export */   pairKey: () => (/* binding */ pairKey),
+/* harmony export */   popVersionForMessage: () => (/* binding */ popVersionForMessage),
+/* harmony export */   sortPair: () => (/* binding */ sortPair),
+/* harmony export */   updateAttitude: () => (/* binding */ updateAttitude)
+/* harmony export */ });
+// ============================================
+// Relationship Utility Functions
+// ============================================
+// ============================================
+// Pair Management
+// ============================================
+/**
+ * Sort a pair of character names alphabetically.
+ * Returns a tuple with the names in alphabetical order.
+ */
+function sortPair(char1, char2) {
+    return char1.localeCompare(char2) <= 0 ? [char1, char2] : [char2, char1];
+}
+/**
+ * Generate a deterministic key for a character pair.
+ * The key is the same regardless of argument order.
+ */
+function pairKey(char1, char2) {
+    const [a, b] = sortPair(char1, char2);
+    return `${a}|${b}`;
+}
+/**
+ * Check if a relationship has a specific milestone type.
+ */
+function hasMilestone(relationship, type) {
+    return relationship.milestones.some(m => m.type === type);
+}
+/**
+ * Find all character pairs that don't have an established relationship.
+ * Returns pairs as sorted tuples.
+ */
+function findUnestablishedPairs(characters, relationships) {
+    if (characters.length < 2) {
+        return [];
+    }
+    const existingKeys = new Set(relationships.map(r => pairKey(r.pair[0], r.pair[1])));
+    const unestablished = [];
+    for (let i = 0; i < characters.length; i++) {
+        for (let j = i + 1; j < characters.length; j++) {
+            const key = pairKey(characters[i], characters[j]);
+            if (!existingKeys.has(key)) {
+                unestablished.push(sortPair(characters[i], characters[j]));
+            }
+        }
+    }
+    return unestablished;
+}
+// ============================================
+// Formatting
+// ============================================
+/**
+ * Format relationships for inclusion in prompts.
+ * @param relationships All relationships
+ * @param presentCharacters Characters currently in the scene (filters to relevant relationships)
+ * @param includeSecrets Whether to include secret knowledge (for dramatic irony)
+ */
+function formatRelationshipsForPrompt(relationships, presentCharacters, includeSecrets = true) {
+    if (relationships.length === 0) {
+        return 'No established relationships.';
+    }
+    // Filter to relationships involving present characters if specified
+    let relevantRelationships = relationships;
+    if (presentCharacters && presentCharacters.length > 0) {
+        const presentSet = new Set(presentCharacters.map(c => c.toLowerCase()));
+        relevantRelationships = relationships.filter(r => presentSet.has(r.pair[0].toLowerCase()) ||
+            presentSet.has(r.pair[1].toLowerCase()));
+    }
+    if (relevantRelationships.length === 0) {
+        return 'No established relationships between present characters.';
+    }
+    return relevantRelationships.map(r => formatRelationship(r, includeSecrets)).join('\n\n');
+}
+/**
+ * Format a single relationship for display.
+ */
+function formatRelationship(relationship, includeSecrets = true) {
+    const [charA, charB] = relationship.pair;
+    const lines = [];
+    lines.push(`## ${charA} & ${charB} (${relationship.status})`);
+    // A's feelings toward B
+    lines.push(`${charA} → ${charB}:`);
+    lines.push(`  Feelings: ${relationship.aToB.feelings.join(', ') || 'neutral'}`);
+    if (relationship.aToB.wants.length > 0) {
+        lines.push(`  Wants: ${relationship.aToB.wants.join(', ')}`);
+    }
+    if (includeSecrets && relationship.aToB.secrets.length > 0) {
+        lines.push(`  Secrets (${charB} doesn't know): ${relationship.aToB.secrets.join(', ')}`);
+    }
+    // B's feelings toward A
+    lines.push(`${charB} → ${charA}:`);
+    lines.push(`  Feelings: ${relationship.bToA.feelings.join(', ') || 'neutral'}`);
+    if (relationship.bToA.wants.length > 0) {
+        lines.push(`  Wants: ${relationship.bToA.wants.join(', ')}`);
+    }
+    if (includeSecrets && relationship.bToA.secrets.length > 0) {
+        lines.push(`  Secrets (${charA} doesn't know): ${relationship.bToA.secrets.join(', ')}`);
+    }
+    // Milestones
+    if (relationship.milestones.length > 0) {
+        lines.push(`Milestones: ${relationship.milestones.map(m => m.type.replace(/_/g, ' ')).join(', ')}`);
+    }
+    return lines.join('\n');
+}
+// ============================================
+// Creation Helpers
+// ============================================
+/**
+ * Create an empty relationship attitude.
+ */
+function createEmptyAttitude() {
+    return {
+        feelings: [],
+        secrets: [],
+        wants: [],
+    };
+}
+/**
+ * Create a new relationship between two characters.
+ */
+function createRelationship(char1, char2, status = 'strangers', messageId) {
+    const pair = sortPair(char1, char2);
+    const aToB = createEmptyAttitude();
+    const bToA = createEmptyAttitude();
+    const relationship = {
+        pair,
+        status,
+        aToB,
+        bToA,
+        milestones: [],
+        history: [],
+        versions: [],
+    };
+    // If messageId provided, create the initial version
+    if (messageId !== undefined) {
+        addRelationshipVersion(relationship, messageId);
+    }
+    return relationship;
+}
+/**
+ * Add a milestone to a relationship (avoids duplicates).
+ */
+function addMilestone(relationship, milestone) {
+    // Check if we already have this milestone type
+    if (!hasMilestone(relationship, milestone.type)) {
+        relationship.milestones.push(milestone);
+    }
+}
+/**
+ * Get the attitude direction for a character in a relationship.
+ * Returns 'aToB' if the character is the first in the pair, 'bToA' otherwise.
+ */
+function getAttitudeDirection(relationship, fromCharacter) {
+    return relationship.pair[0].toLowerCase() === fromCharacter.toLowerCase() ? 'aToB' : 'bToA';
+}
+/**
+ * Update a specific character's attitude in a relationship.
+ */
+function updateAttitude(relationship, fromCharacter, updates) {
+    const direction = getAttitudeDirection(relationship, fromCharacter);
+    const attitude = relationship[direction];
+    if (updates.feelings !== undefined) {
+        attitude.feelings = updates.feelings;
+    }
+    if (updates.secrets !== undefined) {
+        attitude.secrets = updates.secrets;
+    }
+    if (updates.wants !== undefined) {
+        attitude.wants = updates.wants;
+    }
+}
+// ============================================
+// Time Comparison
+// ============================================
+/**
+ * Convert NarrativeDateTime to a comparable number (timestamp-like).
+ * Returns a number that can be compared with > < >= <= operators.
+ */
+function narrativeDateTimeToNumber(dt) {
+    // YYYYMMDDHHMMSS format as a number for easy comparison
+    return (dt.year * 10000000000 +
+        dt.month * 100000000 +
+        dt.day * 1000000 +
+        dt.hour * 10000 +
+        dt.minute * 100 +
+        dt.second);
+}
+/**
+ * Compare two NarrativeDateTime values.
+ * Returns:
+ *   - negative if a < b
+ *   - 0 if a === b
+ *   - positive if a > b
+ */
+function compareNarrativeDateTime(a, b) {
+    return narrativeDateTimeToNumber(a) - narrativeDateTimeToNumber(b);
+}
+/**
+ * Check if a NarrativeDateTime is >= a reference time.
+ */
+function isDateTimeOnOrAfter(dt, reference) {
+    return compareNarrativeDateTime(dt, reference) >= 0;
+}
+// ============================================
+// Milestone Cleanup
+// ============================================
+/**
+ * Remove milestones from a relationship that occurred on or after a given time.
+ * Returns the number of milestones removed.
+ */
+function clearMilestonesSince(relationship, sinceTime) {
+    const originalCount = relationship.milestones.length;
+    relationship.milestones = relationship.milestones.filter(m => !isDateTimeOnOrAfter(m.timestamp, sinceTime));
+    return originalCount - relationship.milestones.length;
+}
+/**
+ * Remove milestones from all relationships that occurred on or after a given time.
+ * Returns the total number of milestones removed.
+ */
+function clearAllMilestonesSince(relationships, sinceTime) {
+    let totalRemoved = 0;
+    for (const rel of relationships) {
+        totalRemoved += clearMilestonesSince(rel, sinceTime);
+    }
+    return totalRemoved;
+}
+/**
+ * Remove milestones from a relationship that were created by a specific message.
+ * Returns the number of milestones removed.
+ */
+function clearMilestonesForMessage(relationship, messageId) {
+    const originalCount = relationship.milestones.length;
+    relationship.milestones = relationship.milestones.filter(m => m.messageId !== messageId);
+    return originalCount - relationship.milestones.length;
+}
+/**
+ * Remove milestones from all relationships that were created by a specific message.
+ * Returns the total number of milestones removed.
+ */
+function clearAllMilestonesForMessage(relationships, messageId) {
+    let totalRemoved = 0;
+    for (const rel of relationships) {
+        totalRemoved += clearMilestonesForMessage(rel, messageId);
+    }
+    return totalRemoved;
+}
+// ============================================
+// Version Management
+// ============================================
+/**
+ * Add a new version snapshot to a relationship.
+ * Call this when the relationship status changes.
+ */
+function addRelationshipVersion(relationship, messageId) {
+    // Initialize versions array if it doesn't exist (legacy relationships)
+    if (!relationship.versions) {
+        relationship.versions = [];
+    }
+    const version = {
+        messageId,
+        status: relationship.status,
+        aToB: {
+            feelings: [...relationship.aToB.feelings],
+            secrets: [...relationship.aToB.secrets],
+            wants: [...relationship.aToB.wants],
+        },
+        bToA: {
+            feelings: [...relationship.bToA.feelings],
+            secrets: [...relationship.bToA.secrets],
+            wants: [...relationship.bToA.wants],
+        },
+        milestones: [...relationship.milestones],
+    };
+    relationship.versions.push(version);
+}
+/**
+ * Remove the latest version if it matches the given messageId.
+ * Call this before re-extracting or on swipe to rollback.
+ * Returns true if a version was removed.
+ */
+function popVersionForMessage(relationship, messageId) {
+    if (!relationship.versions || relationship.versions.length === 0) {
+        return false;
+    }
+    const lastVersion = relationship.versions[relationship.versions.length - 1];
+    if (lastVersion.messageId === messageId) {
+        relationship.versions.pop();
+        // Restore state from the new last version (if any)
+        if (relationship.versions.length > 0) {
+            const previousVersion = relationship.versions[relationship.versions.length - 1];
+            relationship.status = previousVersion.status;
+            relationship.aToB = {
+                feelings: [...previousVersion.aToB.feelings],
+                secrets: [...previousVersion.aToB.secrets],
+                wants: [...previousVersion.aToB.wants],
+            };
+            relationship.bToA = {
+                feelings: [...previousVersion.bToA.feelings],
+                secrets: [...previousVersion.bToA.secrets],
+                wants: [...previousVersion.bToA.wants],
+            };
+            relationship.milestones = [...previousVersion.milestones];
+        }
+        return true;
+    }
+    return false;
+}
+/**
+ * Get the latest version's messageId for context window calculation.
+ * Returns undefined if no versions exist.
+ */
+function getLatestVersionMessageId(relationship) {
+    if (!relationship.versions || relationship.versions.length === 0) {
+        return undefined;
+    }
+    return relationship.versions[relationship.versions.length - 1].messageId;
+}
+/**
+ * Get the relationship state as it was at or before a given messageId.
+ * Returns the version data, or undefined if no version exists before that message.
+ */
+function getRelationshipAtMessage(relationship, messageId) {
+    // Handle legacy relationships without versions array
+    if (!relationship.versions || relationship.versions.length === 0) {
+        return undefined;
+    }
+    // Find the latest version with messageId <= the given messageId
+    for (let i = relationship.versions.length - 1; i >= 0; i--) {
+        if (relationship.versions[i].messageId <= messageId) {
+            return relationship.versions[i];
+        }
+    }
+    return undefined;
+}
+/**
+ * Get all relationships with their state as of a specific messageId.
+ * Returns relationships with status/attitudes from the appropriate version.
+ * Relationships without a version at or before the messageId are filtered out.
+ */
+function getRelationshipsAtMessage(relationships, messageId) {
+    const result = [];
+    for (const rel of relationships) {
+        const version = getRelationshipAtMessage(rel, messageId);
+        if (version) {
+            // Return a relationship with the versioned state
+            result.push({
+                ...rel,
+                status: version.status,
+                aToB: version.aToB,
+                bToA: version.bToA,
+                milestones: version.milestones,
+            });
+        }
+        // No version found - skip this relationship
+    }
+    return result;
+}
+
+
+/***/ },
+
+/***/ "./src/types/state.ts"
+/*!****************************!*\
+  !*** ./src/types/state.ts ***!
+  \****************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   EVENT_TYPES: () => (/* binding */ EVENT_TYPES),
+/* harmony export */   EVENT_TYPE_GROUPS: () => (/* binding */ EVENT_TYPE_GROUPS),
+/* harmony export */   MILESTONE_TYPES: () => (/* binding */ MILESTONE_TYPES),
+/* harmony export */   NARRATIVE_STATE_VERSION: () => (/* binding */ NARRATIVE_STATE_VERSION),
+/* harmony export */   RELATIONSHIP_STATUSES: () => (/* binding */ RELATIONSHIP_STATUSES),
+/* harmony export */   TENSION_LEVELS: () => (/* binding */ TENSION_LEVELS),
+/* harmony export */   TENSION_TYPES: () => (/* binding */ TENSION_TYPES)
+/* harmony export */ });
+// ============================================
+// Runtime State Types
+// ============================================
+const EVENT_TYPES = [
+    'conversation',
+    'confession',
+    'argument',
+    'negotiation',
+    'discovery',
+    'secret_shared',
+    'secret_revealed',
+    'emotional',
+    'supportive',
+    'rejection',
+    'comfort',
+    'apology',
+    'forgiveness',
+    'laugh',
+    'gift',
+    'compliment',
+    'tease',
+    'flirt',
+    'date',
+    'i_love_you',
+    'sleepover',
+    'shared_meal',
+    'shared_activity',
+    'intimate_touch',
+    'intimate_kiss',
+    'intimate_embrace',
+    'intimate_heated',
+    'intimate_foreplay',
+    'intimate_oral',
+    'intimate_manual',
+    'intimate_penetrative',
+    'intimate_climax',
+    'action',
+    'combat',
+    'danger',
+    'decision',
+    'promise',
+    'betrayal',
+    'lied',
+    'exclusivity',
+    'marriage',
+    'pregnancy',
+    'childbirth',
+    'social',
+    'achievement',
+];
+/**
+ * Event type groups for UI display.
+ */
+const EVENT_TYPE_GROUPS = {
+    conversation: ['conversation', 'confession', 'argument', 'negotiation'],
+    discovery: ['discovery', 'secret_shared', 'secret_revealed'],
+    emotional: ['emotional', 'supportive', 'rejection', 'comfort', 'apology', 'forgiveness'],
+    bonding: [
+        'laugh',
+        'gift',
+        'compliment',
+        'tease',
+        'flirt',
+        'date',
+        'i_love_you',
+        'sleepover',
+        'shared_meal',
+        'shared_activity',
+    ],
+    intimacy_romantic: [
+        'intimate_touch',
+        'intimate_kiss',
+        'intimate_embrace',
+        'intimate_heated',
+    ],
+    intimacy_sexual: [
+        'intimate_foreplay',
+        'intimate_oral',
+        'intimate_manual',
+        'intimate_penetrative',
+        'intimate_climax',
+    ],
+    action: ['action', 'combat', 'danger'],
+    commitment: ['decision', 'promise', 'betrayal', 'lied'],
+    life_events: ['exclusivity', 'marriage', 'pregnancy', 'childbirth'],
+    social: ['social', 'achievement'],
+};
+// ============================================
+// Constants
+// ============================================
+const NARRATIVE_STATE_VERSION = 2;
+const TENSION_LEVELS = [
+    'relaxed',
+    'aware',
+    'guarded',
+    'tense',
+    'charged',
+    'volatile',
+    'explosive',
+];
+const TENSION_TYPES = [
+    'confrontation',
+    'intimate',
+    'vulnerable',
+    'celebratory',
+    'negotiation',
+    'suspense',
+    'conversation',
+];
+const RELATIONSHIP_STATUSES = [
+    'strangers',
+    'acquaintances',
+    'friendly',
+    'close',
+    'intimate',
+    'strained',
+    'hostile',
+    'complicated',
+];
+const MILESTONE_TYPES = [
+    // Relationship firsts
+    'first_meeting',
+    'first_conflict',
+    'first_alliance',
+    // Emotional
+    'confession',
+    'emotional_intimacy',
+    // Bonding
+    'first_laugh',
+    'first_gift',
+    'first_date',
+    'first_i_love_you',
+    'first_sleepover',
+    'first_shared_meal',
+    // Physical intimacy (granular)
+    'first_touch',
+    'first_kiss',
+    'first_embrace',
+    'first_heated',
+    // Sexual milestones (atomic)
+    'first_foreplay',
+    'first_oral',
+    'first_manual',
+    'first_penetrative',
+    'first_climax',
+    // Life commitment
+    'promised_exclusivity',
+    'marriage',
+    'pregnancy',
+    'had_child',
+    // Trust & commitment
+    'promise_made',
+    'promise_broken',
+    'betrayal',
+    'reconciliation',
+    'sacrifice',
+    // Secrets
+    'secret_shared',
+    'secret_revealed',
+    // Conflicts
+    'major_argument',
+    'major_reconciliation',
+];
+
+
+/***/ },
+
+/***/ "./src/ui/components/ChapterHistory.tsx"
+/*!**********************************************!*\
+  !*** ./src/ui/components/ChapterHistory.tsx ***!
+  \**********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ChapterHistory: () => (/* binding */ ChapterHistory)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _EventList__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./EventList */ "./src/ui/components/EventList.tsx");
+
+// ============================================
+// Chapter History Component
+// ============================================
+
+
+// ============================================
+// Helpers
+// ============================================
+function formatChapterTime(dt) {
+    const hour12 = dt.hour % 12 || 12;
+    const ampm = dt.hour < 12 ? 'AM' : 'PM';
+    const minute = dt.minute.toString().padStart(2, '0');
+    const dayAbbrev = {
+        Monday: 'Mon',
+        Tuesday: 'Tue',
+        Wednesday: 'Wed',
+        Thursday: 'Thu',
+        Friday: 'Fri',
+        Saturday: 'Sat',
+        Sunday: 'Sun',
+    };
+    const day = dayAbbrev[dt.dayOfWeek] || dt.dayOfWeek.slice(0, 3);
+    return `${day} ${hour12}:${minute} ${ampm}`;
+}
+function formatTimeRange(start, end) {
+    const startStr = formatChapterTime(start);
+    const endStr = formatChapterTime(end);
+    // If same day, simplify
+    if (start.dayOfWeek === end.dayOfWeek) {
+        const startTime = `${start.hour % 12 || 12}:${start.minute.toString().padStart(2, '0')} ${start.hour < 12 ? 'AM' : 'PM'}`;
+        const endTime = `${end.hour % 12 || 12}:${end.minute.toString().padStart(2, '0')} ${end.hour < 12 ? 'AM' : 'PM'}`;
+        const dayAbbrev = {
+            Monday: 'Mon',
+            Tuesday: 'Tue',
+            Wednesday: 'Wed',
+            Thursday: 'Thu',
+            Friday: 'Fri',
+            Saturday: 'Sat',
+            Sunday: 'Sun',
+        };
+        const day = dayAbbrev[start.dayOfWeek] || start.dayOfWeek.slice(0, 3);
+        return `${day} ${startTime} - ${endTime}`;
+    }
+    return `${startStr} - ${endStr}`;
+}
+// ============================================
+// Components
+// ============================================
+function ChapterCard({ chapter, isExpanded, onToggle, editMode, onUpdateChapter, onDeleteChapter, onUpdateEvent, onDeleteEvent, }) {
+    const [editingTitle, setEditingTitle] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(chapter.title);
+    const [editingSummary, setEditingSummary] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(chapter.summary);
+    const hasOutcomes = chapter.outcomes &&
+        (chapter.outcomes.relationshipChanges.length > 0 ||
+            chapter.outcomes.secretsRevealed.length > 0);
+    const handleTitleChange = (e) => {
+        setEditingTitle(e.target.value);
+    };
+    const handleTitleBlur = () => {
+        if (onUpdateChapter && editingTitle !== chapter.title) {
+            onUpdateChapter({ ...chapter, title: editingTitle });
+        }
+    };
+    const handleSummaryChange = (e) => {
+        setEditingSummary(e.target.value);
+    };
+    const handleSummaryBlur = () => {
+        if (onUpdateChapter && editingSummary !== chapter.summary) {
+            onUpdateChapter({ ...chapter, summary: editingSummary });
+        }
+    };
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: `bt-chapter-card ${isExpanded ? 'bt-expanded' : ''}`, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-header", onClick: editMode ? undefined : onToggle, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-number", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-bookmark" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: ["Chapter ", chapter.index + 1] })] }), editMode ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", className: "bt-chapter-title-input", value: editingTitle, onChange: handleTitleChange, onBlur: handleTitleBlur, onClick: e => e.stopPropagation() })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chapter-title", children: chapter.title })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chapter-time", children: formatTimeRange(chapter.timeRange.start, chapter.timeRange.end) }), editMode && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-delete-btn-small", onClick: e => {
+                            e.stopPropagation();
+                            onDeleteChapter?.();
+                        }, title: "Delete chapter", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} bt-expand-icon`, onClick: editMode ? onToggle : undefined })] }), isExpanded && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-details", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-summary", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-section-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-align-left" }), ' ', "Summary"] }), editMode ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("textarea", { className: "bt-chapter-summary-input", value: editingSummary, onChange: handleSummaryChange, onBlur: handleSummaryBlur, rows: 3 })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { children: chapter.summary }))] }), chapter.primaryLocation && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-location", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-section-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), ' ', "Location"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { children: chapter.primaryLocation })] })), hasOutcomes && chapter.outcomes && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-outcomes", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-section-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-flag-checkered" }), ' ', "Outcomes"] }), chapter.outcomes.relationshipChanges
+                                .length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-outcome-group", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-outcome-label", children: "Relationship Changes:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: chapter.outcomes.relationshipChanges.map((change, i) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("li", { children: change }, i))) })] })), chapter.outcomes.secretsRevealed.length >
+                                0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-outcome-group", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-outcome-label", children: "Secrets Revealed:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: chapter.outcomes.secretsRevealed.map((secret, i) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("li", { children: secret }, i))) })] }))] })), chapter.events.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-events", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-section-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-list" }), ' ', "Events (", chapter.events.length, ")"] }), editMode ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_EventList__WEBPACK_IMPORTED_MODULE_2__.EventList, { events: chapter.events, editMode: true, onUpdate: onUpdateEvent, onDelete: onDeleteEvent })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { className: "bt-events-list", children: chapter.events.map((event, i) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("li", { className: "bt-archived-event", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-event-time", children: formatChapterTime(event.timestamp) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-event-summary", children: event.summary }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-event-tension", children: ["(", event.tensionLevel, ' ', event.tensionType, ")"] })] }, i))) }))] }))] }))] }));
+}
+function ChapterHistory({ chapters, editMode, onUpdate }) {
+    const [expandedIds, setExpandedIds] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(new Set());
+    const toggleExpanded = (index) => {
+        setExpandedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(index)) {
+                next.delete(index);
+            }
+            else {
+                next.add(index);
+            }
+            return next;
+        });
+    };
+    const expandAll = () => {
+        setExpandedIds(new Set(chapters.map(c => c.index)));
+    };
+    const collapseAll = () => {
+        setExpandedIds(new Set());
+    };
+    const handleUpdateChapter = (chapterIndex, updatedChapter) => {
+        if (onUpdate) {
+            const newChapters = chapters.map(ch => ch.index === chapterIndex ? updatedChapter : ch);
+            onUpdate(newChapters);
+        }
+    };
+    const handleDeleteChapter = (chapterIndex) => {
+        if (onUpdate) {
+            const newChapters = chapters.filter(ch => ch.index !== chapterIndex);
+            // Re-index remaining chapters
+            const reindexedChapters = newChapters.map((ch, idx) => ({
+                ...ch,
+                index: idx,
+            }));
+            onUpdate(reindexedChapters);
+        }
+    };
+    const handleUpdateEvent = (chapterIndex, eventIndex, event) => {
+        if (onUpdate) {
+            const newChapters = chapters.map(ch => {
+                if (ch.index === chapterIndex) {
+                    const newEvents = [...ch.events];
+                    newEvents[eventIndex] = event;
+                    return { ...ch, events: newEvents };
+                }
+                return ch;
+            });
+            onUpdate(newChapters);
+        }
+    };
+    const handleDeleteEvent = (chapterIndex, eventIndex) => {
+        if (onUpdate) {
+            const newChapters = chapters.map(ch => {
+                if (ch.index === chapterIndex) {
+                    const newEvents = ch.events.filter((_, i) => i !== eventIndex);
+                    return { ...ch, events: newEvents };
+                }
+                return ch;
+            });
+            onUpdate(newChapters);
+        }
+    };
+    if (chapters.length === 0) {
+        return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chapter-history bt-empty", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { children: "No chapters recorded yet." }) }));
+    }
+    // Show chapters in reverse order (most recent first)
+    const sortedChapters = [...chapters].sort((a, b) => b.index - a.index);
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-history", children: [chapters.length > 1 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-controls", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: "bt-btn bt-btn-small", onClick: expandAll, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-angles-down" }), " Expand All"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: "bt-btn bt-btn-small", onClick: collapseAll, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-angles-up" }), " Collapse All"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-chapter-count", children: [chapters.length, " chapter", chapters.length !== 1 ? 's' : ''] })] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chapter-list", children: sortedChapters.map(chapter => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(ChapterCard, { chapter: chapter, isExpanded: expandedIds.has(chapter.index), onToggle: () => toggleExpanded(chapter.index), editMode: editMode, onUpdateChapter: ch => handleUpdateChapter(chapter.index, ch), onDeleteChapter: () => handleDeleteChapter(chapter.index), onUpdateEvent: (evtIdx, evt) => handleUpdateEvent(chapter.index, evtIdx, evt), onDeleteEvent: evtIdx => handleDeleteEvent(chapter.index, evtIdx) }, chapter.index))) })] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/EventEditor.tsx"
+/*!*******************************************!*\
+  !*** ./src/ui/components/EventEditor.tsx ***!
+  \*******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   EventEditor: () => (/* binding */ EventEditor)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _types_state__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../types/state */ "./src/types/state.ts");
+/* harmony import */ var _form_TagInput__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./form/TagInput */ "./src/ui/components/form/TagInput.tsx");
+
+// ============================================
+// Event Editor Component
+// ============================================
+
+
+
+// ============================================
+// Component
+// ============================================
+function EventEditor({ event, onSave, onCancel }) {
+    const [summary, setSummary] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(event.summary);
+    const [eventTypes, setEventTypes] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(event.eventTypes || ['conversation']);
+    const [tensionLevel, setTensionLevel] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(event.tensionLevel);
+    const [tensionType, setTensionType] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(event.tensionType);
+    const [witnesses, setWitnesses] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(event.witnesses || []);
+    // Relationship signal state
+    const [hasPair, setHasPair] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(!!event.relationshipSignal?.pair);
+    const [pairChar1, setPairChar1] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(event.relationshipSignal?.pair?.[0] || '');
+    const [pairChar2, setPairChar2] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(event.relationshipSignal?.pair?.[1] || '');
+    const [milestones, setMilestones] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(event.relationshipSignal?.milestones || []);
+    // New milestone form state
+    const [newMilestoneType, setNewMilestoneType] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('first_meeting');
+    const [newMilestoneDesc, setNewMilestoneDesc] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
+    const handleSave = () => {
+        const updatedEvent = {
+            ...event,
+            summary,
+            eventTypes,
+            tensionLevel,
+            tensionType,
+            witnesses,
+        };
+        // Update relationship signal
+        if (hasPair && pairChar1 && pairChar2) {
+            const sortedPair = [pairChar1, pairChar2].sort();
+            updatedEvent.relationshipSignal = {
+                pair: sortedPair,
+                milestones: milestones.length > 0 ? milestones : undefined,
+            };
+        }
+        else {
+            updatedEvent.relationshipSignal = undefined;
+        }
+        onSave(updatedEvent);
+    };
+    const handleAddMilestone = () => {
+        if (newMilestoneType) {
+            const newMilestone = {
+                type: newMilestoneType,
+                description: newMilestoneDesc,
+                timestamp: event.timestamp,
+                location: event.location,
+                messageId: event.messageId,
+            };
+            setMilestones([...milestones, newMilestone]);
+            setNewMilestoneType('first_meeting');
+            setNewMilestoneDesc('');
+        }
+    };
+    const handleRemoveMilestone = (index) => {
+        setMilestones(milestones.filter((_, i) => i !== index));
+    };
+    const handleToggleEventType = (type) => {
+        if (eventTypes.includes(type)) {
+            // Don't allow removing the last event type
+            if (eventTypes.length > 1) {
+                setEventTypes(eventTypes.filter(t => t !== type));
+            }
+        }
+        else {
+            setEventTypes([...eventTypes, type]);
+        }
+    };
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-editor", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: "event-summary", children: "Summary" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("textarea", { id: "event-summary", value: summary, onChange: e => setSummary(e.target.value), rows: 2, placeholder: "Event summary..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Event Types" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-event-type-grid", children: _types_state__WEBPACK_IMPORTED_MODULE_2__.EVENT_TYPES.map(type => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { className: "bt-event-type-option", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "checkbox", checked: eventTypes.includes(type), onChange: () => handleToggleEventType(type) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: type.replace(/_/g, ' ') })] }, type))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: "tension-level", children: "Tension Level" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { id: "tension-level", value: tensionLevel, onChange: e => setTensionLevel(e.target.value), children: _types_state__WEBPACK_IMPORTED_MODULE_2__.TENSION_LEVELS.map(level => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: level, children: level }, level))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: "tension-type", children: "Tension Type" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { id: "tension-type", value: tensionType, onChange: e => setTensionType(e.target.value), children: _types_state__WEBPACK_IMPORTED_MODULE_2__.TENSION_TYPES.map(type => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: type, children: type }, type))) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Witnesses" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_form_TagInput__WEBPACK_IMPORTED_MODULE_3__.TagInput, { tags: witnesses, onChange: setWitnesses, placeholder: "Add witness..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { className: "bt-section-toggle", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "checkbox", checked: hasPair, onChange: e => setHasPair(e.target.checked) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Relationship Signal" })] }), hasPair && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-relationship-signal-editor", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: "pair-char1", children: "Character 1" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { id: "pair-char1", type: "text", value: pairChar1, onChange: e => setPairChar1(e.target
+                                                    .value), placeholder: "Name..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-pair-separator", children: "&" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: "pair-char2", children: "Character 2" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { id: "pair-char2", type: "text", value: pairChar2, onChange: e => setPairChar2(e.target
+                                                    .value), placeholder: "Name..." })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-milestones-editor", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Milestones" }), milestones.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { className: "bt-milestones-list-edit", children: milestones.map((m, i) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("li", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-milestone-type", children: m.type.replace(/_/g, ' ') }), m.description && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-milestone-desc", children: m.description })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-delete-btn-small", onClick: () => handleRemoveMilestone(i), title: "Remove milestone", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-times" }) })] }, i))) })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-add-milestone", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: newMilestoneType, onChange: e => setNewMilestoneType(e.target
+                                                    .value), children: _types_state__WEBPACK_IMPORTED_MODULE_2__.MILESTONE_TYPES.map(type => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: type, children: type.replace(/_/g, ' ') }, type))) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: newMilestoneDesc, onChange: e => setNewMilestoneDesc(e.target
+                                                    .value), placeholder: "Description (optional)..." }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-btn bt-btn-small", onClick: handleAddMilestone, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-plus" }) })] })] })] }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor-actions", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-btn bt-btn-secondary", onClick: onCancel, children: "Cancel" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-btn bt-btn-primary", onClick: handleSave, children: "Save" })] })] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/EventList.tsx"
+/*!*****************************************!*\
+  !*** ./src/ui/components/EventList.tsx ***!
+  \*****************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   EventList: () => (/* binding */ EventList)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _icons__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../icons */ "./src/ui/icons.ts");
+/* harmony import */ var _EventEditor__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./EventEditor */ "./src/ui/components/EventEditor.tsx");
+
+// ============================================
+// Event List Component
+// ============================================
+
+
+
+// ============================================
+// Helpers
+// ============================================
+function formatEventTime(dt) {
+    const hour12 = dt.hour % 12 || 12;
+    const ampm = dt.hour < 12 ? 'AM' : 'PM';
+    const minute = dt.minute.toString().padStart(2, '0');
+    return `${dt.dayOfWeek} ${hour12}:${minute} ${ampm}`;
+}
+function getAbsentWitnesses(witnesses, presentCharacters) {
+    const presentSet = new Set(presentCharacters.map(c => c.toLowerCase()));
+    return witnesses.filter(w => !presentSet.has(w.toLowerCase()));
+}
+/**
+ * Sort event types by salience (priority) order.
+ */
+function sortByPriority(types) {
+    return [...types].sort((a, b) => {
+        const aIndex = _icons__WEBPACK_IMPORTED_MODULE_2__.EVENT_TYPE_PRIORITY.indexOf(a);
+        const bIndex = _icons__WEBPACK_IMPORTED_MODULE_2__.EVENT_TYPE_PRIORITY.indexOf(b);
+        // Types not in priority list go to the end
+        const aPos = aIndex === -1 ? _icons__WEBPACK_IMPORTED_MODULE_2__.EVENT_TYPE_PRIORITY.length : aIndex;
+        const bPos = bIndex === -1 ? _icons__WEBPACK_IMPORTED_MODULE_2__.EVENT_TYPE_PRIORITY.length : bIndex;
+        return aPos - bPos;
+    });
+}
+// ============================================
+// Components
+// ============================================
+function EventItem({ event, index: _index, presentCharacters, opacity = 1, editMode, onEdit, onDelete, }) {
+    const levelIconClass = (0,_icons__WEBPACK_IMPORTED_MODULE_2__.getTensionLevelIcon)(event.tensionLevel);
+    const levelColor = (0,_icons__WEBPACK_IMPORTED_MODULE_2__.getTensionColor)(event.tensionLevel);
+    const typeIconClass = (0,_icons__WEBPACK_IMPORTED_MODULE_2__.getTensionIcon)(event.tensionType);
+    const typeColor = (0,_icons__WEBPACK_IMPORTED_MODULE_2__.getTensionTypeColor)(event.tensionType);
+    const milestones = event.relationshipSignal?.milestones ?? [];
+    // Get event types sorted by salience
+    const eventTypes = event.eventTypes?.length
+        ? sortByPriority(event.eventTypes)
+        : ['conversation'];
+    // Calculate absent witnesses for dramatic irony notes
+    const absentWitnesses = presentCharacters
+        ? getAbsentWitnesses(event.witnesses, presentCharacters)
+        : [];
+    // Format tooltips
+    const levelTooltip = `Level: ${event.tensionLevel}`;
+    const typeTooltip = `Type: ${event.tensionType}`;
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-item", style: {
+            borderLeftColor: levelColor,
+            '--bt-event-opacity': opacity,
+        }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-event-time", children: formatEventTime(event.timestamp) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-header-right", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-event-types", children: eventTypes.map((type, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: (0,_icons__WEBPACK_IMPORTED_MODULE_2__.getEventTypeIcon)(type), style: {
+                                        color: (0,_icons__WEBPACK_IMPORTED_MODULE_2__.getEventTypeColor)(type),
+                                    }, title: type.replace(/_/g, ' ') }, idx))) }), editMode && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-actions", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-edit-btn-small", onClick: onEdit, title: "Edit event", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-pen" }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-delete-btn-small", onClick: onDelete, title: "Delete event", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] }))] })] }), milestones.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-event-milestones", children: milestones.map((m, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-milestone-item", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-star" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-milestone-type", children: m.type.replace(/_/g, ' ') }), m.description && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-milestone-desc", children: m.description }))] }, idx))) })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-event-summary", children: event.summary }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-footer", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-people", children: [event.witnesses.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-witnesses", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-witnesses-label", children: "Witnesses:" }), event.witnesses.map((w, i) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-witness", children: w }, i)))] })), absentWitnesses.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-absent", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-absent-label", children: "Not present:" }), absentWitnesses.map((w, i) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-absent-witness", children: w }, i)))] }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-tension", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: typeIconClass, style: { color: typeColor }, title: typeTooltip }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: levelIconClass, style: { color: levelColor }, title: levelTooltip })] })] })] }));
+}
+function EventList({ events, presentCharacters, maxEvents, editMode, onUpdate, onDelete, }) {
+    const [editingIndex, setEditingIndex] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(null);
+    // Get the most recent events (from the end of the array)
+    const recentEvents = maxEvents ? events.slice(-maxEvents) : events;
+    // Reverse to show newest first
+    const displayEvents = [...recentEvents].reverse();
+    // Calculate the original index from display index
+    const getOriginalIndex = (displayIndex) => {
+        // displayEvents is reversed, so we need to map back
+        const recentIndex = displayEvents.length - 1 - displayIndex;
+        // Then add the offset from slice
+        const startOffset = events.length - recentEvents.length;
+        return startOffset + recentIndex;
+    };
+    const handleEdit = (displayIndex) => {
+        setEditingIndex(getOriginalIndex(displayIndex));
+    };
+    const handleDelete = (displayIndex) => {
+        if (onDelete) {
+            onDelete(getOriginalIndex(displayIndex));
+        }
+    };
+    const handleSaveEdit = (event) => {
+        if (onUpdate && editingIndex !== null) {
+            onUpdate(editingIndex, event);
+            setEditingIndex(null);
+        }
+    };
+    const handleCancelEdit = () => {
+        setEditingIndex(null);
+    };
+    if (displayEvents.length === 0) {
+        return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-event-list bt-empty", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { children: "No events recorded yet." }) }));
+    }
+    // Find the event being edited (if any)
+    const eventBeingEdited = editingIndex !== null ? events[editingIndex] : null;
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-list", children: [editingIndex !== null && eventBeingEdited && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-event-editor-container", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_EventEditor__WEBPACK_IMPORTED_MODULE_3__.EventEditor, { event: eventBeingEdited, onSave: handleSaveEdit, onCancel: handleCancelEdit }) })), displayEvents.map((event, displayIndex) => {
+                const originalIndex = getOriginalIndex(displayIndex);
+                // Skip showing the item being edited
+                if (originalIndex === editingIndex) {
+                    return null;
+                }
+                // Decrease opacity for older events: 100%, 75%, 50%, 40% (min)
+                const opacity = Math.max(0.4, 1 - displayIndex * 0.25);
+                return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(EventItem, { event: event, index: originalIndex, presentCharacters: presentCharacters, opacity: editMode ? 1 : opacity, editMode: editMode, onEdit: () => handleEdit(displayIndex), onDelete: () => handleDelete(displayIndex) }, originalIndex));
+            })] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/NarrativeModal.tsx"
+/*!**********************************************!*\
+  !*** ./src/ui/components/NarrativeModal.tsx ***!
+  \**********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   NarrativeModal: () => (/* binding */ NarrativeModal)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! react-dom */ "./node_modules/react-dom/index.js");
+/* harmony import */ var _ChapterHistory__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./ChapterHistory */ "./src/ui/components/ChapterHistory.tsx");
+/* harmony import */ var _TensionGraph__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./TensionGraph */ "./src/ui/components/TensionGraph.tsx");
+/* harmony import */ var _EventList__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./EventList */ "./src/ui/components/EventList.tsx");
+/* harmony import */ var _tabs_RelationshipsTab__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../tabs/RelationshipsTab */ "./src/ui/tabs/RelationshipsTab.tsx");
+
+// ============================================
+// Narrative Modal Component
+// ============================================
+
+
+
+
+
+
+// ============================================
+// Component
+// ============================================
+function NarrativeModal({ narrativeState, currentEvents = [], presentCharacters, onClose, onSave, initialTab = 'chapters', }) {
+    const [activeTab, setActiveTab] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(initialTab);
+    const [editMode, setEditMode] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
+    const [saving, setSaving] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
+    // Working copies for edit mode
+    const [editChapters, setEditChapters] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)([]);
+    const [editRelationships, setEditRelationships] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)([]);
+    const [editCurrentEvents, setEditCurrentEvents] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)([]);
+    // Track deleted events for syncing back to messages
+    const [deletedEvents, setDeletedEvents] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)([]);
+    // Initialize edit state when entering edit mode
+    const enterEditMode = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)(() => {
+        setEditChapters(JSON.parse(JSON.stringify(narrativeState.chapters)));
+        setEditRelationships(JSON.parse(JSON.stringify(narrativeState.relationships)));
+        setEditCurrentEvents(JSON.parse(JSON.stringify(currentEvents)));
+        setDeletedEvents([]);
+        setEditMode(true);
+    }, [narrativeState, currentEvents]);
+    const cancelEditMode = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)(() => {
+        setEditMode(false);
+        setEditChapters([]);
+        setEditRelationships([]);
+        setEditCurrentEvents([]);
+        setDeletedEvents([]);
+    }, []);
+    const handleSave = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)(async () => {
+        if (!onSave)
+            return;
+        setSaving(true);
+        try {
+            const updatedState = {
+                ...narrativeState,
+                chapters: editChapters,
+                relationships: editRelationships,
+            };
+            await onSave(updatedState, deletedEvents, editCurrentEvents);
+            setEditMode(false);
+        }
+        finally {
+            setSaving(false);
+        }
+    }, [
+        onSave,
+        narrativeState,
+        editChapters,
+        editRelationships,
+        editCurrentEvents,
+        deletedEvents,
+    ]);
+    // Handle chapter updates
+    const handleChaptersUpdate = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)((chapters) => {
+        // Track deleted events from chapters
+        const newChapterEventIds = new Set(chapters.flatMap(ch => ch.events.map(e => `${e.messageId}-${e.summary}`)));
+        const oldEvents = editChapters.flatMap(ch => ch.events);
+        for (const event of oldEvents) {
+            if (!newChapterEventIds.has(`${event.messageId}-${event.summary}`)) {
+                if (event.messageId !== undefined) {
+                    setDeletedEvents(prev => [
+                        ...prev,
+                        {
+                            messageId: event.messageId,
+                            summary: event.summary,
+                        },
+                    ]);
+                }
+            }
+        }
+        setEditChapters(chapters);
+    }, [editChapters]);
+    // Handle current events updates
+    const handleCurrentEventUpdate = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)((index, event) => {
+        const newEvents = [...editCurrentEvents];
+        newEvents[index] = event;
+        setEditCurrentEvents(newEvents);
+    }, [editCurrentEvents]);
+    const handleCurrentEventDelete = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)((index) => {
+        const event = editCurrentEvents[index];
+        if (event.messageId !== undefined) {
+            setDeletedEvents(prev => [
+                ...prev,
+                { messageId: event.messageId, summary: event.summary },
+            ]);
+        }
+        setEditCurrentEvents(editCurrentEvents.filter((_, i) => i !== index));
+    }, [editCurrentEvents]);
+    // Close on escape key (only if not in edit mode)
+    (0,react__WEBPACK_IMPORTED_MODULE_1__.useEffect)(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && !editMode) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose, editMode]);
+    // Prevent scrolling of body while modal is open
+    (0,react__WEBPACK_IMPORTED_MODULE_1__.useEffect)(() => {
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, []);
+    // Use edit state or original state based on mode
+    const displayChapters = editMode ? editChapters : narrativeState.chapters;
+    const displayRelationships = editMode ? editRelationships : narrativeState.relationships;
+    const displayCurrentEvents = editMode ? editCurrentEvents : currentEvents;
+    // Get all events from all chapters
+    const allChapterEvents = displayChapters.flatMap(ch => ch.events);
+    // All events for tension graph (including current)
+    const allEvents = [...allChapterEvents, ...displayCurrentEvents];
+    // Render to body via portal to avoid container positioning issues
+    return (0,react_dom__WEBPACK_IMPORTED_MODULE_2__.createPortal)((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-modal-overlay", onClick: e => {
+            if (e.target === e.currentTarget && !editMode)
+                onClose();
+        }, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-modal-container bt-narrative-modal", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-modal-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h2", { children: editMode
+                                ? 'Editing Narrative'
+                                : 'Narrative Overview' }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-modal-header-actions", children: [editMode ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { className: "bt-btn bt-btn-secondary", onClick: cancelEditMode, disabled: saving, children: "Cancel" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { className: "bt-btn bt-btn-primary", onClick: handleSave, disabled: saving, children: saving ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-spinner fa-spin" }), "Saving..."] })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-check" }), "Save"] })) })] })) : (onSave && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: "bt-btn bt-btn-secondary", onClick: enterEditMode, title: "Enable editing of narrative state", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-pen" }), "Enable Editing"] }))), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { className: "bt-modal-close", onClick: onClose, disabled: editMode, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-xmark" }) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-modal-tabs", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: `bt-tab ${activeTab === 'events' ? 'bt-tab-active' : ''}`, onClick: () => setActiveTab('events'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-bolt" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: ["Events (", displayCurrentEvents.length, ")"] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: `bt-tab ${activeTab === 'chapters' ? 'bt-tab-active' : ''}`, onClick: () => setActiveTab('chapters'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-book" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: ["Chapters (", displayChapters.length, ")"] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: `bt-tab ${activeTab === 'relationships' ? 'bt-tab-active' : ''}`, onClick: () => setActiveTab('relationships'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-heart" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: ["Relationships (", displayRelationships.length, ")"] })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-modal-content", children: [activeTab === 'events' && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-events-tab-content", children: displayCurrentEvents.length > 0 ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_EventList__WEBPACK_IMPORTED_MODULE_5__.EventList, { events: displayCurrentEvents, presentCharacters: presentCharacters, editMode: editMode, onUpdate: handleCurrentEventUpdate, onDelete: handleCurrentEventDelete })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "bt-empty-message", children: "No events in the current chapter yet." })) })), activeTab === 'chapters' && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapters-tab-content", children: [allEvents.length > 0 && !editMode && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tension-graph-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("h3", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-chart-line" }), "Tension Over Time"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_TensionGraph__WEBPACK_IMPORTED_MODULE_4__.TensionGraph, { events: allEvents })] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_ChapterHistory__WEBPACK_IMPORTED_MODULE_3__.ChapterHistory, { chapters: displayChapters, editMode: editMode, onUpdate: handleChaptersUpdate })] })), activeTab === 'relationships' && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_tabs_RelationshipsTab__WEBPACK_IMPORTED_MODULE_6__.RelationshipsTab, { relationships: displayRelationships, presentCharacters: presentCharacters, editMode: editMode, onUpdate: setEditRelationships }))] })] }) }), document.body);
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/TensionGraph.tsx"
+/*!********************************************!*\
+  !*** ./src/ui/components/TensionGraph.tsx ***!
+  \********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   TensionGraph: () => (/* binding */ TensionGraph)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! react-dom */ "./node_modules/react-dom/index.js");
+/* harmony import */ var _icons__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../icons */ "./src/ui/icons.ts");
+
+// ============================================
+// Tension Graph Component
+// ============================================
+
+
+
+// ============================================
+// Constants
+// ============================================
+const PADDING = { top: 25, right: 20, bottom: 30, left: 50 };
+const TENSION_LEVELS = [
+    'relaxed',
+    'aware',
+    'guarded',
+    'tense',
+    'charged',
+    'volatile',
+    'explosive',
+];
+// ============================================
+// Helpers
+// ============================================
+/**
+ * Calculate the time span in minutes between first and last event.
+ */
+function getTimeSpanMinutes(events) {
+    if (events.length < 2)
+        return 0;
+    const first = events[0].timestamp;
+    const last = events[events.length - 1].timestamp;
+    // Convert to minutes since midnight for comparison
+    const firstMinutes = first.hour * 60 + first.minute;
+    const lastMinutes = last.hour * 60 + last.minute;
+    // Handle day boundaries (simple approach - assume same day or next day)
+    let diff = lastMinutes - firstMinutes;
+    if (diff < 0)
+        diff += 24 * 60; // Crossed midnight
+    return diff;
+}
+/**
+ * Format time based on span - show minutes if the span is short.
+ */
+function formatTimeForSpan(event, spanMinutes) {
+    const dt = event.timestamp;
+    const hour12 = dt.hour % 12 || 12;
+    const ampm = dt.hour < 12 ? 'a' : 'p';
+    const minute = dt.minute.toString().padStart(2, '0');
+    // If span is less than 2 hours, show minutes
+    if (spanMinutes < 120) {
+        return `${hour12}:${minute}${ampm}`;
+    }
+    // If span is less than 6 hours, show minutes on the hour boundaries
+    if (spanMinutes < 360) {
+        return dt.minute === 0 ? `${hour12}${ampm}` : `${hour12}:${minute}${ampm}`;
+    }
+    // Otherwise just show hour
+    return `${hour12}${ampm}`;
+}
+// ============================================
+// Component
+// ============================================
+function TensionGraph({ events, width: propWidth, height: propHeight }) {
+    const containerRef = (0,react__WEBPACK_IMPORTED_MODULE_1__.useRef)(null);
+    const [dimensions, setDimensions] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)({
+        width: propWidth ?? 400,
+        height: propHeight ?? 250,
+    });
+    const [tooltip, setTooltip] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)({
+        visible: false,
+        x: 0,
+        y: 0,
+        event: null,
+    });
+    // Use ResizeObserver to track container size when no fixed dimensions provided
+    (0,react__WEBPACK_IMPORTED_MODULE_1__.useEffect)(() => {
+        if (propWidth && propHeight) {
+            setDimensions({ width: propWidth, height: propHeight });
+            return;
+        }
+        const container = containerRef.current;
+        if (!container)
+            return;
+        const observer = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                if (width > 0 && height > 0) {
+                    setDimensions({
+                        width: propWidth ?? width,
+                        height: propHeight ?? Math.max(250, height),
+                    });
+                }
+            }
+        });
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, [propWidth, propHeight]);
+    const width = dimensions.width;
+    const height = dimensions.height;
+    // Calculate dimensions
+    const graphWidth = width - PADDING.left - PADDING.right;
+    const graphHeight = height - PADDING.top - PADDING.bottom;
+    // Calculate time span for smart formatting
+    const timeSpanMinutes = (0,react__WEBPACK_IMPORTED_MODULE_1__.useMemo)(() => getTimeSpanMinutes(events), [events]);
+    // Generate points for the line
+    const points = (0,react__WEBPACK_IMPORTED_MODULE_1__.useMemo)(() => {
+        if (events.length === 0)
+            return [];
+        return events.map((event, index) => {
+            const x = PADDING.left +
+                (index / Math.max(events.length - 1, 1)) * graphWidth;
+            const tensionValue = (0,_icons__WEBPACK_IMPORTED_MODULE_3__.getTensionValue)(event.tensionLevel);
+            const y = PADDING.top + graphHeight - ((tensionValue - 1) / 6) * graphHeight;
+            return { x, y, event };
+        });
+    }, [events, graphWidth, graphHeight]);
+    // Generate path for the line
+    const linePath = (0,react__WEBPACK_IMPORTED_MODULE_1__.useMemo)(() => {
+        if (points.length === 0)
+            return '';
+        if (points.length === 1)
+            return '';
+        return points
+            .map((point, i) => {
+            return `${i === 0 ? 'M' : 'L'} ${point.x} ${point.y}`;
+        })
+            .join(' ');
+    }, [points]);
+    // Handle mouse events - use viewport coordinates for portal positioning
+    const handlePointEnter = (point, e) => {
+        setTooltip({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY - 10,
+            event: point.event,
+        });
+    };
+    const handlePointLeave = () => {
+        setTooltip(prev => ({ ...prev, visible: false }));
+    };
+    if (events.length === 0) {
+        return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-tension-graph bt-empty", ref: containerRef, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { children: "No events to graph." }) }));
+    }
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tension-graph", ref: containerRef, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("svg", { width: width, height: height, className: "bt-tension-svg", children: [TENSION_LEVELS.map((level, i) => {
+                        const y = PADDING.top + graphHeight - (i / 6) * graphHeight;
+                        const iconClass = (0,_icons__WEBPACK_IMPORTED_MODULE_3__.getTensionLevelIcon)(level);
+                        const color = (0,_icons__WEBPACK_IMPORTED_MODULE_3__.getTensionColor)(level);
+                        return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("g", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("line", { x1: PADDING.left - 5, y1: y, x2: PADDING.left, y2: y, stroke: "#666", strokeWidth: 1 }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("foreignObject", { x: PADDING.left - 40, y: y - 10, width: 35, height: 20, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: iconClass, style: {
+                                            color,
+                                            fontSize: '14px',
+                                            display: 'block',
+                                        }, title: level }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("line", { x1: PADDING.left, y1: y, x2: width - PADDING.right, y2: y, stroke: "#333", strokeWidth: 1, strokeDasharray: "2,2" })] }, level));
+                    }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("line", { x1: PADDING.left, y1: height - PADDING.bottom, x2: width - PADDING.right, y2: height - PADDING.bottom, stroke: "#666", strokeWidth: 1 }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("line", { x1: PADDING.left, y1: PADDING.top, x2: PADDING.left, y2: height - PADDING.bottom, stroke: "#666", strokeWidth: 1 }), linePath && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("path", { d: linePath, fill: "none", stroke: "#888", strokeWidth: 2, strokeLinejoin: "round", strokeLinecap: "round" })), points.map((point, i) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("circle", { cx: point.x, cy: point.y, r: 6, fill: (0,_icons__WEBPACK_IMPORTED_MODULE_3__.getTensionColor)(point.event.tensionLevel), stroke: "#fff", strokeWidth: 2, className: "bt-graph-point", onMouseEnter: e => handlePointEnter(point, e), onMouseLeave: handlePointLeave }, i))), events.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("text", { x: PADDING.left, y: height - PADDING.bottom + 15, textAnchor: "start", className: "bt-graph-label", fontSize: 10, fill: "#999", children: formatTimeForSpan(events[0], timeSpanMinutes) }), events.length > 2 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("text", { x: PADDING.left + graphWidth / 2, y: height - PADDING.bottom + 15, textAnchor: "middle", className: "bt-graph-label", fontSize: 10, fill: "#999", children: formatTimeForSpan(events[Math.floor(events.length /
+                                    2)], timeSpanMinutes) })), events.length > 1 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("text", { x: width - PADDING.right, y: height - PADDING.bottom + 15, textAnchor: "end", className: "bt-graph-label", fontSize: 10, fill: "#999", children: formatTimeForSpan(events[events.length - 1], timeSpanMinutes) }))] }))] }), tooltip.visible &&
+                tooltip.event &&
+                (0,react_dom__WEBPACK_IMPORTED_MODULE_2__.createPortal)((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-graph-tooltip", style: {
+                        position: 'fixed',
+                        left: tooltip.x,
+                        top: tooltip.y,
+                        transform: 'translate(-50%, -100%)',
+                    }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tooltip-level", style: {
+                                color: (0,_icons__WEBPACK_IMPORTED_MODULE_3__.getTensionColor)(tooltip.event.tensionLevel),
+                            }, children: [tooltip.event.tensionLevel, ' ', tooltip.event.tensionType] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-tooltip-summary", children: tooltip.event.summary })] }), document.body)] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/display/CharacterCard.tsx"
+/*!*****************************************************!*\
+  !*** ./src/ui/components/display/CharacterCard.tsx ***!
+  \*****************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CharacterCard: () => (/* binding */ CharacterCard)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var _formatters__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../formatters */ "./src/ui/formatters.ts");
+
+
+const STATUS_COLORS = {
+    strangers: '#6b7280',
+    acquaintances: '#3b82f6',
+    friendly: '#22c55e',
+    close: '#f59e0b',
+    intimate: '#ec4899',
+    strained: '#f97316',
+    hostile: '#ef4444',
+    complicated: '#8b5cf6',
+};
+function CharacterCard({ character, relationships }) {
+    const mood = character.mood?.join(', ') || 'unknown';
+    // Filter relationships to those involving this character
+    const charRelationships = relationships?.filter(r => r.pair[0] === character.name || r.pair[1] === character.name) ?? [];
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-character", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("strong", { children: character.name }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-char-mood", children: mood })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-position", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-crosshairs", title: "Position" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.position })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-details", children: [character.activity && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-activity", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-person-walking", title: "Activity" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.activity })] })), character.physicalState && character.physicalState.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-physical", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-heart-pulse", title: "Physical state" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.physicalState.join(', ') })] })), character.outfit && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-outfit", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-shirt", title: "Outfit" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: (0,_formatters__WEBPACK_IMPORTED_MODULE_1__.formatOutfit)(character.outfit) })] })), charRelationships.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-relationships", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-heart", title: "Relationships" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-relationship-badges", children: charRelationships.map(rel => {
+                                    const otherChar = rel.pair[0] ===
+                                        character.name
+                                        ? rel.pair[1]
+                                        : rel.pair[0];
+                                    const attitude = rel.pair[0] ===
+                                        character.name
+                                        ? rel.aToB
+                                        : rel.bToA;
+                                    const feelings = attitude.feelings
+                                        .slice(0, 2)
+                                        .join(', ');
+                                    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-relationship-badge", style: {
+                                            borderColor: STATUS_COLORS[rel
+                                                .status],
+                                        }, title: `${rel.status}${feelings ? `: ${feelings}` : ''}`, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-rel-name", children: otherChar }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-rel-status", style: {
+                                                    color: STATUS_COLORS[rel
+                                                        .status],
+                                                }, children: rel.status })] }, otherChar));
+                                }) })] }))] })] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/display/ClimateDisplay.tsx"
+/*!******************************************************!*\
+  !*** ./src/ui/components/display/ClimateDisplay.tsx ***!
+  \******************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ClimateDisplay: () => (/* binding */ ClimateDisplay)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! react-dom */ "./node_modules/react-dom/index.js");
+/* harmony import */ var _ui_icons__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @/ui/icons */ "./src/ui/icons.ts");
+/* harmony import */ var _utils_temperatures__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @/utils/temperatures */ "./src/utils/temperatures.ts");
+/* harmony import */ var _weather__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @/weather */ "./src/weather/index.ts");
+
+// ============================================
+// Climate Display Component
+// ============================================
+
+
+
+
+
+// ============================================
+// Constants
+// ============================================
+const DAYLIGHT_ICONS = {
+    dawn: 'fa-sun-haze',
+    day: 'fa-sun',
+    dusk: 'fa-sunset',
+    night: 'fa-moon',
+};
+const DAYLIGHT_LABELS = {
+    dawn: 'Dawn',
+    day: 'Daytime',
+    dusk: 'Dusk',
+    night: 'Nighttime',
+};
+const BUILDING_TYPE_LABELS = {
+    modern: 'Climate controlled',
+    heated: 'Heated building',
+    unheated: 'Unheated structure',
+    underground: 'Underground',
+    tent: 'Tent/minimal shelter',
+    vehicle: 'Vehicle',
+};
+// ============================================
+// Helpers
+// ============================================
+function getWindDescription(speed) {
+    if (speed < 1)
+        return 'Calm';
+    if (speed < 8)
+        return 'Light breeze';
+    if (speed < 13)
+        return 'Gentle breeze';
+    if (speed < 19)
+        return 'Moderate breeze';
+    if (speed < 25)
+        return 'Fresh breeze';
+    if (speed < 32)
+        return 'Strong breeze';
+    if (speed < 39)
+        return 'High wind';
+    if (speed < 47)
+        return 'Gale';
+    if (speed < 55)
+        return 'Strong gale';
+    return 'Storm force';
+}
+function getHumidityDescription(humidity) {
+    if (humidity < 30)
+        return 'Very dry';
+    if (humidity < 45)
+        return 'Dry';
+    if (humidity < 65)
+        return 'Comfortable';
+    if (humidity < 80)
+        return 'Humid';
+    return 'Very humid';
+}
+function getUVDescription(uv) {
+    if (uv < 3)
+        return 'Low';
+    if (uv < 6)
+        return 'Moderate';
+    if (uv < 8)
+        return 'High';
+    if (uv < 11)
+        return 'Very high';
+    return 'Extreme';
+}
+// ============================================
+// Component
+// ============================================
+function ClimateDisplay({ climate, temperatureUnit }) {
+    const [tooltip, setTooltip] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)({
+        visible: false,
+        x: 0,
+        y: 0,
+    });
+    const isLegacy = (0,_weather__WEBPACK_IMPORTED_MODULE_5__.isLegacyClimate)(climate);
+    const procedural = isLegacy ? null : climate;
+    // Get condition icon
+    const conditionIcon = isLegacy
+        ? (0,_ui_icons__WEBPACK_IMPORTED_MODULE_3__.getWeatherIcon)(climate.weather)
+        : (0,_ui_icons__WEBPACK_IMPORTED_MODULE_3__.getConditionIcon)(climate.conditionType);
+    // Get temperature to display
+    const displayTemp = climate.temperature;
+    // Check if indoors
+    const isIndoors = procedural?.isIndoors ?? false;
+    // Check if feels like is significantly different (>5°F difference)
+    const feelsLikeDiff = procedural
+        ? Math.abs(procedural.feelsLike - procedural.outdoorTemperature)
+        : 0;
+    const showFeelsLike = !isIndoors && feelsLikeDiff > 5;
+    // Handle mouse events
+    const handleMouseEnter = (e) => {
+        setTooltip({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY - 10,
+        });
+    };
+    const handleMouseMove = (e) => {
+        setTooltip(prev => ({
+            ...prev,
+            x: e.clientX,
+            y: e.clientY - 10,
+        }));
+    };
+    const handleMouseLeave = () => {
+        setTooltip(prev => ({ ...prev, visible: false }));
+    };
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-climate", onMouseEnter: handleMouseEnter, onMouseMove: handleMouseMove, onMouseLeave: handleMouseLeave, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${conditionIcon}` }), displayTemp !== undefined && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-climate-temp", children: (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_4__.formatTemperature)(displayTemp, temperatureUnit) })), isIndoors && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-house bt-climate-indoor", title: "Indoors" })), showFeelsLike && procedural && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-climate-feels", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-temperature-half" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-feels-value", children: (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_4__.formatTemperature)(procedural.feelsLike, temperatureUnit) })] })), procedural && procedural.windSpeed >= 15 && !isIndoors && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-wind bt-climate-wind", title: `${Math.round(procedural.windSpeed)} mph ${procedural.windDirection}` })), procedural && procedural.humidity >= 75 && !isIndoors && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-droplet bt-climate-humidity", title: `${Math.round(procedural.humidity)}% humidity` }))] }), tooltip.visible &&
+                procedural &&
+                (0,react_dom__WEBPACK_IMPORTED_MODULE_2__.createPortal)((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip", style: {
+                        position: 'fixed',
+                        left: tooltip.x,
+                        top: tooltip.y,
+                        transform: 'translate(-50%, -100%)',
+                    }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-row bt-climate-conditions", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${conditionIcon}` }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: procedural.conditions })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${DAYLIGHT_ICONS[procedural.daylight]}` }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: DAYLIGHT_LABELS[procedural.daylight] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-section", children: [isIndoors &&
+                                    procedural.indoorTemperature !==
+                                        undefined && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-house" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: ["Indoor:", ' ', (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_4__.formatTemperature)(procedural.indoorTemperature, temperatureUnit), procedural.buildingType && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-climate-building", children: [' ', "(", BUILDING_TYPE_LABELS[procedural
+                                                            .buildingType], ")"] }))] })] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-tree" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: ["Outdoor:", ' ', (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_4__.formatTemperature)(procedural.outdoorTemperature, temperatureUnit)] })] }), feelsLikeDiff > 2 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-temperature-half" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: ["Feels like:", ' ', (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_4__.formatTemperature)(procedural.feelsLike, temperatureUnit)] })] }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-droplet" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: [Math.round(procedural.humidity), "% humidity (", getHumidityDescription(procedural.humidity), ")"] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-wind" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: [getWindDescription(procedural.windSpeed), procedural.windSpeed >=
+                                                    5 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [' ', "(", Math.round(procedural.windSpeed), ' ', "mph", ' ', procedural.windDirection, ")"] }))] })] }), procedural.daylight === 'day' &&
+                                    procedural.uvIndex > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-climate-tooltip-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-sun" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: ["UV Index:", ' ', procedural.uvIndex, ' ', "(", getUVDescription(procedural.uvIndex), ")"] })] }))] })] }), document.body)] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/display/LoadingIndicator.tsx"
+/*!********************************************************!*\
+  !*** ./src/ui/components/display/LoadingIndicator.tsx ***!
+  \********************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   LoadingIndicator: () => (/* binding */ LoadingIndicator)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+
+function LoadingIndicator({ stepLabel }) {
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-state-container bt-extracting", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-loading-indicator", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-fire fa-beat-fade" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: stepLabel })] }) }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/display/SceneDisplay.tsx"
+/*!****************************************************!*\
+  !*** ./src/ui/components/display/SceneDisplay.tsx ***!
+  \****************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   SceneDisplay: () => (/* binding */ SceneDisplay)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var _icons__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../icons */ "./src/ui/icons.ts");
+
+
+function SceneDisplay({ scene, onMoreInfoClick }) {
+    const { tension } = scene;
+    const typeColor = (0,_icons__WEBPACK_IMPORTED_MODULE_1__.getTensionTypeColor)(tension.type);
+    const levelColor = (0,_icons__WEBPACK_IMPORTED_MODULE_1__.getTensionColor)(tension.level);
+    // Direction colors
+    const directionColors = {
+        escalating: '#ef4444', // red
+        stable: '#6b7280', // gray
+        decreasing: '#22c55e', // green
+    };
+    const directionColor = directionColors[tension.direction] || '#6b7280';
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-scene", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-scene-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-scene-topic", children: scene.topic }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-scene-tone", children: scene.tone }), onMoreInfoClick && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { className: "bt-more-info-btn", onClick: onMoreInfoClick, title: "View narrative overview", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-book-open" }) }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-scene-tension", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-tension-type", title: tension.type, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${_icons__WEBPACK_IMPORTED_MODULE_1__.TENSION_TYPE_ICONS[tension.type]}`, style: { color: typeColor } }), tension.type] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-tension-level", title: tension.level, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${_icons__WEBPACK_IMPORTED_MODULE_1__.TENSION_LEVEL_ICONS[tension.level]}`, style: { color: levelColor } }), tension.level] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-tension-direction", title: tension.direction, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${_icons__WEBPACK_IMPORTED_MODULE_1__.TENSION_DIRECTION_ICONS[tension.direction]}`, style: { color: directionColor } }), tension.direction] })] })] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/display/index.ts"
+/*!********************************************!*\
+  !*** ./src/ui/components/display/index.ts ***!
+  \********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CharacterCard: () => (/* reexport safe */ _CharacterCard__WEBPACK_IMPORTED_MODULE_1__.CharacterCard),
+/* harmony export */   ClimateDisplay: () => (/* reexport safe */ _ClimateDisplay__WEBPACK_IMPORTED_MODULE_3__.ClimateDisplay),
+/* harmony export */   LoadingIndicator: () => (/* reexport safe */ _LoadingIndicator__WEBPACK_IMPORTED_MODULE_2__.LoadingIndicator),
+/* harmony export */   SceneDisplay: () => (/* reexport safe */ _SceneDisplay__WEBPACK_IMPORTED_MODULE_0__.SceneDisplay)
+/* harmony export */ });
+/* harmony import */ var _SceneDisplay__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./SceneDisplay */ "./src/ui/components/display/SceneDisplay.tsx");
+/* harmony import */ var _CharacterCard__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./CharacterCard */ "./src/ui/components/display/CharacterCard.tsx");
+/* harmony import */ var _LoadingIndicator__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./LoadingIndicator */ "./src/ui/components/display/LoadingIndicator.tsx");
+/* harmony import */ var _ClimateDisplay__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./ClimateDisplay */ "./src/ui/components/display/ClimateDisplay.tsx");
+
+
+
+
+
+
+/***/ },
+
+/***/ "./src/ui/components/form/CheckboxField.tsx"
+/*!**************************************************!*\
+  !*** ./src/ui/components/form/CheckboxField.tsx ***!
+  \**************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CheckboxField: () => (/* binding */ CheckboxField)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+
+function CheckboxField({ id, label, description, checked, onChange }) {
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-container flexFlowColumn", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { className: "checkbox_label", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "checkbox", id: id, checked: checked, onChange: e => onChange(e.target.checked) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: label })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: description })] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/form/NumberField.tsx"
+/*!************************************************!*\
+  !*** ./src/ui/components/form/NumberField.tsx ***!
+  \************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   NumberField: () => (/* binding */ NumberField)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+
+function NumberField({ id, label, description, value, min, max, step, onChange, }) {
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-container flexFlowColumn", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: id, children: label }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: description }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", id: id, className: "text_pole", min: min, max: max, step: step, value: value, onChange: e => onChange(parseInt(e.target.value) || min) })] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/form/OutfitEditor.tsx"
+/*!*************************************************!*\
+  !*** ./src/ui/components/form/OutfitEditor.tsx ***!
+  \*************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   OutfitEditor: () => (/* binding */ OutfitEditor)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../constants */ "./src/ui/constants.ts");
+
+
+/** Outfit editor with nullable slots */
+function OutfitEditor({ outfit, onChange }) {
+    const update = (slot, value) => {
+        onChange({ ...outfit, [slot]: value || null });
+    };
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-outfit-grid", children: _constants__WEBPACK_IMPORTED_MODULE_1__.OUTFIT_SLOTS.map(slot => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-outfit-slot", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: slot }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-outfit-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: outfit[slot] || '', onChange: e => update(slot, e.target.value), placeholder: "None" }), outfit[slot] && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: () => update(slot, null), className: "bt-x", children: "\u00D7" }))] })] }, slot))) }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/form/SelectField.tsx"
+/*!************************************************!*\
+  !*** ./src/ui/components/form/SelectField.tsx ***!
+  \************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   SelectField: () => (/* binding */ SelectField)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+
+function SelectField({ id, label, description, value, options, onChange, }) {
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-container flexFlowColumn", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: id, children: label }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: description }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { id: id, className: "text_pole", value: value, onChange: e => onChange(e.target.value), children: options.map(opt => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: opt.value, children: opt.label }, opt.value))) })] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/form/TagInput.tsx"
+/*!*********************************************!*\
+  !*** ./src/ui/components/form/TagInput.tsx ***!
+  \*********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   TagInput: () => (/* binding */ TagInput)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+
+
+/** Tag input for arrays of strings (mood, physicalState, etc.) */
+function TagInput({ tags, onChange, placeholder = 'Add...' }) {
+    const [input, setInput] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
+    const addTag = () => {
+        const trimmed = input.trim();
+        if (trimmed && !tags.includes(trimmed)) {
+            onChange([...tags, trimmed]);
+            setInput('');
+        }
+    };
+    const removeTag = (tag) => {
+        onChange(tags.filter(t => t !== tag));
+    };
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tag-input", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-tags", children: tags.map(tag => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-tag", children: [tag, (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: () => removeTag(tag), className: "bt-tag-x", children: "\u00D7" })] }, tag))) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tag-add", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: input, onChange: e => setInput(e.target.value), onKeyDown: e => e.key === 'Enter' && (e.preventDefault(), addTag()), placeholder: placeholder }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: addTag, children: "+" })] })] }));
+}
+
+
+/***/ },
+
+/***/ "./src/ui/components/form/index.ts"
+/*!*****************************************!*\
+  !*** ./src/ui/components/form/index.ts ***!
+  \*****************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CheckboxField: () => (/* reexport safe */ _CheckboxField__WEBPACK_IMPORTED_MODULE_2__.CheckboxField),
+/* harmony export */   NumberField: () => (/* reexport safe */ _NumberField__WEBPACK_IMPORTED_MODULE_1__.NumberField),
+/* harmony export */   OutfitEditor: () => (/* reexport safe */ _OutfitEditor__WEBPACK_IMPORTED_MODULE_4__.OutfitEditor),
+/* harmony export */   SelectField: () => (/* reexport safe */ _SelectField__WEBPACK_IMPORTED_MODULE_0__.SelectField),
+/* harmony export */   TagInput: () => (/* reexport safe */ _TagInput__WEBPACK_IMPORTED_MODULE_3__.TagInput)
+/* harmony export */ });
+/* harmony import */ var _SelectField__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./SelectField */ "./src/ui/components/form/SelectField.tsx");
+/* harmony import */ var _NumberField__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./NumberField */ "./src/ui/components/form/NumberField.tsx");
+/* harmony import */ var _CheckboxField__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./CheckboxField */ "./src/ui/components/form/CheckboxField.tsx");
+/* harmony import */ var _TagInput__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./TagInput */ "./src/ui/components/form/TagInput.tsx");
+/* harmony import */ var _OutfitEditor__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./OutfitEditor */ "./src/ui/components/form/OutfitEditor.tsx");
+
+
+
+
+
+
+
+/***/ },
+
+/***/ "./src/ui/constants.ts"
+/*!*****************************!*\
+  !*** ./src/ui/constants.ts ***!
+  \*****************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   BUILDING_TYPES: () => (/* binding */ BUILDING_TYPES),
+/* harmony export */   BUILDING_TYPE_LABELS: () => (/* binding */ BUILDING_TYPE_LABELS),
+/* harmony export */   DAYS_OF_WEEK: () => (/* binding */ DAYS_OF_WEEK),
+/* harmony export */   MONTH_NAMES: () => (/* binding */ MONTH_NAMES),
+/* harmony export */   OUTFIT_SLOTS: () => (/* binding */ OUTFIT_SLOTS),
+/* harmony export */   TENSION_DIRECTIONS: () => (/* binding */ TENSION_DIRECTIONS),
+/* harmony export */   TENSION_LEVELS: () => (/* binding */ TENSION_LEVELS),
+/* harmony export */   TENSION_TYPES: () => (/* binding */ TENSION_TYPES),
+/* harmony export */   WEATHER_CONDITIONS: () => (/* binding */ WEATHER_CONDITIONS),
+/* harmony export */   WEATHER_CONDITION_LABELS: () => (/* binding */ WEATHER_CONDITION_LABELS),
+/* harmony export */   WEATHER_OPTIONS: () => (/* binding */ WEATHER_OPTIONS)
+/* harmony export */ });
+// ============================================
+// Shared UI Constants
+// ============================================
+/**
+ * Month names for display.
+ */
+const MONTH_NAMES = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+];
+/**
+ * Days of the week.
+ */
+const DAYS_OF_WEEK = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+];
+/**
+ * Valid weather options (legacy).
+ */
+const WEATHER_OPTIONS = [
+    'sunny',
+    'cloudy',
+    'rainy',
+    'snowy',
+    'windy',
+    'thunderstorm',
+];
+/**
+ * Weather condition options (procedural system).
+ */
+const WEATHER_CONDITIONS = [
+    'clear',
+    'sunny',
+    'partly_cloudy',
+    'overcast',
+    'foggy',
+    'drizzle',
+    'rain',
+    'heavy_rain',
+    'thunderstorm',
+    'sleet',
+    'snow',
+    'heavy_snow',
+    'blizzard',
+    'windy',
+    'hot',
+    'cold',
+    'humid',
+];
+/**
+ * Weather condition display names.
+ */
+const WEATHER_CONDITION_LABELS = {
+    clear: 'Clear',
+    sunny: 'Sunny',
+    partly_cloudy: 'Partly Cloudy',
+    overcast: 'Overcast',
+    foggy: 'Foggy',
+    drizzle: 'Drizzle',
+    rain: 'Rain',
+    heavy_rain: 'Heavy Rain',
+    thunderstorm: 'Thunderstorm',
+    sleet: 'Sleet',
+    snow: 'Snow',
+    heavy_snow: 'Heavy Snow',
+    blizzard: 'Blizzard',
+    windy: 'Windy',
+    hot: 'Hot',
+    cold: 'Cold',
+    humid: 'Humid',
+};
+/**
+ * Building types for indoor temperature.
+ */
+const BUILDING_TYPES = [
+    'modern',
+    'heated',
+    'unheated',
+    'underground',
+    'tent',
+    'vehicle',
+];
+/**
+ * Building type display names.
+ */
+const BUILDING_TYPE_LABELS = {
+    modern: 'Modern (HVAC)',
+    heated: 'Heated (Fireplace)',
+    unheated: 'Unheated (Barn/Warehouse)',
+    underground: 'Underground (Cave/Basement)',
+    tent: 'Tent',
+    vehicle: 'Vehicle',
+};
+/**
+ * Tension levels in ascending order.
+ */
+const TENSION_LEVELS = [
+    'relaxed',
+    'aware',
+    'guarded',
+    'tense',
+    'charged',
+    'volatile',
+    'explosive',
+];
+/**
+ * Tension types.
+ */
+const TENSION_TYPES = [
+    'confrontation',
+    'intimate',
+    'vulnerable',
+    'celebratory',
+    'negotiation',
+    'suspense',
+    'conversation',
+];
+/**
+ * Tension directions.
+ */
+const TENSION_DIRECTIONS = [
+    'escalating',
+    'stable',
+    'decreasing',
+];
+/**
+ * Outfit slots in order.
+ */
+const OUTFIT_SLOTS = [
+    'head',
+    'neck',
+    'jacket',
+    'back',
+    'torso',
+    'legs',
+    'underwear',
+    'socks',
+    'footwear',
+];
+
+
+/***/ },
+
+/***/ "./src/ui/formatters.ts"
+/*!******************************!*\
+  !*** ./src/ui/formatters.ts ***!
+  \******************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   capitalize: () => (/* binding */ capitalize),
+/* harmony export */   formatLocation: () => (/* binding */ formatLocation),
+/* harmony export */   formatOutfit: () => (/* binding */ formatOutfit),
+/* harmony export */   formatTime: () => (/* binding */ formatTime)
+/* harmony export */ });
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./constants */ "./src/ui/constants.ts");
+/* harmony import */ var _utils_timeFormat__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../utils/timeFormat */ "./src/utils/timeFormat.ts");
+// ============================================
+// Shared UI Formatters
+// ============================================
+
+
+/**
+ * Format a narrative datetime for display.
+ */
+function formatTime(time, timeFormat = '24h') {
+    const month = _constants__WEBPACK_IMPORTED_MODULE_0__.MONTH_NAMES[time.month - 1];
+    // "Mon, Jan 15 2024, 14:30"
+    return `${time.dayOfWeek.slice(0, 3)}, ${month} ${time.day} ${time.year}, ${(0,_utils_timeFormat__WEBPACK_IMPORTED_MODULE_1__.applyTimeFormat)(time.hour, time.minute, timeFormat)}`;
+}
+/**
+ * Format a location for display.
+ */
+function formatLocation(location) {
+    const parts = [location.position, location.place, location.area];
+    return parts.filter(Boolean).join(' \u00B7 ');
+}
+/**
+ * Format an outfit for display.
+ */
+function formatOutfit(outfit) {
+    const outfitParts = [
+        outfit.torso || 'topless',
+        outfit.legs || 'bottomless',
+        outfit.underwear || 'no underwear',
+        outfit.head || null,
+        outfit.neck || null,
+        outfit.jacket || null,
+        outfit.back || null,
+        outfit.footwear || null,
+    ];
+    return outfitParts.filter((v) => v !== null).join(', ');
+}
+/**
+ * Capitalize the first letter of a string.
+ */
+function capitalize(str) {
+    if (!str)
+        return str;
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+
+/***/ },
+
+/***/ "./src/ui/icons.ts"
+/*!*************************!*\
+  !*** ./src/ui/icons.ts ***!
+  \*************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CONDITION_ICONS: () => (/* binding */ CONDITION_ICONS),
+/* harmony export */   EVENT_TYPE_COLORS: () => (/* binding */ EVENT_TYPE_COLORS),
+/* harmony export */   EVENT_TYPE_ICONS: () => (/* binding */ EVENT_TYPE_ICONS),
+/* harmony export */   EVENT_TYPE_PRIORITY: () => (/* binding */ EVENT_TYPE_PRIORITY),
+/* harmony export */   TENSION_DIRECTION_ICONS: () => (/* binding */ TENSION_DIRECTION_ICONS),
+/* harmony export */   TENSION_LEVEL_COLORS: () => (/* binding */ TENSION_LEVEL_COLORS),
+/* harmony export */   TENSION_LEVEL_ICONS: () => (/* binding */ TENSION_LEVEL_ICONS),
+/* harmony export */   TENSION_LEVEL_VALUES: () => (/* binding */ TENSION_LEVEL_VALUES),
+/* harmony export */   TENSION_TYPE_COLORS: () => (/* binding */ TENSION_TYPE_COLORS),
+/* harmony export */   TENSION_TYPE_ICONS: () => (/* binding */ TENSION_TYPE_ICONS),
+/* harmony export */   WEATHER_ICONS: () => (/* binding */ WEATHER_ICONS),
+/* harmony export */   getConditionIcon: () => (/* binding */ getConditionIcon),
+/* harmony export */   getEventTypeColor: () => (/* binding */ getEventTypeColor),
+/* harmony export */   getEventTypeIcon: () => (/* binding */ getEventTypeIcon),
+/* harmony export */   getPrimaryEventType: () => (/* binding */ getPrimaryEventType),
+/* harmony export */   getTensionColor: () => (/* binding */ getTensionColor),
+/* harmony export */   getTensionIcon: () => (/* binding */ getTensionIcon),
+/* harmony export */   getTensionLevelIcon: () => (/* binding */ getTensionLevelIcon),
+/* harmony export */   getTensionTypeColor: () => (/* binding */ getTensionTypeColor),
+/* harmony export */   getTensionValue: () => (/* binding */ getTensionValue),
+/* harmony export */   getWeatherIcon: () => (/* binding */ getWeatherIcon)
+/* harmony export */ });
+// ============================================
+// UI Icons and Colors for BlazeTracker
+// ============================================
+/**
+ * Font Awesome icons for tension types.
+ */
+const TENSION_TYPE_ICONS = {
+    conversation: 'fa-comments',
+    confrontation: 'fa-burst',
+    intimate: 'fa-heart',
+    suspense: 'fa-clock',
+    vulnerable: 'fa-shield-halved',
+    celebratory: 'fa-champagne-glasses',
+    negotiation: 'fa-handshake',
+};
+/**
+ * Font Awesome icons for tension levels.
+ */
+const TENSION_LEVEL_ICONS = {
+    relaxed: 'fa-mug-hot',
+    aware: 'fa-eye',
+    guarded: 'fa-shield-halved',
+    tense: 'fa-face-grimace',
+    charged: 'fa-bolt',
+    volatile: 'fa-fire',
+    explosive: 'fa-explosion',
+};
+/**
+ * Font Awesome icons for tension directions.
+ */
+const TENSION_DIRECTION_ICONS = {
+    escalating: 'fa-arrow-trend-up',
+    stable: 'fa-grip-lines',
+    decreasing: 'fa-arrow-trend-down',
+};
+/**
+ * Font Awesome icons for weather types.
+ */
+const WEATHER_ICONS = {
+    sunny: 'fa-sun',
+    cloudy: 'fa-cloud',
+    snowy: 'fa-snowflake',
+    rainy: 'fa-cloud-rain',
+    windy: 'fa-wind',
+    thunderstorm: 'fa-cloud-bolt',
+};
+/**
+ * Get the weather icon for a weather type.
+ */
+function getWeatherIcon(weather) {
+    return WEATHER_ICONS[weather] ?? 'fa-question';
+}
+/**
+ * Font Awesome icons for procedural weather conditions.
+ */
+const CONDITION_ICONS = {
+    clear: 'fa-moon',
+    sunny: 'fa-sun',
+    partly_cloudy: 'fa-cloud-sun',
+    overcast: 'fa-cloud',
+    foggy: 'fa-smog',
+    drizzle: 'fa-cloud-rain',
+    rain: 'fa-cloud-showers-heavy',
+    heavy_rain: 'fa-cloud-showers-water',
+    thunderstorm: 'fa-cloud-bolt',
+    sleet: 'fa-cloud-meatball',
+    snow: 'fa-snowflake',
+    heavy_snow: 'fa-snowflake',
+    blizzard: 'fa-icicles',
+    windy: 'fa-wind',
+    hot: 'fa-temperature-high',
+    cold: 'fa-temperature-low',
+    humid: 'fa-droplet',
+};
+/**
+ * Get the icon for a procedural weather condition.
+ */
+function getConditionIcon(condition) {
+    return CONDITION_ICONS[condition] ?? 'fa-question';
+}
+/**
+ * Colors for tension types.
+ */
+const TENSION_TYPE_COLORS = {
+    conversation: '#6b7280', // gray-500
+    confrontation: '#ef4444', // red-500
+    intimate: '#ec4899', // pink-500
+    suspense: '#8b5cf6', // violet-500
+    vulnerable: '#06b6d4', // cyan-500
+    celebratory: '#eab308', // yellow-500
+    negotiation: '#f97316', // orange-500
+};
+/**
+ * Colors for tension levels.
+ */
+const TENSION_LEVEL_COLORS = {
+    relaxed: '#6b7280', // gray-500
+    aware: '#3b82f6', // blue-500
+    guarded: '#22c55e', // green-500
+    tense: '#f59e0b', // amber-500
+    charged: '#f97316', // orange-500
+    volatile: '#ef4444', // red-500
+    explosive: '#dc2626', // red-600
+};
+/**
+ * Get the icon class for a tension type.
+ */
+function getTensionIcon(type) {
+    return `fa-solid ${TENSION_TYPE_ICONS[type] || 'fa-circle'}`;
+}
+/**
+ * Get the icon class for a tension level.
+ */
+function getTensionLevelIcon(level) {
+    return `fa-solid ${TENSION_LEVEL_ICONS[level] || 'fa-circle'}`;
+}
+/**
+ * Get the color for a tension type.
+ */
+function getTensionTypeColor(type) {
+    return TENSION_TYPE_COLORS[type] || '#6b7280';
+}
+/**
+ * Get the color for a tension level.
+ */
+function getTensionColor(level) {
+    return TENSION_LEVEL_COLORS[level] || '#6b7280';
+}
+/**
+ * Numeric value for tension level (for graphing).
+ */
+const TENSION_LEVEL_VALUES = {
+    relaxed: 1,
+    aware: 2,
+    guarded: 3,
+    tense: 4,
+    charged: 5,
+    volatile: 6,
+    explosive: 7,
+};
+/**
+ * Get numeric value for a tension level.
+ */
+function getTensionValue(level) {
+    return TENSION_LEVEL_VALUES[level] || 1;
+}
+// ============================================
+// Event Type Icons and Colors
+// ============================================
+/**
+ * Font Awesome icons for event types.
+ */
+const EVENT_TYPE_ICONS = {
+    // Conversation
+    conversation: 'fa-comments',
+    confession: 'fa-heart-circle-exclamation',
+    argument: 'fa-comment-slash',
+    negotiation: 'fa-handshake',
+    // Discovery
+    discovery: 'fa-lightbulb',
+    secret_shared: 'fa-user-secret',
+    secret_revealed: 'fa-mask',
+    // Emotional
+    emotional: 'fa-face-smile-beam',
+    supportive: 'fa-hand-holding-heart',
+    rejection: 'fa-hand',
+    comfort: 'fa-hands-holding',
+    apology: 'fa-hands-praying',
+    forgiveness: 'fa-dove',
+    // Bonding
+    laugh: 'fa-face-laugh-beam',
+    gift: 'fa-gift',
+    compliment: 'fa-face-grin-stars',
+    tease: 'fa-face-grin-tongue',
+    flirt: 'fa-face-grin-wink',
+    date: 'fa-champagne-glasses',
+    i_love_you: 'fa-heart-circle-check',
+    sleepover: 'fa-bed',
+    shared_meal: 'fa-utensils',
+    shared_activity: 'fa-gamepad',
+    // Romantic Intimacy
+    intimate_touch: 'fa-hand-holding-hand',
+    intimate_kiss: 'fa-face-kiss-wink-heart',
+    intimate_embrace: 'fa-people-pulling',
+    intimate_heated: 'fa-fire',
+    // Sexual Activity
+    intimate_foreplay: 'fa-fire-flame-curved',
+    intimate_oral: 'fa-face-kiss-beam',
+    intimate_manual: 'fa-hand-sparkles',
+    intimate_penetrative: 'fa-heart',
+    intimate_climax: 'fa-star',
+    // Action
+    action: 'fa-person-running',
+    combat: 'fa-hand-fist',
+    danger: 'fa-skull',
+    // Commitment
+    decision: 'fa-scale-balanced',
+    promise: 'fa-handshake-angle',
+    betrayal: 'fa-face-angry',
+    lied: 'fa-face-grimace',
+    // Life Events
+    exclusivity: 'fa-lock',
+    marriage: 'fa-ring',
+    pregnancy: 'fa-baby',
+    childbirth: 'fa-baby-carriage',
+    // Social
+    social: 'fa-users',
+    achievement: 'fa-trophy',
+};
+/**
+ * Colors for event types.
+ */
+const EVENT_TYPE_COLORS = {
+    // Conversation - grays/blues
+    conversation: '#6b7280',
+    confession: '#ec4899',
+    argument: '#ef4444',
+    negotiation: '#f59e0b',
+    // Discovery - yellows
+    discovery: '#eab308',
+    secret_shared: '#8b5cf6',
+    secret_revealed: '#a855f7',
+    // Emotional - cyans
+    emotional: '#06b6d4',
+    supportive: '#22d3ee',
+    rejection: '#f43f5e',
+    comfort: '#14b8a6', // teal-500
+    apology: '#a78bfa', // violet-400
+    forgiveness: '#34d399', // emerald-400
+    // Bonding - warm greens and oranges
+    laugh: '#facc15', // yellow-400
+    gift: '#f472b6', // pink-400
+    compliment: '#fbbf24', // amber-400
+    tease: '#fb923c', // orange-400
+    flirt: '#f87171', // red-400
+    date: '#a78bfa', // violet-400
+    i_love_you: '#f43f5e', // rose-500
+    sleepover: '#818cf8', // indigo-400
+    shared_meal: '#4ade80', // green-400
+    shared_activity: '#60a5fa', // blue-400
+    // Romantic Intimacy - pinks
+    intimate_touch: '#fda4af',
+    intimate_kiss: '#fb7185',
+    intimate_embrace: '#f472b6',
+    intimate_heated: '#ec4899',
+    // Sexual Activity - deeper pinks/magentas
+    intimate_foreplay: '#db2777',
+    intimate_oral: '#be185d',
+    intimate_manual: '#9d174d',
+    intimate_penetrative: '#831843',
+    intimate_climax: '#701a75',
+    // Action - blues/reds
+    action: '#3b82f6',
+    combat: '#dc2626',
+    danger: '#991b1b',
+    // Commitment - purples/oranges
+    decision: '#8b5cf6',
+    promise: '#22c55e',
+    betrayal: '#b91c1c',
+    lied: '#f97316', // orange-500
+    // Life Events - golds/teals
+    exclusivity: '#0d9488', // teal-600
+    marriage: '#d97706', // amber-600
+    pregnancy: '#ec4899', // pink-500
+    childbirth: '#8b5cf6', // violet-500
+    // Social - greens
+    social: '#22c55e',
+    achievement: '#f59e0b',
+};
+/**
+ * Priority order for selecting "primary" icon when multiple types.
+ * Higher priority items appear first.
+ */
+const EVENT_TYPE_PRIORITY = [
+    // Life events take highest priority (rare, significant)
+    'childbirth',
+    'marriage',
+    'pregnancy',
+    'exclusivity',
+    // Sexual activity takes visual priority (highest intensity first)
+    'intimate_climax',
+    'intimate_penetrative',
+    'intimate_oral',
+    'intimate_manual',
+    'intimate_foreplay',
+    // Then romantic intimacy
+    'intimate_heated',
+    'intimate_kiss',
+    'intimate_embrace',
+    'intimate_touch',
+    // Then high-drama events
+    'combat',
+    'danger',
+    'betrayal',
+    'confession',
+    'argument',
+    // Then emotional/discovery
+    'emotional',
+    'comfort',
+    'apology',
+    'forgiveness',
+    'secret_revealed',
+    'secret_shared',
+    'discovery',
+    // Then decisions
+    'decision',
+    'promise',
+    'rejection',
+    // Then bonding/social
+    'i_love_you',
+    'date',
+    'sleepover',
+    'gift',
+    'laugh',
+    'compliment',
+    'flirt',
+    'tease',
+    'shared_meal',
+    'shared_activity',
+    // Then social/support
+    'supportive',
+    'achievement',
+    'social',
+    'negotiation',
+    // Default
+    'conversation',
+    'action',
+];
+/**
+ * Get the primary event type from an array of types based on priority.
+ */
+function getPrimaryEventType(types) {
+    for (const priority of EVENT_TYPE_PRIORITY) {
+        if (types.includes(priority))
+            return priority;
+    }
+    return types[0] || 'conversation';
+}
+/**
+ * Get the icon class for an event type.
+ */
+function getEventTypeIcon(type) {
+    return `fa-solid ${EVENT_TYPE_ICONS[type] || 'fa-circle'}`;
+}
+/**
+ * Get the color for an event type.
+ */
+function getEventTypeColor(type) {
+    return EVENT_TYPE_COLORS[type] || '#6b7280';
 }
 
 
@@ -40534,21 +50214,14 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
 /* harmony import */ var _stateDisplay__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./stateDisplay */ "./src/ui/stateDisplay.tsx");
 /* harmony import */ var _extractors_prompts__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../extractors/prompts */ "./src/extractors/prompts.ts");
+/* harmony import */ var _components_form__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./components/form */ "./src/ui/components/form/index.ts");
 
 
 
 
 
 
-function SelectField({ id, label, description, value, options, onChange }) {
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-container flexFlowColumn", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: id, children: label }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: description }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { id: id, className: "text_pole", value: value, onChange: e => onChange(e.target.value), children: options.map(opt => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: opt.value, children: opt.label }, opt.value))) })] }));
-}
-function NumberField({ id, label, description, value, min, max, step, onChange, }) {
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-container flexFlowColumn", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: id, children: label }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: description }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", id: id, className: "text_pole", min: min, max: max, step: step, value: value, onChange: e => onChange(parseInt(e.target.value) || min) })] }));
-}
-function CheckboxField({ id, label, description, checked, onChange }) {
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-container flexFlowColumn", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { className: "checkbox_label", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "checkbox", id: id, checked: checked, onChange: e => onChange(e.target.checked) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: label })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: description })] }));
-}
+
 function PromptEditor({ definition, customPrompts, customTemperatures, onSave, onSaveTemperature, }) {
     const [isEditing, setIsEditing] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
     const [editValue, setEditValue] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
@@ -40604,8 +50277,8 @@ function PromptsSection({ customPrompts, customTemperatures, onUpdatePrompt, onU
     const definitions = (0,_extractors_prompts__WEBPACK_IMPORTED_MODULE_5__.getAllPromptDefinitions)();
     return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompts-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-prompts-header", onClick: () => setIsExpanded(!isExpanded), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}` }), ' ', "Custom Prompts"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: "Click to customize extraction prompts" })] }), isExpanded && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-prompts-list", children: definitions.map(def => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(PromptEditor, { definition: def, customPrompts: customPrompts, customTemperatures: customTemperatures, onSave: onUpdatePrompt, onSaveTemperature: onUpdateTemperature }, def.key))) }))] }));
 }
-function ExtractionTogglesSection({ settings, onToggle }) {
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-extraction-toggles", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-section-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("strong", { children: "Extraction Types" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: "Enable or disable specific extraction modules" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(CheckboxField, { id: "blazetracker-tracktime", label: "Time Tracking", description: "Extract and track narrative date/time", checked: settings.trackTime, onChange: checked => onToggle('trackTime', checked) }), settings.trackTime && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-nested-setting", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(NumberField, { id: "blazetracker-leapthreshold", label: "Leap Threshold (minutes)", description: "Cap consecutive time jumps to prevent 'double sleep' issues", value: settings.leapThresholdMinutes, min: 5, max: 1440, step: 5, onChange: v => onToggle('leapThresholdMinutes', v) }) })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(CheckboxField, { id: "blazetracker-tracklocation", label: "Location Tracking", description: "Extract area, place, position, and nearby props", checked: settings.trackLocation, onChange: checked => onToggle('trackLocation', checked) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(CheckboxField, { id: "blazetracker-trackclimate", label: "Climate Tracking", description: "Extract weather and temperature conditions", checked: settings.trackClimate, onChange: checked => onToggle('trackClimate', checked) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(CheckboxField, { id: "blazetracker-trackcharacters", label: "Character Tracking", description: "Extract character positions, moods, outfits, and dispositions", checked: settings.trackCharacters, onChange: checked => onToggle('trackCharacters', checked) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(CheckboxField, { id: "blazetracker-trackscene", label: "Scene Tracking", description: "Extract scene topic, tone, tension, and recent events", checked: settings.trackScene, onChange: checked => onToggle('trackScene', checked) })] }));
+function ExtractionTogglesSection({ settings, onToggle, onNumericChange, }) {
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-extraction-toggles", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-section-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("strong", { children: "Extraction Types" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: "Enable or disable specific extraction modules" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.CheckboxField, { id: "blazetracker-tracktime", label: "Time Tracking", description: "Extract and track narrative date/time", checked: settings.trackTime, onChange: checked => onToggle('trackTime', checked) }), settings.trackTime && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-nested-setting", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.NumberField, { id: "blazetracker-leapthreshold", label: "Leap Threshold (minutes)", description: "Cap consecutive time jumps to prevent 'double sleep' issues", value: settings.leapThresholdMinutes, min: 5, max: 1440, step: 5, onChange: v => onNumericChange('leapThresholdMinutes', v) }) })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.CheckboxField, { id: "blazetracker-tracklocation", label: "Location Tracking", description: "Extract area, place, position, and nearby props", checked: settings.trackLocation, onChange: checked => onToggle('trackLocation', checked) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.CheckboxField, { id: "blazetracker-trackclimate", label: "Climate Tracking", description: "Extract weather and temperature conditions", checked: settings.trackClimate, onChange: checked => onToggle('trackClimate', checked) }), settings.trackClimate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-nested-setting", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.CheckboxField, { id: "blazetracker-proceduralweather", label: "Procedural Weather", description: "Use procedural forecast generation instead of LLM extraction", checked: settings.useProceduralWeather, onChange: checked => onToggle('useProceduralWeather', checked) }), settings.useProceduralWeather && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-nested-setting", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.CheckboxField, { id: "blazetracker-weathertransitions", label: "Weather Transitions", description: "Inject transition notes when weather changes significantly", checked: settings.injectWeatherTransitions, onChange: checked => onToggle('injectWeatherTransitions', checked) }) }))] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.CheckboxField, { id: "blazetracker-trackcharacters", label: "Character Tracking", description: "Extract character positions, moods, outfits, and dispositions", checked: settings.trackCharacters, onChange: checked => onToggle('trackCharacters', checked) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.CheckboxField, { id: "blazetracker-trackscene", label: "Scene Tracking", description: "Extract scene topic, tone, tension, and recent events", checked: settings.trackScene, onChange: checked => onToggle('trackScene', checked) })] }));
 }
 // ============================================
 // Main Settings Panel Component
@@ -40628,10 +50301,14 @@ function SettingsPanel() {
         document.querySelectorAll('.bt-state-root').forEach(el => el.remove());
         setTimeout(() => (0,_stateDisplay__WEBPACK_IMPORTED_MODULE_4__.renderAllStates)(), 200);
     }, [handleUpdate]);
-    // Generic toggle handler for extraction settings
+    // Handler for boolean extraction toggles
     const handleExtractionToggle = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)((key, value) => {
         handleUpdate(key, value);
         setTimeout(() => (0,_stateDisplay__WEBPACK_IMPORTED_MODULE_4__.renderAllStates)(), 100);
+    }, [handleUpdate]);
+    // Handler for numeric extraction settings
+    const handleExtractionNumericChange = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)((key, value) => {
+        handleUpdate(key, value);
     }, [handleUpdate]);
     const handleTempUnitChange = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)((value) => {
         handleUpdate('temperatureUnit', value);
@@ -40661,18 +50338,18 @@ function SettingsPanel() {
         }
         handleUpdate('customTemperatures', newCustomTemperatures);
     }, [settings.customTemperatures, handleUpdate]);
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "blazetracker-settings-content", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-container flexFlowColumn", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: "blazetracker-profile", children: "Connection Profile" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: "Select which API connection to use for state extraction" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("select", { id: "blazetracker-profile", className: "text_pole", value: settings.profileId, onChange: e => handleUpdate('profileId', e.target.value), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "", children: "-- Select a profile --" }), profiles.map(profile => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: profile.id, children: profile.name || profile.id }, profile.id)))] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SelectField, { id: "blazetracker-automode", label: "Auto Mode", description: "When to automatically extract state", value: settings.autoMode, options: [
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "blazetracker-settings-content", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "flex-container flexFlowColumn", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: "blazetracker-profile", children: "Connection Profile" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("small", { children: "Select which API connection to use for state extraction" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("select", { id: "blazetracker-profile", className: "text_pole", value: settings.profileId, onChange: e => handleUpdate('profileId', e.target.value), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "", children: "-- Select a profile --" }), profiles.map(profile => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: profile.id, children: profile.name || profile.id }, profile.id)))] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.SelectField, { id: "blazetracker-automode", label: "Auto Mode", description: "When to automatically extract state", value: settings.autoMode, options: [
                     { value: 'none', label: 'None (manual only)' },
                     { value: 'responses', label: 'AI responses only' },
                     { value: 'inputs', label: 'User messages only' },
                     { value: 'both', label: 'Both' },
-                ], onChange: v => handleUpdate('autoMode', v) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(NumberField, { id: "blazetracker-lastx", label: "Max Messages to Include", description: "Max. number of recent messages to send for extraction context", value: settings.lastXMessages, min: 1, max: 50, step: 1, onChange: v => handleUpdate('lastXMessages', v) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(NumberField, { id: "blazetracker-maxtokens", label: "Max Response Tokens", description: "Maximum tokens for extraction response", value: settings.maxResponseTokens, min: 500, max: 8000, step: 100, onChange: v => handleUpdate('maxResponseTokens', v) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SelectField, { id: "blazetracker-position", label: "State Display Position", description: "Show state block above or below the message", value: settings.displayPosition, options: [
+                ], onChange: v => handleUpdate('autoMode', v) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.NumberField, { id: "blazetracker-lastx", label: "Max Messages to Include", description: "Max. number of recent messages to send for extraction context", value: settings.lastXMessages, min: 1, max: 50, step: 1, onChange: v => handleUpdate('lastXMessages', v) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.NumberField, { id: "blazetracker-maxtokens", label: "Max Response Tokens", description: "Maximum tokens for extraction response", value: settings.maxResponseTokens, min: 500, max: 8000, step: 100, onChange: v => handleUpdate('maxResponseTokens', v) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.SelectField, { id: "blazetracker-position", label: "State Display Position", description: "Show state block above or below the message", value: settings.displayPosition, options: [
                     { value: 'below', label: 'Below message' },
                     { value: 'above', label: 'Above message' },
-                ], onChange: handlePositionChange }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(ExtractionTogglesSection, { settings: settings, onToggle: handleExtractionToggle }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SelectField, { id: "blazetracker-tempunit", label: "Temperature Unit", description: "Display temperatures in Fahrenheit or Celsius", value: settings.temperatureUnit, options: [
+                ], onChange: handlePositionChange }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(ExtractionTogglesSection, { settings: settings, onToggle: handleExtractionToggle, onNumericChange: handleExtractionNumericChange }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.SelectField, { id: "blazetracker-tempunit", label: "Temperature Unit", description: "Display temperatures in Fahrenheit or Celsius", value: settings.temperatureUnit, options: [
                     { value: 'fahrenheit', label: 'Fahrenheit (°F)' },
                     { value: 'celsius', label: 'Celsius (°C)' },
-                ], onChange: handleTempUnitChange }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SelectField, { id: "blazetracker-timeformat", label: "Time Format", description: "Display time in 12-hour or 24-hour format", value: settings.timeFormat, options: [
+                ], onChange: handleTempUnitChange }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.SelectField, { id: "blazetracker-timeformat", label: "Time Format", description: "Display time in 12-hour or 24-hour format", value: settings.timeFormat, options: [
                     { value: '24h', label: '24-hour (14:30)' },
                     { value: '12h', label: '12-hour (2:30 PM)' },
                 ], onChange: handleTimeFormatChange }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("hr", {}), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(PromptsSection, { customPrompts: settings.customPrompts, customTemperatures: settings.customTemperatures, onUpdatePrompt: handlePromptUpdate, onUpdateTemperature: handleTemperatureUpdate })] }));
@@ -40722,7 +50399,6 @@ async function initSettingsUI() {
         settingsRoot = react_dom_client__WEBPACK_IMPORTED_MODULE_2__.createRoot(root);
         settingsRoot.render((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SettingsPanel, {}));
     }
-    console.log('[BlazeTracker] Settings UI initialized');
 }
 function unmountSettingsUI() {
     if (settingsRoot) {
@@ -40740,7 +50416,7 @@ function unmountSettingsUI() {
   \*********************************/
 (module, __unused_webpack_exports, __webpack_require__) {
 
-module.exports = __webpack_require__.p + "b25f02397c9a4212814f.css";
+module.exports = __webpack_require__.p + "170df1f11bc13c62df91.css";
 
 /***/ },
 
@@ -40757,23 +50433,32 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   extractionInProgress: () => (/* binding */ extractionInProgress),
 /* harmony export */   initStateDisplay: () => (/* binding */ initStateDisplay),
 /* harmony export */   injectStyles: () => (/* binding */ injectStyles),
+/* harmony export */   isManualExtractionInProgress: () => (/* binding */ isManualExtractionInProgress),
 /* harmony export */   renderAllStates: () => (/* binding */ renderAllStates),
 /* harmony export */   renderMessageState: () => (/* binding */ renderMessageState),
+/* harmony export */   setManualExtractionInProgress: () => (/* binding */ setManualExtractionInProgress),
+/* harmony export */   unmountAllRoots: () => (/* binding */ unmountAllRoots),
 /* harmony export */   unmountMessageState: () => (/* binding */ unmountMessageState)
 /* harmony export */ });
 /* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
-/* harmony import */ var react_dom_client__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react-dom/client */ "./node_modules/react-dom/client.js");
-/* harmony import */ var sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! sillytavern-utils-lib/config */ "./node_modules/sillytavern-utils-lib/dist/config.js");
-/* harmony import */ var _extractors_extractState__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../extractors/extractState */ "./src/extractors/extractState.ts");
-/* harmony import */ var _extractors_extractionProgress__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../extractors/extractionProgress */ "./src/extractors/extractionProgress.ts");
-/* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../utils/messageState */ "./src/utils/messageState.ts");
-/* harmony import */ var _stateEditor__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./stateEditor */ "./src/ui/stateEditor.tsx");
-/* harmony import */ var _injectors_injectState__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../injectors/injectState */ "./src/injectors/injectState.ts");
-/* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
-/* harmony import */ var _extractors_extractTime__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../extractors/extractTime */ "./src/extractors/extractTime.ts");
-/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../constants */ "./src/constants.ts");
-/* harmony import */ var _utils_temperatures__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../utils/temperatures */ "./src/utils/temperatures.ts");
-/* harmony import */ var _utils_timeFormat__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../utils/timeFormat */ "./src/utils/timeFormat.ts");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var react_dom_client__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! react-dom/client */ "./node_modules/react-dom/client.js");
+/* harmony import */ var sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! sillytavern-utils-lib/config */ "./node_modules/sillytavern-utils-lib/dist/config.js");
+/* harmony import */ var _extractors_extractState__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../extractors/extractState */ "./src/extractors/extractState.ts");
+/* harmony import */ var _extractors_extractionProgress__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../extractors/extractionProgress */ "./src/extractors/extractionProgress.ts");
+/* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../utils/messageState */ "./src/utils/messageState.ts");
+/* harmony import */ var _stateEditor__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./stateEditor */ "./src/ui/stateEditor.tsx");
+/* harmony import */ var _injectors_injectState__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../injectors/injectState */ "./src/injectors/injectState.ts");
+/* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
+/* harmony import */ var _extractors_extractTime__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../extractors/extractTime */ "./src/extractors/extractTime.ts");
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../constants */ "./src/constants.ts");
+/* harmony import */ var _formatters__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./formatters */ "./src/ui/formatters.ts");
+/* harmony import */ var _components_display__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./components/display */ "./src/ui/components/display/index.ts");
+/* harmony import */ var _components_EventList__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./components/EventList */ "./src/ui/components/EventList.tsx");
+/* harmony import */ var _components_NarrativeModal__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./components/NarrativeModal */ "./src/ui/components/NarrativeModal.tsx");
+/* harmony import */ var _state_narrativeState__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ../state/narrativeState */ "./src/state/narrativeState.ts");
+/* harmony import */ var _state_relationships__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ../state/relationships */ "./src/state/relationships.ts");
 
 
 
@@ -40787,122 +50472,105 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-// --- Icon Mappings (UI concern, lives here not in state types) ---
-const TENSION_LEVEL_ICONS = {
-    relaxed: 'fa-mug-hot',
-    aware: 'fa-eye',
-    guarded: 'fa-shield-halved',
-    tense: 'fa-face-grimace',
-    charged: 'fa-bolt',
-    volatile: 'fa-fire',
-    explosive: 'fa-explosion',
-};
-const TENSION_DIRECTION_ICONS = {
-    escalating: 'fa-arrow-trend-up',
-    stable: 'fa-grip-lines',
-    decreasing: 'fa-arrow-trend-down',
-};
-const TENSION_TYPE_ICONS = {
-    confrontation: 'fa-hand-fist',
-    intimate: 'fa-heart',
-    vulnerable: 'fa-heart-crack',
-    celebratory: 'fa-champagne-glasses',
-    negotiation: 'fa-handshake',
-    suspense: 'fa-hourglass-half',
-    conversation: 'fa-comments',
-};
-const WEATHER_ICONS = {
-    sunny: 'fa-sun',
-    cloudy: 'fa-cloud',
-    snowy: 'fa-snowflake',
-    rainy: 'fa-cloud-rain',
-    windy: 'fa-wind',
-    thunderstorm: 'fa-cloud-bolt',
-};
+
+
+
+
+
 // Track React roots so we can unmount/update them
 const roots = new Map();
 // Track ongoing extractions - exported so index.ts can check
 const extractionInProgress = new Set();
+// Track manual extraction in progress (prevents auto-extraction during manual)
+let manualExtractionInProgress = false;
 // Track current extraction step for UI updates
 let currentExtractionStep = 'idle';
 let currentExtractionMessageId = null;
-// --- Helper Functions ---
-function formatTime(time) {
-    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_8__.getSettings)();
-    const MONTH_NAMES = [
-        'January',
-        'February',
-        'March',
-        'April',
-        'May',
-        'June',
-        'July',
-        'August',
-        'September',
-        'October',
-        'November',
-        'December',
-    ];
-    const month = MONTH_NAMES[time.month - 1];
-    // "Mon, Jan 15, 14:30"
-    return `${time.dayOfWeek.slice(0, 3)}, ${month} ${time.day} ${time.year}, ${(0,_utils_timeFormat__WEBPACK_IMPORTED_MODULE_12__.applyTimeFormat)(time.hour, time.minute, settings.timeFormat)}`;
+/**
+ * Check if a manual extraction is currently in progress.
+ */
+function isManualExtractionInProgress() {
+    return manualExtractionInProgress;
 }
-function formatLocation(location) {
-    const parts = [location.position, location.place, location.area];
-    return parts.filter(Boolean).join(' · ');
+/**
+ * Set the manual extraction flag.
+ */
+function setManualExtractionInProgress(value) {
+    manualExtractionInProgress = value;
 }
-function formatOutfit(outfit) {
-    const outfitParts = [
-        outfit.torso || 'topless',
-        outfit.legs || 'bottomless',
-        outfit.underwear || 'no underwear',
-        outfit.head || null,
-        outfit.jacket || null,
-        outfit.footwear || null,
-    ];
-    return outfitParts.filter((v) => v !== null).join(', ');
-}
-function getWeatherIcon(weather) {
-    return WEATHER_ICONS[weather] ?? 'fa-question';
-}
-function SceneDisplay({ scene }) {
-    const { tension } = scene;
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-scene", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-scene-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-scene-topic", children: scene.topic }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-scene-tone", children: scene.tone })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-scene-tension", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-tension-type", title: tension.type, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${TENSION_TYPE_ICONS[tension.type]}` }), tension.type] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-tension-level", title: tension.level, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${TENSION_LEVEL_ICONS[tension.level]}` }), tension.level] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-tension-direction", title: tension.direction, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${TENSION_DIRECTION_ICONS[tension.direction]}` }), tension.direction] })] }), scene.recentEvents.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-scene-events", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: scene.recentEvents.map((event, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("li", { children: event }, idx))) }) }))] }));
-}
-function Character({ character }) {
-    const mood = character.mood?.join(', ') || 'unknown';
-    // Parse dispositions into array format
-    let dispositions = [];
-    if (character.dispositions && typeof character.dispositions === 'object') {
-        if (Array.isArray(character.dispositions)) {
-            dispositions = character.dispositions;
+function StateDisplay({ stateData, narrativeState, messageId, isExtracting, extractionStep, }) {
+    const [showModal, setShowModal] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
+    const handleOpenModal = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)(() => {
+        setShowModal(true);
+    }, []);
+    const handleCloseModal = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)(() => {
+        setShowModal(false);
+    }, []);
+    // Handle saving narrative state from the modal
+    const handleNarrativeSave = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)(async (updatedState, deletedEvents, updatedCurrentEvents) => {
+        const context = SillyTavern.getContext();
+        // Save the narrative state
+        await (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_16__.saveNarrativeState)(updatedState);
+        // Sync deleted events: remove from affected messages' currentEvents
+        if (deletedEvents.length > 0 || updatedCurrentEvents) {
+            // Group deletions by messageId
+            const deletionsByMessage = new Map();
+            for (const del of deletedEvents) {
+                if (!deletionsByMessage.has(del.messageId)) {
+                    deletionsByMessage.set(del.messageId, new Set());
+                }
+                deletionsByMessage.get(del.messageId).add(del.summary);
+            }
+            // Update each affected message
+            for (const [messageId, deletedSummaries] of deletionsByMessage) {
+                const message = context.chat[messageId];
+                if (!message)
+                    continue;
+                const msgStateData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.getMessageState)(message);
+                if (!msgStateData?.state.currentEvents)
+                    continue;
+                // Filter out deleted events
+                msgStateData.state.currentEvents =
+                    msgStateData.state.currentEvents.filter(event => !deletedSummaries.has(event.summary));
+                (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.setMessageState)(message, msgStateData);
+            }
+            // If we have updated current events, update the most recent message
+            if (updatedCurrentEvents && context.chat.length > 0) {
+                // Find the most recent message that has state
+                for (let i = context.chat.length - 1; i >= 0; i--) {
+                    const message = context.chat[i];
+                    const msgStateData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.getMessageState)(message);
+                    if (msgStateData?.state) {
+                        msgStateData.state.currentEvents =
+                            updatedCurrentEvents;
+                        (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.setMessageState)(message, msgStateData);
+                        break;
+                    }
+                }
+            }
+            await context.saveChat();
         }
-        else {
-            dispositions = Object.entries(character.dispositions).map(([name, feelings]) => ({
-                toward: name,
-                feelings: feelings,
-            }));
-        }
-    }
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-character", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("strong", { children: character.name }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-char-mood", children: mood })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-position", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-crosshairs", title: "Position" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.position })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-details", children: [character.goals && character.goals.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-goals", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-bullseye", title: "Goals" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.goals.join(', ') })] })), character.activity && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-activity", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-person-walking", title: "Activity" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.activity })] })), character.physicalState && character.physicalState.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-physical", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-heart-pulse", title: "Physical state" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: character.physicalState.join(', ') })] })), character.outfit && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-row bt-char-outfit", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-shirt", title: "Outfit" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: formatOutfit(character.outfit) })] }))] }), dispositions.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-char-dispositions", children: dispositions.map((d, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-disposition", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-arrow-right", title: `Feelings toward ${d.toward}` }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-disposition-target", children: [d.toward, ":"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-disposition-feelings", children: d.feelings.join(', ') })] }, idx))) }))] }));
-}
-function StateDisplay({ stateData, isExtracting, extractionStep }) {
+        // Re-render all states to reflect the changes
+        renderAllStates();
+    }, []);
     // Show loading state while extracting
     if (isExtracting) {
-        const stepLabel = extractionStep ? (0,_extractors_extractionProgress__WEBPACK_IMPORTED_MODULE_4__.getStepLabel)(extractionStep) : 'Extracting...';
-        return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-state-container bt-extracting", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-loading-indicator", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-fire fa-beat-fade" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: stepLabel })] }) }));
+        const stepLabel = extractionStep ? (0,_extractors_extractionProgress__WEBPACK_IMPORTED_MODULE_5__.getStepLabel)(extractionStep) : 'Extracting...';
+        return (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_display__WEBPACK_IMPORTED_MODULE_13__.LoadingIndicator, { stepLabel: stepLabel });
     }
     if (!stateData) {
         return null;
     }
     const { state } = stateData;
-    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_8__.getSettings)();
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_9__.getSettings)();
     // Determine what to show based on settings AND data availability
     const showTime = settings.trackTime !== false && state.time;
     const showLocation = settings.trackLocation !== false && state.location;
     const showClimate = settings.trackClimate !== false && state.climate;
     const showScene = settings.trackScene !== false && state.scene;
-    const showCharacters = settings.trackCharacters !== false && state.characters && state.characters.length > 0;
+    const showCharacters = settings.trackCharacters !== false &&
+        state.characters &&
+        state.characters.length > 0;
     // If nothing to show, render nothing
     const hasAnythingToShow = showTime || showLocation || showClimate || showScene || showCharacters;
     if (!hasAnythingToShow) {
@@ -40912,28 +50580,59 @@ function StateDisplay({ stateData, isExtracting, extractionStep }) {
     const characterCount = state.characters?.length ?? 0;
     const propsCount = state.location?.props?.length ?? 0;
     const showDetails = (showCharacters && characterCount > 0) || (showLocation && propsCount > 0);
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-container", children: [(showTime || showClimate || showLocation) && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-summary", children: [showTime && state.time && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-time", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), ' ', formatTime(state.time)] })), showClimate && state.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-climate", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${getWeatherIcon(state.climate.weather)}` }), state.climate.temperature !== undefined &&
-                                ` ${(0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_11__.formatTemperature)(state.climate.temperature, settings.temperatureUnit)}`] })), showLocation && state.location && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-location", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), ' ', formatLocation(state.location)] }))] })), showScene && state.scene ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(SceneDisplay, { scene: state.scene })) : showScene && !state.scene ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-scene-pending", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-hourglass-half" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Scene analysis will happen after first character response" })] })) : null, showDetails && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("details", { className: "bt-state-details", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("summary", { children: ["Details", showCharacters && characterCount > 0 && ` (${characterCount} characters`, showLocation && propsCount > 0 && `${showCharacters && characterCount > 0 ? ', ' : ' ('}${propsCount} props`, (showCharacters && characterCount > 0) || (showLocation && propsCount > 0) ? ')' : ''] }), showLocation && state.location && state.location.props && state.location.props.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-props-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-props-header", children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-props", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: state.location.props.map((prop, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("li", { children: prop }, idx))) }) })] })), showCharacters && state.characters && state.characters.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-characters", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(Character, { character: char }, `${char.name}-${idx}`))) }))] }))] }));
+    // Get relationships for character cards, versioned to this message's time
+    const allRelationships = narrativeState?.relationships ?? [];
+    const relationships = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_17__.getRelationshipsAtMessage)(allRelationships, messageId);
+    // Get current events for display
+    const currentEvents = state.currentEvents ?? [];
+    const showEvents = currentEvents.length > 0;
+    // Get present character names for context
+    const presentCharacters = state.characters?.map(c => c.name) ?? [];
+    // Check if narrative modal should be available (has chapters or relationships)
+    const hasNarrativeContent = narrativeState &&
+        (narrativeState.chapters.length > 0 || narrativeState.relationships.length > 0);
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-container", children: [(showTime || showClimate || showLocation) && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-state-summary", children: [showTime && state.time && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-time", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), ' ', (0,_formatters__WEBPACK_IMPORTED_MODULE_12__.formatTime)(state.time, settings.timeFormat)] })), showClimate && state.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_display__WEBPACK_IMPORTED_MODULE_13__.ClimateDisplay, { climate: state.climate, temperatureUnit: settings.temperatureUnit })), showLocation && state.location && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-location", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), ' ', (0,_formatters__WEBPACK_IMPORTED_MODULE_12__.formatLocation)(state.location)] }))] })), showScene && state.scene ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_display__WEBPACK_IMPORTED_MODULE_13__.SceneDisplay, { scene: state.scene, onMoreInfoClick: hasNarrativeContent ? handleOpenModal : undefined })) : showScene && !state.scene ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-scene-pending", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-hourglass-half" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Scene analysis will happen after first character response" })] })) : null, state.chapterEnded ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-current-events", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-ended", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-chapter-ended-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-book" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-chapter-ended-title", children: ["Chapter ", state.chapterEnded.index + 1, ":", ' ', state.chapterEnded.title] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-chapter-ended-badge", children: [state.chapterEnded.reason ===
+                                            'location_change' &&
+                                            'Location changed', state.chapterEnded.reason ===
+                                            'time_jump' && 'Time skip', state.chapterEnded.reason === 'both' &&
+                                            'Location + Time', state.chapterEnded.reason === 'manual' &&
+                                            'Manual'] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chapter-ended-summary", children: state.chapterEnded.summary }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chapter-ended-stats", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { children: [state.chapterEnded.eventCount, " events archived"] }) })] }) })) : showEvents ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-current-events", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_EventList__WEBPACK_IMPORTED_MODULE_14__.EventList, { events: currentEvents.slice(-3), presentCharacters: presentCharacters, maxEvents: 3 }), currentEvents.length > 3 && hasNarrativeContent && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { className: "bt-view-all-events", onClick: handleOpenModal, children: ["View all ", currentEvents.length, " events..."] }))] })) : null, showDetails && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("details", { className: "bt-state-details", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("summary", { children: ["Details", showCharacters &&
+                                characterCount > 0 &&
+                                ` (${characterCount} characters`, showLocation &&
+                                propsCount > 0 &&
+                                `${showCharacters && characterCount > 0 ? ', ' : ' ('}${propsCount} props`, (showCharacters && characterCount > 0) ||
+                                (showLocation && propsCount > 0)
+                                ? ')'
+                                : ''] }), showLocation &&
+                        state.location &&
+                        state.location.props &&
+                        state.location.props.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-props-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-props-header", children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-props", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { children: state.location.props.map((prop, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("li", { children: prop }, idx))) }) })] })), showCharacters &&
+                        state.characters &&
+                        state.characters.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-characters", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_display__WEBPACK_IMPORTED_MODULE_13__.CharacterCard, { character: char, relationships: relationships }, `${char.name}-${idx}`))) }))] })), showModal && narrativeState && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_NarrativeModal__WEBPACK_IMPORTED_MODULE_15__.NarrativeModal, { narrativeState: narrativeState, currentEvents: currentEvents, presentCharacters: presentCharacters, onClose: handleCloseModal, onSave: handleNarrativeSave, initialTab: currentEvents.length > 3 ? 'events' : 'chapters' }))] }));
 }
 // --- State Extraction ---
 function getPreviousState(context, beforeMessageId) {
     for (let i = beforeMessageId - 1; i >= 0; i--) {
         const prev = context.chat[i];
-        const trackerData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_5__.getMessageState)(prev);
+        const trackerData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.getMessageState)(prev);
         if (trackerData?.state) {
             return trackerData.state;
         }
     }
     return null;
 }
-async function doExtractState(messageId) {
+async function doExtractState(messageId, options = {}) {
     if (extractionInProgress.has(messageId)) {
         return null;
+    }
+    // Set manual extraction flag if this is a manual trigger
+    if (options.isManual) {
+        setManualExtractionInProgress(true);
     }
     const context = SillyTavern.getContext();
     const message = context.chat[messageId];
     if (!message) {
-        console.warn(`[${_constants__WEBPACK_IMPORTED_MODULE_10__.EXTENSION_NAME}] Message not found:`, messageId);
+        console.warn(`[${_constants__WEBPACK_IMPORTED_MODULE_11__.EXTENSION_NAME}] Message not found:`, messageId);
         return null;
     }
     // Mark extraction in progress and track which message
@@ -40948,8 +50647,17 @@ async function doExtractState(messageId) {
         renderMessageStateInternal(messageId, messageElement, null, true, currentExtractionStep);
     }
     const previousState = getPreviousState(context, messageId);
+    // Clear milestones created by this message before re-extraction
+    // This applies to all triggers: swiping, editing, fire button, slash commands
+    const narrativeState = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_16__.getNarrativeState)();
+    if (narrativeState && narrativeState.relationships.length > 0) {
+        const removed = (0,_state_relationships__WEBPACK_IMPORTED_MODULE_17__.clearAllMilestonesForMessage)(narrativeState.relationships, messageId);
+        if (removed > 0) {
+            await (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_16__.saveNarrativeState)(narrativeState);
+        }
+    }
     try {
-        const { state } = await (0,_extractors_extractState__WEBPACK_IMPORTED_MODULE_3__.extractState)(context, messageId, previousState);
+        const { state } = await (0,_extractors_extractState__WEBPACK_IMPORTED_MODULE_4__.extractState)(context, messageId, previousState);
         const stateData = {
             state,
             extractedAt: new Date().toISOString(),
@@ -40957,8 +50665,17 @@ async function doExtractState(messageId) {
         if (!message.extra) {
             message.extra = {};
         }
-        (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_5__.setMessageState)(message, stateData);
+        (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.setMessageState)(message, stateData);
         await context.saveChat();
+        // Update subsequent messages if this isn't the last message (re-extraction case)
+        if (messageId < context.chat.length - 1) {
+            // Find the event that was extracted for this specific messageId
+            const newEvent = state.currentEvents?.find(e => e.messageId === messageId);
+            // Update subsequent messages' events
+            (0,_extractors_extractState__WEBPACK_IMPORTED_MODULE_4__.updateSubsequentMessagesEvents)(context, messageId, newEvent);
+            // Save again to persist the updated subsequent messages
+            await context.saveChat();
+        }
         // Render the extracted state
         if (messageElement) {
             renderMessageStateInternal(messageId, messageElement, stateData, false);
@@ -40967,11 +50684,11 @@ async function doExtractState(messageId) {
     }
     catch (e) {
         if (e.name === 'AbortError') {
-            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_2__.st_echo)?.('warning', '🔥 Extraction aborted');
+            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_3__.st_echo)?.('warning', '🔥 Extraction aborted');
         }
         else {
-            console.warn(`[${_constants__WEBPACK_IMPORTED_MODULE_10__.EXTENSION_NAME}] Extraction failed:`, e);
-            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_2__.st_echo)?.('error', `🔥 Extraction failed: ${e.message}`);
+            console.warn(`[${_constants__WEBPACK_IMPORTED_MODULE_11__.EXTENSION_NAME}] Extraction failed:`, e);
+            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_3__.st_echo)?.('error', `🔥 Extraction failed: ${e.message}`);
         }
         // Clear loading state on error
         if (messageElement) {
@@ -40983,6 +50700,10 @@ async function doExtractState(messageId) {
         extractionInProgress.delete(messageId);
         if (currentExtractionMessageId === messageId) {
             currentExtractionMessageId = null;
+        }
+        // Clear manual extraction flag if we set it
+        if (options.isManual) {
+            setManualExtractionInProgress(false);
         }
         updateMenuButtonState(messageId, false);
     }
@@ -41013,7 +50734,7 @@ function addMenuButton(messageId, messageElement) {
         extractBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            await doExtractState(messageId);
+            await doExtractState(messageId, { isManual: true });
         });
         extraButtons.insertBefore(extractBtn, extraButtons.firstChild);
     }
@@ -41039,7 +50760,7 @@ function addMenuButton(messageId, messageElement) {
 // --- Internal render function (when we already have the element) ---
 function renderMessageStateInternal(messageId, messageElement, stateData, isExtracting, extractionStep) {
     addMenuButton(messageId, messageElement);
-    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_8__.getSettings)();
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_9__.getSettings)();
     const isAbove = settings.displayPosition === 'above';
     let needsNewRoot = false;
     let container = messageElement.querySelector('.bt-state-root');
@@ -41067,10 +50788,12 @@ function renderMessageStateInternal(messageId, messageElement, stateData, isExtr
         root = undefined;
     }
     if (!root) {
-        root = react_dom_client__WEBPACK_IMPORTED_MODULE_1__.createRoot(container);
+        root = react_dom_client__WEBPACK_IMPORTED_MODULE_2__.createRoot(container);
         roots.set(messageId, root);
     }
-    root.render((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(StateDisplay, { stateData: stateData, isExtracting: isExtracting, extractionStep: extractionStep }));
+    // Get narrative state from message 0
+    const narrativeState = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_16__.getNarrativeState)();
+    root.render((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(StateDisplay, { stateData: stateData, narrativeState: narrativeState, messageId: messageId, isExtracting: isExtracting, extractionStep: extractionStep }));
     // If this is the most recent message, scroll to the end.
     const context = SillyTavern.getContext();
     if (messageId === context.chat.length - 1) {
@@ -41092,7 +50815,7 @@ function renderMessageState(messageId, stateData, isExtracting = false) {
         return;
     const currentStateData = stateData !== undefined
         ? stateData
-        : ((0,_utils_messageState__WEBPACK_IMPORTED_MODULE_5__.getMessageState)(message) ?? null);
+        : ((0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.getMessageState)(message) ?? null);
     renderMessageStateInternal(messageId, messageElement, currentStateData, isExtracting);
 }
 /** Clear loading state (used when extraction is handled elsewhere) */
@@ -41107,59 +50830,64 @@ function unmountMessageState(messageId) {
         roots.delete(messageId);
     }
 }
+/**
+ * Unmount all React roots and clear DOM containers.
+ * Use this before bulk operations like bt-extract-all.
+ */
+function unmountAllRoots() {
+    // Remove all DOM containers
+    document.querySelectorAll('.bt-state-root').forEach(el => el.remove());
+    // Unmount all React roots
+    for (const [_messageId, root] of roots) {
+        root.unmount();
+    }
+    roots.clear();
+}
 function renderAllStates() {
     const context = SillyTavern.getContext();
     // Reset time tracker first
-    (0,_extractors_extractTime__WEBPACK_IMPORTED_MODULE_9__.resetTimeTracker)();
+    (0,_extractors_extractTime__WEBPACK_IMPORTED_MODULE_10__.resetTimeTracker)();
     // Find most recent message with state and initialize time tracker
     for (let i = context.chat.length - 1; i >= 0; i--) {
         const msg = context.chat[i];
-        const stored = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_5__.getMessageState)(msg);
+        const stored = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.getMessageState)(msg);
         if (stored?.state?.time) {
-            (0,_extractors_extractTime__WEBPACK_IMPORTED_MODULE_9__.setTimeTrackerState)(stored.state.time);
+            (0,_extractors_extractTime__WEBPACK_IMPORTED_MODULE_10__.setTimeTrackerState)(stored.state.time);
             break;
         }
     }
-    // Unmount and remove roots that aren't mid-extraction
-    document.querySelectorAll('.bt-state-root').forEach(el => el.remove());
-    for (const [messageId, root] of roots) {
-        if (!extractionInProgress.has(messageId)) {
-            root.unmount();
-            roots.delete(messageId);
-        }
-    }
-    // Re-render all non-in-progress messages
+    // Unmount all roots and clear DOM containers
+    unmountAllRoots();
+    // Re-render all messages
     for (let i = 0; i < context.chat.length; i++) {
-        if (!extractionInProgress.has(i)) {
-            renderMessageState(i);
-        }
+        renderMessageState(i);
     }
 }
 async function editMessageState(messageId) {
     const context = SillyTavern.getContext();
     const message = context.chat[messageId];
     if (!message) {
-        (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_2__.st_echo)?.('error', 'Message not found');
+        (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_3__.st_echo)?.('error', 'Message not found');
         return;
     }
-    const currentStateData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_5__.getMessageState)(message);
+    const currentStateData = (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.getMessageState)(message);
     const currentState = currentStateData?.state || null;
-    const _saved = await (0,_stateEditor__WEBPACK_IMPORTED_MODULE_6__.openStateEditor)(currentState, async (newState) => {
+    const _saved = await (0,_stateEditor__WEBPACK_IMPORTED_MODULE_7__.openStateEditor)(currentState, async (newState) => {
         const stateData = {
             state: newState,
             extractedAt: new Date().toISOString(),
         };
-        (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_5__.setMessageState)(message, stateData);
+        (0,_utils_messageState__WEBPACK_IMPORTED_MODULE_6__.setMessageState)(message, stateData);
         await context.saveChat();
         renderMessageState(messageId, stateData);
-        (0,_injectors_injectState__WEBPACK_IMPORTED_MODULE_7__.updateInjectionFromChat)();
-        (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_2__.st_echo)?.('success', '🔥 State updated');
+        (0,_injectors_injectState__WEBPACK_IMPORTED_MODULE_8__.updateInjectionFromChat)();
+        (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_3__.st_echo)?.('success', '🔥 State updated');
     });
 }
 function initStateDisplay() {
     const context = SillyTavern.getContext();
     // Wire up extraction progress updates
-    (0,_extractors_extractionProgress__WEBPACK_IMPORTED_MODULE_4__.onExtractionProgress)((progress) => {
+    (0,_extractors_extractionProgress__WEBPACK_IMPORTED_MODULE_5__.onExtractionProgress)((progress) => {
         currentExtractionStep = progress.step;
         // Re-render the extracting message to show updated step
         if (currentExtractionMessageId !== null &&
@@ -41172,7 +50900,7 @@ function initStateDisplay() {
     });
     // Only handle chat change for initial render - let index.ts handle message events
     context.eventSource.on(context.event_types.CHAT_CHANGED, (() => {
-        (0,_extractors_extractTime__WEBPACK_IMPORTED_MODULE_9__.resetTimeTracker)();
+        (0,_extractors_extractTime__WEBPACK_IMPORTED_MODULE_10__.resetTimeTracker)();
         setTimeout(renderAllStates, 100);
     }));
 }
@@ -41217,6 +50945,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var react_dom_client__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! react-dom/client */ "./node_modules/react-dom/client.js");
 /* harmony import */ var _utils_temperatures__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../utils/temperatures */ "./src/utils/temperatures.ts");
 /* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./constants */ "./src/ui/constants.ts");
+/* harmony import */ var _components_form__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./components/form */ "./src/ui/components/form/index.ts");
+/* harmony import */ var _weather__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../weather */ "./src/weather/index.ts");
 
 /**
  * BlazeTracker State Editor
@@ -41225,57 +50956,15 @@ __webpack_require__.r(__webpack_exports__);
  * Uses ST's popup system to display.
  *
  * Only shows sections for fields that exist in the state.
- * Preserves optionality - undefined fields stay undefined.
+ * Preserves optionality - undefined fields stays undefined.
  */
 
 
 
 
-// --- Constants from Schema ---
-const WEATHER_OPTIONS = ['sunny', 'cloudy', 'snowy', 'rainy', 'windy', 'thunderstorm'];
-const DAYS_OF_WEEK = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-];
-const MONTH_NAMES = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-];
-const OUTFIT_SLOTS = ['head', 'jacket', 'torso', 'legs', 'underwear', 'socks', 'footwear'];
-const TENSION_LEVELS = [
-    'relaxed',
-    'aware',
-    'guarded',
-    'tense',
-    'charged',
-    'volatile',
-    'explosive',
-];
-const TENSION_DIRECTIONS = ['escalating', 'stable', 'decreasing'];
-const TENSION_TYPES = [
-    'confrontation',
-    'intimate',
-    'vulnerable',
-    'celebratory',
-    'negotiation',
-    'suspense',
-    'conversation',
-];
+
+
+
 // --- Helper Functions ---
 function getDaysInMonth(year, month) {
     // Day 0 of next month = last day of this month
@@ -41283,26 +50972,28 @@ function getDaysInMonth(year, month) {
 }
 function getDayOfWeek(year, month, day) {
     const date = new Date(year, month - 1, day);
-    return DAYS_OF_WEEK[date.getDay()];
+    return _constants__WEBPACK_IMPORTED_MODULE_5__.DAYS_OF_WEEK[date.getDay()];
 }
 function createEmptyCharacter() {
     return {
         name: '',
         position: '',
         activity: '',
-        goals: [],
+        // Note: goals removed in v1.0.0, now tracked in CharacterArc
         mood: [],
         physicalState: [],
         outfit: {
             head: null,
+            neck: null,
             jacket: null,
+            back: null,
             torso: null,
             legs: null,
             socks: null,
             underwear: null,
             footwear: null,
         },
-        dispositions: {},
+        // Note: dispositions removed in v1.0.0, now tracked in Relationship
     };
 }
 function createEmptyTime() {
@@ -41314,7 +51005,7 @@ function createEmptyTime() {
         hour: 12,
         minute: 0,
         second: 0,
-        dayOfWeek: DAYS_OF_WEEK[now.getDay()],
+        dayOfWeek: _constants__WEBPACK_IMPORTED_MODULE_5__.DAYS_OF_WEEK[now.getDay()],
     };
 }
 function createEmptyLocation() {
@@ -41340,7 +51031,7 @@ function createEmptyScene() {
             direction: 'stable',
             type: 'conversation',
         },
-        recentEvents: [],
+        // Note: recentEvents removed in v1.0.0, replaced by currentEvents on TrackedState
     };
 }
 function cloneState(state) {
@@ -41394,8 +51085,15 @@ function validateState(state) {
     }
     // Climate (only validate if present)
     if (state.climate) {
-        if (!WEATHER_OPTIONS.includes(state.climate.weather)) {
-            errors['climate.weather'] = 'Invalid weather';
+        if ((0,_weather__WEBPACK_IMPORTED_MODULE_7__.isLegacyClimate)(state.climate)) {
+            if (!_constants__WEBPACK_IMPORTED_MODULE_5__.WEATHER_OPTIONS.includes(state.climate.weather)) {
+                errors['climate.weather'] = 'Invalid weather';
+            }
+        }
+        else {
+            if (!_constants__WEBPACK_IMPORTED_MODULE_5__.WEATHER_CONDITIONS.includes(state.climate.conditionType)) {
+                errors['climate.conditionType'] = 'Invalid condition type';
+            }
         }
     }
     // Characters (only validate if present)
@@ -41412,73 +51110,20 @@ function validateState(state) {
     return errors;
 }
 // --- Sub-Components ---
-/** Tag input for arrays of strings (mood, physicalState, etc.) */
-function TagInput({ tags, onChange, placeholder = 'Add...', }) {
-    const [input, setInput] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
-    const addTag = () => {
-        const trimmed = input.trim();
-        if (trimmed && !tags.includes(trimmed)) {
-            onChange([...tags, trimmed]);
-            setInput('');
-        }
-    };
-    const removeTag = (tag) => {
-        onChange(tags.filter(t => t !== tag));
-    };
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tag-input", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-tags", children: tags.map(tag => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-tag", children: [tag, (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: () => removeTag(tag), className: "bt-tag-x", children: "\u00D7" })] }, tag))) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tag-add", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: input, onChange: e => setInput(e.target.value), onKeyDown: e => e.key === 'Enter' && (e.preventDefault(), addTag()), placeholder: placeholder }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: addTag, children: "+" })] })] }));
-}
-/** Event list editor - similar to TagInput but for longer items */
-function EventListEditor({ events, onChange, }) {
-    const [input, setInput] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
-    const addEvent = () => {
-        const trimmed = input.trim();
-        if (trimmed && !events.includes(trimmed)) {
-            onChange([...events, trimmed]);
-            setInput('');
-        }
-    };
-    const removeEvent = (idx) => {
-        onChange(events.filter((_, i) => i !== idx));
-    };
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-list", children: [events.map((event, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-item", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-event-text", children: event }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: () => removeEvent(idx), className: "bt-x", children: "\u00D7" })] }, idx))), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-event-add", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: input, onChange: e => setInput(e.target.value), onKeyDown: e => e.key === 'Enter' &&
-                            (e.preventDefault(), addEvent()), placeholder: "Add recent event..." }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: addEvent, children: "+" })] }), events.length >= 5 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-event-hint", children: "Max 5 events recommended" }))] }));
-}
-/** Outfit editor with nullable slots */
-function OutfitEditor({ outfit, onChange, }) {
-    const update = (slot, value) => {
-        onChange({ ...outfit, [slot]: value || null });
-    };
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-outfit-grid", children: OUTFIT_SLOTS.map(slot => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-outfit-slot", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: slot }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-outfit-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: outfit[slot] || '', onChange: e => update(slot, e.target.value), placeholder: "None" }), outfit[slot] && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: () => update(slot, null), className: "bt-x", children: "\u00D7" }))] })] }, slot))) }));
-}
-/** Dispositions editor - feelings toward other characters */
-function DispositionsEditor({ dispositions, otherNames, onChange, }) {
-    const [selectedName, setSelectedName] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
-    const addDisposition = (name) => {
-        if (name && !dispositions[name]) {
-            onChange({ ...dispositions, [name]: [] });
-        }
-        setSelectedName('');
-    };
-    const updateFeelings = (name, feelings) => {
-        onChange({ ...dispositions, [name]: feelings });
-    };
-    const removeDisposition = (name) => {
-        const { [name]: _, ...rest } = dispositions;
-        onChange(rest);
-    };
-    // Names not yet in dispositions
-    const availableNames = otherNames.filter(n => !dispositions[n]);
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-dispositions", children: [Object.entries(dispositions).map(([name, feelings]) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-disposition-item", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-disposition-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-disposition-name", children: ["\u2192 ", name] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: () => removeDisposition(name), className: "bt-x", children: "\u00D7" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(TagInput, { tags: feelings, onChange: f => updateFeelings(name, f), placeholder: "Add feeling..." })] }, name))), availableNames.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-add-disposition", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("select", { value: selectedName, onChange: e => setSelectedName(e.target.value), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "", children: "Add feelings toward..." }), availableNames.map(name => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: name, children: name }, name)))] }), selectedName && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: () => addDisposition(selectedName), children: "+" }))] }))] }));
-}
 /** Character editor */
-function CharacterEditor({ character, index, onChange, onRemove, otherNames, errors, }) {
+function CharacterEditor({ character, index, onChange, onRemove, otherNames: _otherNames, errors, }) {
     const update = (field, value) => {
         onChange({ ...character, [field]: value });
     };
     return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-char-editor", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("details", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("summary", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-char-name", children: character.name || `Character ${index + 1}` }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: e => {
                                 e.preventDefault();
                                 onRemove();
-                            }, className: "bt-x", children: "\u00D7" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-fields", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Name *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: character.name, onChange: e => update('name', e.target.value), className: errors[`char.${index}.name`] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Activity" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: character.activity || '', onChange: e => update('activity', e.target.value || undefined) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Position *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: character.position, onChange: e => update('position', e.target.value), className: errors[`char.${index}.position`] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Mood" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(TagInput, { tags: character.mood || [], onChange: t => update('mood', t), placeholder: "anxious, hopeful..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Goals" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(TagInput, { tags: character.goals || [], onChange: t => update('goals', t), placeholder: "find the artifact..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Physical State" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(TagInput, { tags: character.physicalState || [], onChange: t => update('physicalState', t), placeholder: "tired, injured..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Outfit" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(OutfitEditor, { outfit: character.outfit, onChange: o => update('outfit', o) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Dispositions" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(DispositionsEditor, { dispositions: character.dispositions || {}, otherNames: otherNames, onChange: d => update('dispositions', d) })] })] })] }) }));
+                            }, className: "bt-x", children: "\u00D7" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-char-fields", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Name *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: character.name, onChange: e => update('name', e.target.value), className: errors[`char.${index}.name`]
+                                                ? 'bt-err'
+                                                : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Activity" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: character.activity || '', onChange: e => update('activity', e.target.value ||
+                                                undefined) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Position *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: character.position, onChange: e => update('position', e.target.value), className: errors[`char.${index}.position`]
+                                        ? 'bt-err'
+                                        : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Mood" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.TagInput, { tags: character.mood || [], onChange: t => update('mood', t), placeholder: "anxious, hopeful..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Physical State" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.TagInput, { tags: character.physicalState || [], onChange: t => update('physicalState', t), placeholder: "tired, injured..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Outfit" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.OutfitEditor, { outfit: character.outfit, onChange: o => update('outfit', o) })] })] })] }) }));
 }
 // --- Main Component ---
 function StateEditor({ initialState, onSave, onCancel }) {
@@ -41559,7 +51204,7 @@ function StateEditor({ initialState, onSave, onCancel }) {
             return { ...s, location: { ...s.location, [field]: value } };
         });
     };
-    // Climate
+    // Climate (handles both legacy Climate and ProceduralClimate)
     const updateClimate = (field, value) => {
         setState(s => {
             if (!s.climate)
@@ -41607,19 +51252,34 @@ function StateEditor({ initialState, onSave, onCancel }) {
     const addCharacters = () => setState(s => ({ ...s, characters: [] }));
     // Remove sections (switch tabs if needed)
     const removeTime = () => {
-        setState(s => { const { time, ...rest } = s; return rest; });
+        setState(s => {
+            const { time: _time, ...rest } = s;
+            return rest;
+        });
     };
     const removeLocation = () => {
-        setState(s => { const { location, ...rest } = s; return rest; });
+        setState(s => {
+            const { location: _location, ...rest } = s;
+            return rest;
+        });
     };
     const removeClimate = () => {
-        setState(s => { const { climate, ...rest } = s; return rest; });
+        setState(s => {
+            const { climate: _climate, ...rest } = s;
+            return rest;
+        });
     };
     const removeScene = () => {
-        setState(s => { const { scene, ...rest } = s; return rest; });
+        setState(s => {
+            const { scene: _scene, ...rest } = s;
+            return rest;
+        });
     };
     const removeCharacters = () => {
-        setState(s => { const { characters, ...rest } = s; return rest; });
+        setState(s => {
+            const { characters: _characters, ...rest } = s;
+            return rest;
+        });
         // Switch to scene tab since characters tab will be gone
         setTab('scene');
     };
@@ -41633,9 +51293,7 @@ function StateEditor({ initialState, onSave, onCancel }) {
     };
     const hasErrors = Object.keys(errors).length > 0;
     // Calculate max days for current month (only if time exists)
-    const maxDaysInMonth = hasTime && state.time
-        ? getDaysInMonth(state.time.year, state.time.month)
-        : 31;
+    const maxDaysInMonth = hasTime && state.time ? getDaysInMonth(state.time.year, state.time.month) : 31;
     // Check what sections are missing (for add buttons)
     const missingSections = {
         time: !hasTime,
@@ -41649,35 +51307,169 @@ function StateEditor({ initialState, onSave, onCancel }) {
     const AddSectionButtons = () => {
         if (!hasMissingSections)
             return null;
-        return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-add-sections", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-add-sections-label", children: "Add section:" }), missingSections.scene && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addScene, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-clapperboard" }), " Scene"] })), missingSections.time && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addTime, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), " Time"] })), missingSections.location && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addLocation, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-map-marker-alt" }), " Location"] })), missingSections.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addClimate, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-cloud-sun" }), " Climate"] })), missingSections.characters && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addCharacters, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-users" }), " Characters"] }))] }));
+        return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-add-sections", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-add-sections-label", children: "Add section:" }), missingSections.scene && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addScene, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-clapperboard" }), " Scene"] })), missingSections.time && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addTime, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), " Time"] })), missingSections.location && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addLocation, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-map-marker-alt" }), ' ', "Location"] })), missingSections.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addClimate, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-cloud-sun" }), " Climate"] })), missingSections.characters && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addCharacters, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-users" }), " Characters"] }))] }));
     };
     // If nothing to edit at all, show add buttons
     if (!hasSceneTabContent && !hasCharacters) {
         return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-empty-state", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-info-circle" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { children: "No state data to edit." }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { children: "Run extraction to populate, or add sections manually:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(AddSectionButtons, {})] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-actions", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: onCancel, className: "bt-btn", children: "Close" }) })] }));
     }
-    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tabs", children: [hasSceneTabContent && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: `bt-tab ${tab === 'scene' ? 'active' : ''}`, onClick: () => setTab('scene'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), " Scene"] })), hasCharacters && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: `bt-tab ${tab === 'chars' ? 'active' : ''}`, onClick: () => setTab('chars'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-users" }), " Characters (", state.characters?.length || 0, ")"] }))] }), tab === 'scene' && hasSceneTabContent && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-panel", children: [hasScene && state.scene && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-clapperboard" }), ' ', "Context", (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-section-remove", onClick: removeScene, title: "Remove section", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Topic *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.scene.topic, onChange: e => updateScene('topic', e.target.value), placeholder: "What's the scene about?", className: errors['scene.topic'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tone *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.scene.tone, onChange: e => updateScene('tone', e.target.value), placeholder: "Emotional atmosphere...", className: errors['scene.tone'] ? 'bt-err' : '' })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tension Level" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene.tension.level, onChange: e => updateTension('level', e.target.value), children: TENSION_LEVELS.map(l => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: l, children: l.charAt(0).toUpperCase() +
-                                                        l.slice(1) }, l))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Direction" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene.tension.direction, onChange: e => updateTension('direction', e.target.value), children: TENSION_DIRECTIONS.map(d => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: d, children: d.charAt(0).toUpperCase() +
-                                                        d.slice(1) }, d))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Type" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene.tension.type, onChange: e => updateTension('type', e.target.value), children: TENSION_TYPES.map(t => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: t, children: t.charAt(0).toUpperCase() +
-                                                        t.slice(1) }, t))) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Recent Events" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(EventListEditor, { events: state.scene.recentEvents, onChange: e => updateScene('recentEvents', e) })] })] })), hasTime && state.time && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), " Time", (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-section-remove", onClick: removeTime, title: "Remove section", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Year" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 1, max: 9999, value: state.time.year, onChange: e => updateTime('year', parseInt(e.target.value) ||
-                                                    2024), className: errors['time.year'] ? 'bt-err' : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Month" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.time.month, onChange: e => updateTime('month', parseInt(e.target.value)), className: errors['time.month'] ? 'bt-err' : '', children: MONTH_NAMES.map((name, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: idx + 1, children: name }, idx))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Day" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 1, max: maxDaysInMonth, value: state.time.day, onChange: e => updateTime('day', parseInt(e.target.value) || 1), className: errors['time.day']
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-editor", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-tabs", children: [hasSceneTabContent && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: `bt-tab ${tab === 'scene' ? 'active' : ''}`, onClick: () => setTab('scene'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-location-dot" }), " Scene"] })), hasCharacters && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: `bt-tab ${tab === 'chars' ? 'active' : ''}`, onClick: () => setTab('chars'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-users" }), " Characters (", state.characters?.length || 0, ")"] }))] }), tab === 'scene' && hasSceneTabContent && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-panel", children: [hasScene && state.scene && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-clapperboard" }), ' ', "Context", (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-section-remove", onClick: removeScene, title: "Remove section", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Topic *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.scene
+                                                    .topic, onChange: e => updateScene('topic', e
+                                                    .target
+                                                    .value), placeholder: "What's the scene about?", className: errors['scene.topic']
                                                     ? 'bt-err'
-                                                    : '' })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Hour (0-23)" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 0, max: 23, value: state.time.hour, onChange: e => updateTime('hour', parseInt(e.target.value) || 0), className: errors['time.hour']
+                                                    : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tone *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.scene
+                                                    .tone, onChange: e => updateScene('tone', e
+                                                    .target
+                                                    .value), placeholder: "Emotional atmosphere...", className: errors['scene.tone']
                                                     ? 'bt-err'
-                                                    : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Minute" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 0, max: 59, value: state.time.minute, onChange: e => updateTime('minute', parseInt(e.target.value) || 0), className: errors['time.minute']
+                                                    : '' })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Tension Level" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene
+                                                    .tension
+                                                    .level, onChange: e => updateTension('level', e
+                                                    .target
+                                                    .value), children: _constants__WEBPACK_IMPORTED_MODULE_5__.TENSION_LEVELS.map(l => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: l, children: l
+                                                        .charAt(0)
+                                                        .toUpperCase() +
+                                                        l.slice(1) }, l))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Direction" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene
+                                                    .tension
+                                                    .direction, onChange: e => updateTension('direction', e
+                                                    .target
+                                                    .value), children: _constants__WEBPACK_IMPORTED_MODULE_5__.TENSION_DIRECTIONS.map(d => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: d, children: d
+                                                        .charAt(0)
+                                                        .toUpperCase() +
+                                                        d.slice(1) }, d))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Type" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.scene
+                                                    .tension
+                                                    .type, onChange: e => updateTension('type', e
+                                                    .target
+                                                    .value), children: _constants__WEBPACK_IMPORTED_MODULE_5__.TENSION_TYPES.map(t => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: t, children: t
+                                                        .charAt(0)
+                                                        .toUpperCase() +
+                                                        t.slice(1) }, t))) })] })] })] })), hasTime && state.time && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), ' ', "Time", (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-section-remove", onClick: removeTime, title: "Remove section", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Year" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 1, max: 9999, value: state.time
+                                                    .year, onChange: e => updateTime('year', parseInt(e
+                                                    .target
+                                                    .value) ||
+                                                    2024), className: errors['time.year']
                                                     ? 'bt-err'
-                                                    : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Day of Week" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.time.dayOfWeek, disabled: true, style: {
+                                                    : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Month" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.time
+                                                    .month, onChange: e => updateTime('month', parseInt(e
+                                                    .target
+                                                    .value)), className: errors['time.month']
+                                                    ? 'bt-err'
+                                                    : '', children: _constants__WEBPACK_IMPORTED_MODULE_5__.MONTH_NAMES.map((name, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: idx +
+                                                        1, children: name }, idx))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Day" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 1, max: maxDaysInMonth, value: state.time
+                                                    .day, onChange: e => updateTime('day', parseInt(e
+                                                    .target
+                                                    .value) ||
+                                                    1), className: errors['time.day']
+                                                    ? 'bt-err'
+                                                    : '' })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-3", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Hour (0-23)" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 0, max: 23, value: state.time
+                                                    .hour, onChange: e => updateTime('hour', parseInt(e
+                                                    .target
+                                                    .value) ||
+                                                    0), className: errors['time.hour']
+                                                    ? 'bt-err'
+                                                    : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Minute" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: 0, max: 59, value: state.time
+                                                    .minute, onChange: e => updateTime('minute', parseInt(e
+                                                    .target
+                                                    .value) ||
+                                                    0), className: errors['time.minute']
+                                                    ? 'bt-err'
+                                                    : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Day of Week" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.time
+                                                    .dayOfWeek, disabled: true, style: {
                                                     opacity: 0.7,
                                                     cursor: 'not-allowed',
-                                                } })] })] })] })), hasLocation && state.location && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-map-marker-alt" }), ' ', "Location", (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-section-remove", onClick: removeLocation, title: "Remove section", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Area *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.area, onChange: e => updateLocation('area', e.target.value), placeholder: "City, district, region...", className: errors['location.area']
+                                                } })] })] })] })), hasLocation && state.location && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-map-marker-alt" }), ' ', "Location", (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-section-remove", onClick: removeLocation, title: "Remove section", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Area *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.area, onChange: e => updateLocation('area', e.target
+                                            .value), placeholder: "City, district, region...", className: errors['location.area']
                                             ? 'bt-err'
-                                            : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Place *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.place, onChange: e => updateLocation('place', e.target.value), placeholder: "Building, establishment, room...", className: errors['location.place']
+                                            : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Place *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.place, onChange: e => updateLocation('place', e.target
+                                            .value), placeholder: "Building, establishment, room...", className: errors['location.place']
                                             ? 'bt-err'
-                                            : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Position *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location.position, onChange: e => updateLocation('position', e.target.value), placeholder: "Position within the place...", className: errors['location.position']
+                                            : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Position *" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "text", value: state.location
+                                            .position, onChange: e => updateLocation('position', e.target
+                                            .value), placeholder: "Position within the place...", className: errors['location.position']
                                             ? 'bt-err'
-                                            : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(TagInput, { tags: state.location.props || [], onChange: t => updateLocation('props', t), placeholder: "Add props..." })] })] })), hasClimate && state.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-cloud-sun" }), ' ', "Climate", (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-section-remove", onClick: removeClimate, title: "Remove section", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Weather" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state.climate.weather, onChange: e => updateClimate('weather', e.target.value), children: WEATHER_OPTIONS.map(w => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: w, children: w.charAt(0).toUpperCase() +
-                                                        w.slice(1) }, w))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { children: ["Temperature (", tempUnit === 'celsius'
+                                            : '' })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Props" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form__WEBPACK_IMPORTED_MODULE_6__.TagInput, { tags: state.location
+                                            .props || [], onChange: t => updateLocation('props', t), placeholder: "Add props..." })] })] })), hasClimate && state.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("fieldset", { className: "bt-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("legend", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-cloud-sun" }), ' ', "Climate", (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-section-remove", onClick: removeClimate, title: "Remove section", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] }), (0,_weather__WEBPACK_IMPORTED_MODULE_7__.isLegacyClimate)(state.climate) ? (
+                            /* Legacy Climate Editor */
+                            (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Weather" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state
+                                                    .climate
+                                                    .weather, onChange: e => updateClimate('weather', e
+                                                    .target
+                                                    .value), children: _constants__WEBPACK_IMPORTED_MODULE_5__.WEATHER_OPTIONS.map(w => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: w, children: w
+                                                        .charAt(0)
+                                                        .toUpperCase() +
+                                                        w.slice(1) }, w))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { children: ["Temperature (", tempUnit ===
+                                                        'celsius'
                                                         ? '°C'
-                                                        : '°F', ")"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", value: (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toDisplayTemp)(state.climate.temperature, tempUnit), onChange: e => updateClimate('temperature', (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toStorageTemp)(parseInt(e.target.value) || 0, tempUnit)) })] })] })] })), (missingSections.scene || missingSections.time || missingSections.location || missingSections.climate) && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-add-sections", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-add-sections-label", children: "Add:" }), missingSections.scene && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addScene, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-clapperboard" }), " Scene"] })), missingSections.time && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addTime, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), " Time"] })), missingSections.location && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addLocation, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-map-marker-alt" }), " Location"] })), missingSections.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addClimate, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-cloud-sun" }), " Climate"] }))] }))] })), tab === 'chars' && hasCharacters && state.characters && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-panel", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-section-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Characters" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: "bt-section-remove", onClick: removeCharacters, title: "Remove all characters", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }), " Remove Section"] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chars-list", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(CharacterEditor, { character: char, index: idx, onChange: c => updateChar(idx, c), onRemove: () => removeChar(idx), otherNames: getOtherNames(idx), errors: errors }, idx))) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addChar, className: "bt-add-char", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-plus" }), " Add Character"] })] })), tab === 'scene' && missingSections.characters && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-add-sections", style: { marginTop: '1rem', borderTop: '1px solid var(--SmartThemeBorderColor)', paddingTop: '1rem' }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-add-sections-label", children: "Add:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: () => { addCharacters(); setTab('chars'); }, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-users" }), " Characters"] })] })), hasErrors && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-errors", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-exclamation-triangle" }), "Fix highlighted errors before saving."] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-actions", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: onCancel, className: "bt-btn", children: "Cancel" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: handleSave, className: "bt-btn bt-btn-primary", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-save" }), " Save"] })] })] }));
+                                                        : '°F', ")"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", value: (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toDisplayTemp)(state
+                                                    .climate
+                                                    .temperature, tempUnit), onChange: e => updateClimate('temperature', (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toStorageTemp)(parseInt(e
+                                                    .target
+                                                    .value) ||
+                                                    0, tempUnit)) })] })] })) : (
+                            /* Procedural Climate Editor */
+                            (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Condition" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state
+                                                            .climate
+                                                            .conditionType, onChange: e => updateClimate('conditionType', e
+                                                            .target
+                                                            .value), children: _constants__WEBPACK_IMPORTED_MODULE_5__.WEATHER_CONDITIONS.map(c => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: c, children: _constants__WEBPACK_IMPORTED_MODULE_5__.WEATHER_CONDITION_LABELS[c] }, c))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { children: ["Temperature (", tempUnit ===
+                                                                'celsius'
+                                                                ? '°C'
+                                                                : '°F', ")"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", value: (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toDisplayTemp)(state
+                                                            .climate
+                                                            .temperature, tempUnit), onChange: e => updateClimate('temperature', (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toStorageTemp)(parseInt(e
+                                                            .target
+                                                            .value) ||
+                                                            0, tempUnit)) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Humidity (%)" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: "0", max: "100", value: state
+                                                            .climate
+                                                            .humidity, onChange: e => updateClimate('humidity', parseInt(e
+                                                            .target
+                                                            .value) ||
+                                                            0) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Wind Speed (mph)" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: "0", value: state
+                                                            .climate
+                                                            .windSpeed, onChange: e => updateClimate('windSpeed', parseInt(e
+                                                            .target
+                                                            .value) ||
+                                                            0) })] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Cloud Cover (%)" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", min: "0", max: "100", value: state
+                                                            .climate
+                                                            .cloudCover, onChange: e => updateClimate('cloudCover', parseInt(e
+                                                            .target
+                                                            .value) ||
+                                                            0) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Indoors" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("select", { value: state
+                                                            .climate
+                                                            .isIndoors
+                                                            ? 'yes'
+                                                            : 'no', onChange: e => updateClimate('isIndoors', e
+                                                            .target
+                                                            .value ===
+                                                            'yes'), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "no", children: "No (Outdoors)" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "yes", children: "Yes (Indoors)" })] })] })] }), state.climate
+                                        .isIndoors && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-row-2", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { children: "Building Type" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { value: state
+                                                            .climate
+                                                            .buildingType ??
+                                                            'modern', onChange: e => updateClimate('buildingType', e
+                                                            .target
+                                                            .value), children: _constants__WEBPACK_IMPORTED_MODULE_5__.BUILDING_TYPES.map(b => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: b, children: _constants__WEBPACK_IMPORTED_MODULE_5__.BUILDING_TYPE_LABELS[b] }, b))) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-field", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("label", { children: ["Indoor Temp (", tempUnit ===
+                                                                'celsius'
+                                                                ? '°C'
+                                                                : '°F', ")"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("input", { type: "number", value: (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toDisplayTemp)(state
+                                                            .climate
+                                                            .indoorTemperature ??
+                                                            state
+                                                                .climate
+                                                                .temperature, tempUnit), onChange: e => updateClimate('indoorTemperature', (0,_utils_temperatures__WEBPACK_IMPORTED_MODULE_3__.toStorageTemp)(parseInt(e
+                                                            .target
+                                                            .value) ||
+                                                            0, tempUnit)) })] })] }))] }))] })), (missingSections.scene ||
+                        missingSections.time ||
+                        missingSections.location ||
+                        missingSections.climate) && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-add-sections", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-add-sections-label", children: "Add:" }), missingSections.scene && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addScene, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-clapperboard" }), ' ', "Scene"] })), missingSections.time && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addTime, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-regular fa-clock" }), ' ', "Time"] })), missingSections.location && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addLocation, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-map-marker-alt" }), ' ', "Location"] })), missingSections.climate && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addClimate, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-cloud-sun" }), ' ', "Climate"] }))] }))] })), tab === 'chars' && hasCharacters && state.characters && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-panel", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-section-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { children: "Characters" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", className: "bt-section-remove", onClick: removeCharacters, title: "Remove all characters", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }), " Remove Section"] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-chars-list", children: state.characters.map((char, idx) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(CharacterEditor, { character: char, index: idx, onChange: c => updateChar(idx, c), onRemove: () => removeChar(idx), otherNames: getOtherNames(idx), errors: errors }, idx))) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: addChar, className: "bt-add-char", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-plus" }), " Add Character"] })] })), tab === 'scene' && missingSections.characters && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-add-sections", style: {
+                    marginTop: '1rem',
+                    borderTop: '1px solid var(--SmartThemeBorderColor)',
+                    paddingTop: '1rem',
+                }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-add-sections-label", children: "Add:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: () => {
+                            addCharacters();
+                            setTab('chars');
+                        }, className: "bt-btn-small", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-users" }), " Characters"] })] })), hasErrors && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-errors", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-exclamation-triangle" }), "Fix highlighted errors before saving."] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-actions", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", onClick: onCancel, className: "bt-btn", children: "Cancel" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("button", { type: "button", onClick: handleSave, className: "bt-btn bt-btn-primary", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-save" }), " Save"] })] })] }));
 }
 // --- Integration with SillyTavern Popup ---
 /**
@@ -41739,6 +51531,241 @@ async function openStateEditor(currentState, onSave) {
 
 /***/ },
 
+/***/ "./src/ui/tabs/RelationshipsTab.tsx"
+/*!******************************************!*\
+  !*** ./src/ui/tabs/RelationshipsTab.tsx ***!
+  \******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   RelationshipsTab: () => (/* binding */ RelationshipsTab)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "./node_modules/react/jsx-runtime.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _types_state__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../types/state */ "./src/types/state.ts");
+/* harmony import */ var _components_form_TagInput__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../components/form/TagInput */ "./src/ui/components/form/TagInput.tsx");
+
+// ============================================
+// Relationships Tab Component
+// ============================================
+
+
+
+// ============================================
+// Helpers
+// ============================================
+function formatMilestoneDate(dt) {
+    if (!dt)
+        return '';
+    const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+    ];
+    const month = months[dt.month - 1] || 'Jan';
+    return `${month} ${dt.day}, ${dt.year}`;
+}
+// ============================================
+// Constants
+// ============================================
+const STATUS_COLORS = {
+    strangers: '#6b7280',
+    acquaintances: '#3b82f6',
+    friendly: '#22c55e',
+    close: '#f59e0b',
+    intimate: '#ec4899',
+    strained: '#f97316',
+    hostile: '#ef4444',
+    complicated: '#8b5cf6',
+};
+const STATUS_ICONS = {
+    strangers: 'fa-user-secret',
+    acquaintances: 'fa-handshake',
+    friendly: 'fa-users',
+    close: 'fa-user-group',
+    intimate: 'fa-heart',
+    strained: 'fa-face-frown',
+    hostile: 'fa-skull',
+    complicated: 'fa-question',
+};
+// ============================================
+// Components
+// ============================================
+function RelationshipCard({ relationship, isExpanded, onToggle, editMode, isEditing, onStartEdit, onUpdateRelationship, onDeleteRelationship, }) {
+    const [char1, char2] = relationship.pair;
+    const statusColor = STATUS_COLORS[relationship.status] || '#6b7280';
+    const statusIcon = STATUS_ICONS[relationship.status] || 'fa-circle';
+    const handleStatusChange = (newStatus) => {
+        onUpdateRelationship?.({ ...relationship, status: newStatus });
+    };
+    const handleAToBChange = (field, values) => {
+        onUpdateRelationship?.({
+            ...relationship,
+            aToB: { ...relationship.aToB, [field]: values },
+        });
+    };
+    const handleBToAChange = (field, values) => {
+        onUpdateRelationship?.({
+            ...relationship,
+            bToA: { ...relationship.bToA, [field]: values },
+        });
+    };
+    const handleDeleteMilestone = (index) => {
+        const newMilestones = relationship.milestones.filter((_, i) => i !== index);
+        onUpdateRelationship?.({ ...relationship, milestones: newMilestones });
+    };
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: `bt-relationship-card ${isExpanded ? 'bt-expanded' : ''} ${isEditing ? 'bt-editing' : ''}`, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-relationship-header", onClick: isEditing ? undefined : onToggle, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-relationship-pair", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-char-name", children: char1 }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${statusIcon}`, style: { color: statusColor } }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-char-name", children: char2 })] }), isEditing ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("select", { className: "bt-status-select", value: relationship.status, onChange: e => handleStatusChange(e.target
+                            .value), onClick: e => e.stopPropagation(), children: _types_state__WEBPACK_IMPORTED_MODULE_2__.RELATIONSHIP_STATUSES.map(status => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: status, children: status }, status))) })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-relationship-status", style: { color: statusColor }, children: relationship.status })), editMode && !isEditing && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-relationship-actions", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-edit-btn-small", onClick: e => {
+                                    e.stopPropagation();
+                                    onStartEdit?.();
+                                }, title: "Edit relationship", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-pen" }) }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-delete-btn-small", onClick: e => {
+                                    e.stopPropagation();
+                                    onDeleteRelationship?.();
+                                }, title: "Delete relationship", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })] })), isEditing && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-delete-btn-small", onClick: e => {
+                            e.stopPropagation();
+                            onDeleteRelationship?.();
+                        }, title: "Delete relationship", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-trash" }) })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: `fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} bt-expand-icon`, onClick: isEditing ? onToggle : undefined })] }), isExpanded && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-relationship-details", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-header", children: [char1, " \u2192 ", char2] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-attitude-content", children: isEditing ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row-edit", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Feels:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form_TagInput__WEBPACK_IMPORTED_MODULE_3__.TagInput, { tags: relationship
+                                                        .aToB
+                                                        .feelings, onChange: v => handleAToBChange('feelings', v), placeholder: "Add feeling..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row-edit", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Wants:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form_TagInput__WEBPACK_IMPORTED_MODULE_3__.TagInput, { tags: relationship
+                                                        .aToB
+                                                        .wants, onChange: v => handleAToBChange('wants', v), placeholder: "Add want..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row-edit", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Secrets:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form_TagInput__WEBPACK_IMPORTED_MODULE_3__.TagInput, { tags: relationship
+                                                        .aToB
+                                                        .secrets, onChange: v => handleAToBChange('secrets', v), placeholder: "Add secret..." })] })] })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [relationship.aToB.feelings
+                                            .length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Feels:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-value", children: relationship.aToB.feelings.join(', ') })] })), relationship.aToB.wants
+                                            .length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Wants:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-value", children: relationship.aToB.wants.join(', ') })] })), relationship.aToB.secrets
+                                            .length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Secrets:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-value", children: relationship.aToB.secrets.join(', ') })] }))] })) })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-header", children: [char2, " \u2192 ", char1] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-attitude-content", children: isEditing ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row-edit", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Feels:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form_TagInput__WEBPACK_IMPORTED_MODULE_3__.TagInput, { tags: relationship
+                                                        .bToA
+                                                        .feelings, onChange: v => handleBToAChange('feelings', v), placeholder: "Add feeling..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row-edit", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Wants:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form_TagInput__WEBPACK_IMPORTED_MODULE_3__.TagInput, { tags: relationship
+                                                        .bToA
+                                                        .wants, onChange: v => handleBToAChange('wants', v), placeholder: "Add want..." })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row-edit", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Secrets:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(_components_form_TagInput__WEBPACK_IMPORTED_MODULE_3__.TagInput, { tags: relationship
+                                                        .bToA
+                                                        .secrets, onChange: v => handleBToAChange('secrets', v), placeholder: "Add secret..." })] })] })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.Fragment, { children: [relationship.bToA.feelings
+                                            .length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Feels:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-value", children: relationship.bToA.feelings.join(', ') })] })), relationship.bToA.wants
+                                            .length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Wants:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-value", children: relationship.bToA.wants.join(', ') })] })), relationship.bToA.secrets
+                                            .length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-attitude-row", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-label", children: "Secrets:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-value", children: relationship.bToA.secrets.join(', ') })] }))] })) })] }), (relationship.milestones.length > 0 || isEditing) && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-milestones-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-milestones-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-star" }), ' ', "Milestones"] }), relationship.milestones.length > 0 ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { className: "bt-milestones-list", children: relationship.milestones.map((milestone, i) => {
+                                    const dateStr = formatMilestoneDate(milestone.timestamp);
+                                    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("li", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-milestone-type", children: milestone.type.replace(/_/g, ' ') }), dateStr && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-milestone-date", children: [' ', "(", dateStr, ")"] })), milestone.description && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-milestone-desc", children: [' ', "-", ' ', milestone.description] })), isEditing && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { type: "button", className: "bt-delete-btn-small bt-inline", onClick: () => handleDeleteMilestone(i), title: "Delete milestone", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-times" }) }))] }, i));
+                                }) })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { className: "bt-empty-message", children: "No milestones yet." }))] })), relationship.history.length > 0 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-history-section", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-history-header", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("i", { className: "fa-solid fa-clock-rotate-left" }), ' ', "History"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("ul", { className: "bt-history-list", children: relationship.history.map((snapshot, i) => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("li", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-history-chapter", children: ["Ch.", ' ', snapshot.chapterIndex +
+                                                    1, ":"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { className: "bt-history-status", children: snapshot.status }), snapshot.summary && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("span", { className: "bt-history-summary", children: [' ', "-", ' ', snapshot.summary] }))] }, i))) })] }))] }))] }));
+}
+function RelationshipsTab({ relationships, presentCharacters, editMode, onUpdate, }) {
+    const [expandedIds, setExpandedIds] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(new Set());
+    const [filterCharacter, setFilterCharacter] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
+    const [editingPairKey, setEditingPairKey] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(null);
+    // Get unique characters for filter dropdown
+    const allCharacters = (0,react__WEBPACK_IMPORTED_MODULE_1__.useMemo)(() => {
+        const chars = new Set();
+        for (const rel of relationships) {
+            chars.add(rel.pair[0]);
+            chars.add(rel.pair[1]);
+        }
+        return Array.from(chars).sort();
+    }, [relationships]);
+    // Filter relationships
+    const filteredRelationships = (0,react__WEBPACK_IMPORTED_MODULE_1__.useMemo)(() => {
+        if (!filterCharacter)
+            return relationships;
+        return relationships.filter(rel => rel.pair[0].toLowerCase() === filterCharacter.toLowerCase() ||
+            rel.pair[1].toLowerCase() === filterCharacter.toLowerCase());
+    }, [relationships, filterCharacter]);
+    // Sort: present characters first, then by status
+    const sortedRelationships = (0,react__WEBPACK_IMPORTED_MODULE_1__.useMemo)(() => {
+        const presentSet = presentCharacters
+            ? new Set(presentCharacters.map(c => c.toLowerCase()))
+            : null;
+        const statusOrder = [
+            'intimate',
+            'close',
+            'friendly',
+            'acquaintances',
+            'strangers',
+            'strained',
+            'hostile',
+            'complicated',
+        ];
+        return [...filteredRelationships].sort((a, b) => {
+            // Present characters first
+            if (presentSet) {
+                const aPresent = a.pair.some(p => presentSet.has(p.toLowerCase()));
+                const bPresent = b.pair.some(p => presentSet.has(p.toLowerCase()));
+                if (aPresent && !bPresent)
+                    return -1;
+                if (!aPresent && bPresent)
+                    return 1;
+            }
+            // Then by status (closer = higher)
+            const aStatus = statusOrder.indexOf(a.status);
+            const bStatus = statusOrder.indexOf(b.status);
+            return aStatus - bStatus;
+        });
+    }, [filteredRelationships, presentCharacters]);
+    const toggleExpanded = (pairKey) => {
+        setExpandedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(pairKey)) {
+                next.delete(pairKey);
+            }
+            else {
+                next.add(pairKey);
+            }
+            return next;
+        });
+    };
+    const getPairKey = (rel) => rel.pair.join('|');
+    const handleStartEdit = (pairKey) => {
+        // Expand the card when starting to edit
+        setExpandedIds(prev => {
+            const next = new Set(prev);
+            next.add(pairKey);
+            return next;
+        });
+        setEditingPairKey(pairKey);
+    };
+    const handleUpdateRelationship = (pairKey, updated) => {
+        if (onUpdate) {
+            const newRelationships = relationships.map(rel => getPairKey(rel) === pairKey ? updated : rel);
+            onUpdate(newRelationships);
+        }
+    };
+    const handleDeleteRelationship = (pairKey) => {
+        if (onUpdate) {
+            const newRelationships = relationships.filter(rel => getPairKey(rel) !== pairKey);
+            onUpdate(newRelationships);
+            // Clear editing if we deleted the one being edited
+            if (editingPairKey === pairKey) {
+                setEditingPairKey(null);
+            }
+        }
+    };
+    // Clear editing state when leaving edit mode
+    react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
+        if (!editMode) {
+            setEditingPairKey(null);
+        }
+    }, [editMode]);
+    if (relationships.length === 0) {
+        return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-relationships-tab bt-empty", children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", { children: "No relationships established yet." }) }));
+    }
+    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-relationships-tab", children: [allCharacters.length > 2 && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { className: "bt-filter-bar", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("label", { htmlFor: "bt-char-filter", children: "Filter by character:" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("select", { id: "bt-char-filter", value: filterCharacter, onChange: e => setFilterCharacter(e.target.value), children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "", children: "All" }), allCharacters.map(char => ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: char, children: char }, char)))] })] })), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "bt-relationship-list", children: sortedRelationships.map(rel => {
+                    const pairKey = getPairKey(rel);
+                    return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(RelationshipCard, { relationship: rel, isExpanded: expandedIds.has(pairKey), onToggle: () => toggleExpanded(pairKey), editMode: editMode, isEditing: editingPairKey === pairKey, onStartEdit: () => handleStartEdit(pairKey), onUpdateRelationship: updated => handleUpdateRelationship(pairKey, updated), onDeleteRelationship: () => handleDeleteRelationship(pairKey) }, pairKey));
+                }) }), filteredRelationships.length === 0 && filterCharacter && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("p", { className: "bt-no-results", children: ["No relationships found for ", filterCharacter, "."] }))] }));
+}
+
+
+/***/ },
+
 /***/ "./src/utils/clothingMatch.ts"
 /*!************************************!*\
   !*** ./src/utils/clothingMatch.ts ***!
@@ -41771,30 +51798,99 @@ __webpack_require__.r(__webpack_exports__);
  */
 const CLOTHING_KEYWORDS = [
     // Footwear
-    'sneakers', 'trainers', 'boots', 'heels', 'sandals', 'loafers', 'flats', 'shoes', 'slippers',
+    'sneakers',
+    'trainers',
+    'boots',
+    'heels',
+    'sandals',
+    'loafers',
+    'flats',
+    'shoes',
+    'slippers',
     // Legwear
-    'stockings', 'tights', 'thigh-highs', 'knee-highs', 'socks',
-    'jeans', 'trousers', 'pants', 'shorts', 'skirt', 'leggings', 'sweatpants',
+    'stockings',
+    'tights',
+    'thigh-highs',
+    'knee-highs',
+    'socks',
+    'jeans',
+    'trousers',
+    'pants',
+    'shorts',
+    'skirt',
+    'leggings',
+    'sweatpants',
     // Underwear
-    'panties', 'knickers', 'thong', 'boxers', 'briefs', 'underwear',
-    'sports bra', 'bralette', 'bra',
+    'panties',
+    'knickers',
+    'thong',
+    'boxers',
+    'briefs',
+    'underwear',
+    'sports bra',
+    'bralette',
+    'bra',
     // Tops
-    'blouse', 't-shirt', 'tshirt', 'shirt', 'top', 'tank top', 'vest', 'camisole',
-    'sweater', 'jumper', 'hoodie', 'cardigan', 'pullover',
+    'blouse',
+    't-shirt',
+    'tshirt',
+    'shirt',
+    'top',
+    'tank top',
+    'vest',
+    'camisole',
+    'sweater',
+    'jumper',
+    'hoodie',
+    'cardigan',
+    'pullover',
     // Outerwear
-    'jacket', 'coat', 'blazer', 'parka', 'windbreaker',
+    'jacket',
+    'coat',
+    'blazer',
+    'parka',
+    'windbreaker',
     // Dresses
-    'dress', 'gown', 'sundress',
+    'dress',
+    'gown',
+    'sundress',
     // Headwear
-    'hat', 'cap', 'beanie', 'hood',
+    'hat',
+    'cap',
+    'beanie',
+    'hood',
 ];
 /**
  * Common color words to extract from item descriptions.
  */
 const COLOR_KEYWORDS = [
-    'black', 'white', 'red', 'blue', 'green', 'yellow', 'purple', 'pink', 'orange', 'brown',
-    'grey', 'gray', 'navy', 'cream', 'beige', 'tan', 'maroon', 'burgundy', 'teal', 'cyan',
-    'silver', 'gold', 'dark', 'light', 'pale', 'bright', 'pastel',
+    'black',
+    'white',
+    'red',
+    'blue',
+    'green',
+    'yellow',
+    'purple',
+    'pink',
+    'orange',
+    'brown',
+    'grey',
+    'gray',
+    'navy',
+    'cream',
+    'beige',
+    'tan',
+    'maroon',
+    'burgundy',
+    'teal',
+    'cyan',
+    'silver',
+    'gold',
+    'dark',
+    'light',
+    'pale',
+    'bright',
+    'pastel',
 ];
 /**
  * Patterns for PREFIX [item] - character name before the item.
@@ -41868,7 +51964,9 @@ function buildItemSearchTerms(itemName) {
     else {
         // No known clothing type - add individual words as fallback
         // This helps match "onesie" when item is "pink onesie"
-        const words = lower.split(/\s+/).filter(w => w.length > 2 &&
+        const words = lower
+            .split(/\s+/)
+            .filter(w => w.length > 2 &&
             !COLOR_KEYWORDS.includes(w) &&
             !['the', 'and', 'with'].includes(w));
         terms.push(...words);
@@ -41924,7 +52022,7 @@ function propMatchesItem(prop, itemSearchTerms, charName, fullItemName) {
                 return true;
             // If no possessive marker at all, it's probably a generic prop that matches
             // e.g., "sneakers on the floor" matches anyone's sneakers
-            if (!propLower.includes("'s") && !propLower.includes("belonging to")) {
+            if (!propLower.includes("'s") && !propLower.includes('belonging to')) {
                 return true;
             }
         }
@@ -41936,12 +52034,14 @@ function propMatchesItem(prop, itemSearchTerms, charName, fullItemName) {
             // Check if any search term appears after the prefix
             const afterPrefix = propLower.slice(prefix.length);
             for (const term of itemSearchTerms) {
-                if (afterPrefix.includes(term) || term.includes(afterPrefix.split(' ')[0])) {
+                if (afterPrefix.includes(term) ||
+                    term.includes(afterPrefix.split(' ')[0])) {
                     return true;
                 }
             }
             // Fallback: check if the afterPrefix is substring of item or vice versa
-            if (afterPrefix.length > 2 && (itemLower.includes(afterPrefix) || afterPrefix.includes(itemLower))) {
+            if (afterPrefix.length > 2 &&
+                (itemLower.includes(afterPrefix) || afterPrefix.includes(itemLower))) {
                 return true;
             }
         }
@@ -42064,6 +52164,7 @@ function buildExtractionMessages(systemPrompt, userPrompt) {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   asBoolean: () => (/* binding */ asBoolean),
 /* harmony export */   asNumber: () => (/* binding */ asNumber),
 /* harmony export */   asString: () => (/* binding */ asString),
 /* harmony export */   asStringArray: () => (/* binding */ asStringArray),
@@ -42343,6 +52444,12 @@ function asNumber(value, fallback) {
     return typeof value === 'number' ? value : fallback;
 }
 /**
+ * Safely extract a boolean from an unknown value.
+ */
+function asBoolean(value, fallback) {
+    return typeof value === 'boolean' ? value : fallback;
+}
+/**
  * Safely extract an array of strings from an unknown value.
  */
 function asStringArray(value, maxItems) {
@@ -42492,6 +52599,2490 @@ function applyTimeFormat(hour, minute, format) {
 }
 
 
+/***/ },
+
+/***/ "./src/weather/climateApi.ts"
+/*!***********************************!*\
+  !*** ./src/weather/climateApi.ts ***!
+  \***********************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   clearCaches: () => (/* binding */ clearCaches),
+/* harmony export */   fetchClimateNormals: () => (/* binding */ fetchClimateNormals),
+/* harmony export */   geocodeLocation: () => (/* binding */ geocodeLocation)
+/* harmony export */ });
+/* harmony import */ var _fallbackProfiles__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./fallbackProfiles */ "./src/weather/fallbackProfiles.ts");
+/**
+ * Climate API Client
+ *
+ * Fetches historical climate data from Open-Meteo API.
+ * Converts metric units to imperial (Fahrenheit, mph, inches).
+ */
+
+// ============================================
+// Constants
+// ============================================
+const OPEN_METEO_ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive';
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+const USER_AGENT = 'BlazeTracker/1.0 (SillyTavern Extension)';
+// Cache for API responses
+const climateCache = new Map();
+const geocodeCache = new Map();
+// ============================================
+// Unit Conversion
+// ============================================
+function celsiusToFahrenheit(c) {
+    return (c * 9) / 5 + 32;
+}
+function kmhToMph(kmh) {
+    return kmh * 0.621371;
+}
+function mmToInches(mm) {
+    return mm * 0.0393701;
+}
+// ============================================
+// Geocoding
+// ============================================
+/**
+ * Geocode a place name to coordinates using Nominatim
+ */
+async function geocodeLocation(placeName) {
+    const cacheKey = placeName.toLowerCase().trim();
+    if (geocodeCache.has(cacheKey)) {
+        return geocodeCache.get(cacheKey);
+    }
+    try {
+        const params = new URLSearchParams({
+            q: placeName,
+            format: 'json',
+            limit: '1',
+        });
+        const response = await fetch(`${NOMINATIM_URL}?${params}`, {
+            headers: {
+                'User-Agent': USER_AGENT,
+            },
+        });
+        if (!response.ok) {
+            console.warn(`[BlazeTracker] Geocoding failed for "${placeName}": ${response.status}`);
+            geocodeCache.set(cacheKey, null);
+            return null;
+        }
+        const data = await response.json();
+        if (!Array.isArray(data) || data.length === 0) {
+            console.warn(`[BlazeTracker] No geocoding results for "${placeName}"`);
+            geocodeCache.set(cacheKey, null);
+            return null;
+        }
+        const result = {
+            latitude: parseFloat(data[0].lat),
+            longitude: parseFloat(data[0].lon),
+        };
+        geocodeCache.set(cacheKey, result);
+        return result;
+    }
+    catch (error) {
+        console.error(`[BlazeTracker] Geocoding error for "${placeName}":`, error);
+        geocodeCache.set(cacheKey, null);
+        return null;
+    }
+}
+// ============================================
+// Climate Data Fetching
+// ============================================
+/**
+ * Fetch historical climate data from Open-Meteo
+ * Returns averages for the specified month based on historical data
+ */
+async function fetchClimateNormals(latitude, longitude, month, fallbackClimateType) {
+    const cacheKey = `${latitude.toFixed(2)},${longitude.toFixed(2)},${month}`;
+    if (climateCache.has(cacheKey)) {
+        return climateCache.get(cacheKey);
+    }
+    try {
+        // Query last 10 years of data for this month
+        const currentYear = new Date().getFullYear();
+        const years = [];
+        for (let y = currentYear - 10; y < currentYear; y++) {
+            years.push(y);
+        }
+        // Build date ranges for the target month across all years
+        const allData = await Promise.all(years.map(year => fetchMonthData(latitude, longitude, year, month)));
+        // Filter out failed fetches
+        const validData = allData.filter(d => d !== null);
+        if (validData.length === 0) {
+            console.warn(`[BlazeTracker] No climate data available, using fallback`);
+            return getFallbackNormals(latitude, longitude, month, fallbackClimateType);
+        }
+        // Calculate averages
+        const normals = calculateNormals(validData, latitude, longitude, month);
+        climateCache.set(cacheKey, normals);
+        return normals;
+    }
+    catch (error) {
+        console.error(`[BlazeTracker] Climate API error:`, error);
+        return getFallbackNormals(latitude, longitude, month, fallbackClimateType);
+    }
+}
+/**
+ * Fetch data for a single month in a single year
+ */
+async function fetchMonthData(latitude, longitude, year, month) {
+    try {
+        // Calculate date range for the month
+        const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        const params = new URLSearchParams({
+            latitude: latitude.toString(),
+            longitude: longitude.toString(),
+            start_date: startDate,
+            end_date: endDate,
+            daily: [
+                'temperature_2m_max',
+                'temperature_2m_min',
+                'precipitation_sum',
+                'relative_humidity_2m_mean',
+                'windspeed_10m_max',
+                'cloudcover_mean',
+            ].join(','),
+            timezone: 'auto',
+        });
+        const response = await fetch(`${OPEN_METEO_ARCHIVE_URL}?${params}`);
+        if (!response.ok) {
+            return null;
+        }
+        const data = await response.json();
+        if (!data.daily) {
+            return null;
+        }
+        return {
+            highs: data.daily.temperature_2m_max || [],
+            lows: data.daily.temperature_2m_min || [],
+            precip: data.daily.precipitation_sum || [],
+            humidity: data.daily.relative_humidity_2m_mean || [],
+            windSpeed: data.daily.windspeed_10m_max || [],
+            cloudCover: data.daily.cloudcover_mean || [],
+        };
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Calculate climate normals from historical data
+ */
+function calculateNormals(data, latitude, longitude, month) {
+    // Flatten all data points
+    const allHighs = data.flatMap(d => d.highs).filter(v => v !== null);
+    const allLows = data.flatMap(d => d.lows).filter(v => v !== null);
+    const allPrecip = data.flatMap(d => d.precip).filter(v => v !== null);
+    const allHumidity = data.flatMap(d => d.humidity).filter(v => v !== null);
+    const allWind = data.flatMap(d => d.windSpeed).filter(v => v !== null);
+    const allClouds = data.flatMap(d => d.cloudCover).filter(v => v !== null);
+    const avg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    const stdDev = (arr) => {
+        if (arr.length === 0)
+            return 0;
+        const mean = avg(arr);
+        const squareDiffs = arr.map(v => Math.pow(v - mean, 2));
+        return Math.sqrt(avg(squareDiffs));
+    };
+    // Count precip days (>1mm = >0.04 inches)
+    const precipDays = allPrecip.filter(p => p > 1).length / data.length;
+    // Calculate sun times based on latitude and month
+    const sunTimes = calculateSunTimes(latitude, month);
+    // Estimate condition probabilities from cloud cover and precip
+    const avgCloudCover = avg(allClouds);
+    const precipProb = precipDays / 30;
+    const conditionProbabilities = {
+        clear: Math.max(0, (100 - avgCloudCover) / 100 - precipProb) * 0.5,
+        partlyCloudy: Math.min(0.3, avgCloudCover / 200),
+        overcast: Math.min(0.3, avgCloudCover / 150),
+        rain: precipProb * (avg(allLows) > 32 ? 1 : 0.3),
+        snow: precipProb * (avg(allLows) <= 32 ? 1 : 0),
+    };
+    // Normalize probabilities
+    const total = Object.values(conditionProbabilities).reduce((a, b) => a + b, 0);
+    if (total > 0) {
+        Object.keys(conditionProbabilities).forEach(k => {
+            conditionProbabilities[k] /= total;
+        });
+    }
+    return {
+        latitude,
+        longitude,
+        month,
+        avgHigh: celsiusToFahrenheit(avg(allHighs)),
+        avgLow: celsiusToFahrenheit(avg(allLows)),
+        avgPrecipitation: mmToInches(avg(allPrecip)),
+        avgPrecipDays: Math.round(precipDays),
+        avgHumidity: avg(allHumidity),
+        avgWindSpeed: kmhToMph(avg(allWind)),
+        avgCloudCover: avg(allClouds),
+        avgSunriseHour: sunTimes.sunrise,
+        avgSunsetHour: sunTimes.sunset,
+        tempStdDev: celsiusToFahrenheit(stdDev(allHighs)) - 32, // Convert std dev
+        conditionProbabilities,
+    };
+}
+/**
+ * Calculate approximate sunrise/sunset times based on latitude and month
+ */
+function calculateSunTimes(latitude, month) {
+    // Simplified calculation based on latitude and time of year
+    // June 21 = summer solstice (longest day in northern hemisphere)
+    // December 21 = winter solstice (shortest day)
+    const dayOfYear = (month - 1) * 30 + 15; // Approximate mid-month
+    const summerSolstice = 172; // ~June 21
+    // Calculate day length variation based on latitude
+    // At equator, day length is ~12 hours year-round
+    // At 60° latitude, variation is ~6 hours
+    const latitudeRadians = (Math.abs(latitude) * Math.PI) / 180;
+    const maxVariation = Math.min(6, Math.tan(latitudeRadians) * 3);
+    // Sinusoidal variation through the year
+    const variation = Math.cos(((dayOfYear - summerSolstice) * 2 * Math.PI) / 365) * maxVariation;
+    // Apply hemisphere correction
+    const hemisphereCorrection = latitude >= 0 ? 1 : -1;
+    const dayLengthHours = 12 + variation * hemisphereCorrection;
+    // Calculate sunrise/sunset from day length
+    const sunrise = 12 - dayLengthHours / 2;
+    const sunset = 12 + dayLengthHours / 2;
+    return {
+        sunrise: Math.max(4, Math.min(9, sunrise)),
+        sunset: Math.max(17, Math.min(21, sunset)),
+    };
+}
+/**
+ * Get fallback normals when API fails
+ */
+function getFallbackNormals(latitude, longitude, month, fallbackClimateType) {
+    // Infer climate type from latitude if not provided
+    let climateType = fallbackClimateType;
+    if (!climateType) {
+        const absLat = Math.abs(latitude);
+        if (absLat > 60)
+            climateType = 'arctic';
+        else if (absLat < 25)
+            climateType = 'tropical';
+        else if (absLat > 45)
+            climateType = 'continental';
+        else
+            climateType = 'temperate';
+    }
+    const normals = (0,_fallbackProfiles__WEBPACK_IMPORTED_MODULE_0__.getClimateNormalsFromFallback)(climateType, month);
+    // Override with actual coordinates
+    return {
+        ...normals,
+        latitude,
+        longitude,
+    };
+}
+/**
+ * Clear all caches (for testing)
+ */
+function clearCaches() {
+    climateCache.clear();
+    geocodeCache.clear();
+}
+
+
+/***/ },
+
+/***/ "./src/weather/fallbackProfiles.ts"
+/*!*****************************************!*\
+  !*** ./src/weather/fallbackProfiles.ts ***!
+  \*****************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   FALLBACK_PROFILES: () => (/* binding */ FALLBACK_PROFILES),
+/* harmony export */   getClimateNormalsFromFallback: () => (/* binding */ getClimateNormalsFromFallback),
+/* harmony export */   getFallbackProfile: () => (/* binding */ getFallbackProfile),
+/* harmony export */   inferBaseClimateType: () => (/* binding */ inferBaseClimateType)
+/* harmony export */ });
+/**
+ * Fallback Climate Profiles
+ *
+ * Hardcoded climate data for when API/geocoding fails.
+ * All temperatures in Fahrenheit.
+ */
+// ============================================
+// Profiles
+// ============================================
+const FALLBACK_PROFILES = {
+    temperate: {
+        type: 'temperate',
+        monthlyHighs: [40, 43, 52, 62, 72, 80, 85, 83, 76, 64, 52, 43],
+        monthlyLows: [25, 27, 34, 43, 53, 62, 67, 65, 57, 46, 36, 28],
+        monthlyPrecipDays: [10, 9, 11, 11, 12, 10, 9, 9, 8, 8, 9, 10],
+        monthlyHumidity: [70, 68, 62, 58, 62, 65, 68, 70, 72, 70, 72, 72],
+        tempStdDev: 8,
+        precipPersistence: 0.6,
+        conditionWeights: {
+            winter: { clear: 0.3, overcast: 0.35, snow: 0.2, rain: 0.15 },
+            spring: { clear: 0.35, partly_cloudy: 0.3, rain: 0.25, overcast: 0.1 },
+            summer: { sunny: 0.45, partly_cloudy: 0.3, thunderstorm: 0.15, clear: 0.1 },
+            fall: { clear: 0.35, overcast: 0.3, rain: 0.2, partly_cloudy: 0.15 },
+        },
+    },
+    desert: {
+        type: 'desert',
+        monthlyHighs: [67, 72, 80, 89, 99, 109, 111, 109, 103, 91, 77, 67],
+        monthlyLows: [45, 49, 55, 63, 72, 81, 87, 85, 78, 65, 53, 45],
+        monthlyPrecipDays: [3, 3, 2, 1, 1, 0, 2, 3, 2, 2, 2, 3],
+        monthlyHumidity: [35, 30, 25, 18, 15, 12, 25, 30, 28, 25, 30, 38],
+        tempStdDev: 6,
+        precipPersistence: 0.3,
+        conditionWeights: {
+            winter: { sunny: 0.6, clear: 0.3, partly_cloudy: 0.1 },
+            spring: { sunny: 0.7, clear: 0.2, windy: 0.1 },
+            summer: { hot: 0.5, sunny: 0.3, thunderstorm: 0.15, clear: 0.05 },
+            fall: { sunny: 0.6, clear: 0.3, partly_cloudy: 0.1 },
+        },
+    },
+    arctic: {
+        type: 'arctic',
+        monthlyHighs: [5, 8, 18, 32, 45, 55, 60, 57, 47, 32, 18, 8],
+        monthlyLows: [-12, -10, 0, 18, 32, 42, 47, 45, 36, 22, 8, -5],
+        monthlyPrecipDays: [8, 7, 7, 6, 7, 8, 10, 11, 10, 10, 9, 8],
+        monthlyHumidity: [75, 73, 70, 68, 70, 75, 80, 82, 80, 78, 76, 75],
+        tempStdDev: 10,
+        precipPersistence: 0.7,
+        conditionWeights: {
+            winter: { snow: 0.4, overcast: 0.3, cold: 0.2, clear: 0.1 },
+            spring: { overcast: 0.3, snow: 0.3, partly_cloudy: 0.25, clear: 0.15 },
+            summer: { partly_cloudy: 0.35, overcast: 0.3, rain: 0.2, clear: 0.15 },
+            fall: { overcast: 0.35, snow: 0.25, cold: 0.2, partly_cloudy: 0.2 },
+        },
+    },
+    tropical: {
+        type: 'tropical',
+        monthlyHighs: [87, 88, 89, 90, 90, 89, 88, 88, 88, 88, 87, 87],
+        monthlyLows: [73, 73, 74, 75, 76, 76, 75, 75, 75, 75, 74, 73],
+        monthlyPrecipDays: [8, 6, 7, 10, 15, 18, 20, 19, 17, 15, 12, 9],
+        monthlyHumidity: [78, 75, 74, 76, 82, 85, 86, 86, 85, 84, 82, 80],
+        tempStdDev: 3,
+        precipPersistence: 0.7,
+        conditionWeights: {
+            winter: { sunny: 0.4, partly_cloudy: 0.35, rain: 0.2, humid: 0.05 },
+            spring: { partly_cloudy: 0.35, rain: 0.3, thunderstorm: 0.2, humid: 0.15 },
+            summer: { rain: 0.35, thunderstorm: 0.25, humid: 0.25, overcast: 0.15 },
+            fall: { partly_cloudy: 0.3, rain: 0.3, humid: 0.2, thunderstorm: 0.2 },
+        },
+    },
+    mediterranean: {
+        type: 'mediterranean',
+        monthlyHighs: [55, 58, 63, 70, 78, 87, 93, 93, 86, 75, 63, 55],
+        monthlyLows: [40, 42, 45, 50, 57, 64, 70, 70, 64, 55, 47, 41],
+        monthlyPrecipDays: [9, 8, 7, 5, 2, 1, 0, 1, 2, 5, 7, 9],
+        monthlyHumidity: [72, 68, 62, 55, 48, 42, 38, 40, 48, 58, 68, 73],
+        tempStdDev: 5,
+        precipPersistence: 0.5,
+        conditionWeights: {
+            winter: { rain: 0.35, overcast: 0.3, partly_cloudy: 0.2, clear: 0.15 },
+            spring: { sunny: 0.4, partly_cloudy: 0.35, clear: 0.15, rain: 0.1 },
+            summer: { sunny: 0.6, hot: 0.25, clear: 0.1, partly_cloudy: 0.05 },
+            fall: { partly_cloudy: 0.35, sunny: 0.3, rain: 0.2, overcast: 0.15 },
+        },
+    },
+    continental: {
+        type: 'continental',
+        monthlyHighs: [32, 37, 48, 62, 73, 82, 87, 85, 76, 63, 48, 35],
+        monthlyLows: [17, 21, 30, 40, 51, 61, 66, 64, 55, 43, 32, 22],
+        monthlyPrecipDays: [9, 8, 10, 11, 12, 10, 9, 9, 8, 8, 9, 9],
+        monthlyHumidity: [72, 70, 65, 58, 60, 62, 65, 68, 70, 68, 72, 74],
+        tempStdDev: 12,
+        precipPersistence: 0.55,
+        conditionWeights: {
+            winter: { snow: 0.35, overcast: 0.3, cold: 0.2, clear: 0.15 },
+            spring: { partly_cloudy: 0.3, rain: 0.3, clear: 0.25, thunderstorm: 0.15 },
+            summer: { sunny: 0.35, hot: 0.25, thunderstorm: 0.25, partly_cloudy: 0.15 },
+            fall: { clear: 0.35, overcast: 0.3, rain: 0.2, partly_cloudy: 0.15 },
+        },
+    },
+    oceanic: {
+        type: 'oceanic',
+        monthlyHighs: [47, 49, 53, 58, 64, 69, 73, 73, 68, 59, 52, 47],
+        monthlyLows: [38, 38, 41, 44, 50, 55, 59, 59, 55, 48, 43, 39],
+        monthlyPrecipDays: [15, 12, 13, 11, 10, 9, 8, 9, 10, 13, 14, 15],
+        monthlyHumidity: [85, 82, 78, 75, 76, 78, 80, 82, 83, 85, 86, 86],
+        tempStdDev: 4,
+        precipPersistence: 0.65,
+        conditionWeights: {
+            winter: { overcast: 0.4, rain: 0.35, drizzle: 0.15, foggy: 0.1 },
+            spring: { partly_cloudy: 0.35, rain: 0.3, overcast: 0.2, drizzle: 0.15 },
+            summer: { partly_cloudy: 0.4, overcast: 0.25, rain: 0.2, sunny: 0.15 },
+            fall: { overcast: 0.35, rain: 0.35, drizzle: 0.15, foggy: 0.15 },
+        },
+    },
+};
+// ============================================
+// Helpers
+// ============================================
+/**
+ * Get season from month (Northern Hemisphere)
+ */
+function getSeason(month) {
+    if (month >= 3 && month <= 5)
+        return 'spring';
+    if (month >= 6 && month <= 8)
+        return 'summer';
+    if (month >= 9 && month <= 11)
+        return 'fall';
+    return 'winter';
+}
+/**
+ * Get approximate sunrise/sunset for a month
+ * Returns hours (e.g., 6.5 = 6:30 AM)
+ */
+function getApproxSunTimes(month, baseClimate) {
+    // Base times vary by latitude approximation
+    const latitudeEffect = {
+        arctic: 3, // Extreme variation
+        continental: 1.5,
+        temperate: 1,
+        oceanic: 0.8,
+        mediterranean: 0.7,
+        desert: 0.5,
+        tropical: 0.3, // Minimal variation
+    };
+    const effect = latitudeEffect[baseClimate];
+    // June = longest day (month 6), December = shortest (month 12)
+    // Sinusoidal variation
+    const dayOfYear = (month - 1) * 30 + 15; // Approximate
+    const summerSolstice = 172; // ~June 21
+    const variation = Math.cos(((dayOfYear - summerSolstice) * 2 * Math.PI) / 365);
+    // Base: 6 AM sunrise, 6 PM sunset (equinox)
+    const sunrise = 6 - variation * effect;
+    const sunset = 18 + variation * effect;
+    return { sunrise, sunset };
+}
+/**
+ * Convert a fallback profile to ClimateNormals for a given month
+ */
+function getClimateNormalsFromFallback(baseClimate, month) {
+    const profile = FALLBACK_PROFILES[baseClimate];
+    const monthIndex = month - 1;
+    const season = getSeason(month);
+    const { sunrise, sunset } = getApproxSunTimes(month, baseClimate);
+    // Calculate condition probabilities from weights
+    const weights = profile.conditionWeights[season];
+    const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+    // Map to standard condition probabilities
+    const conditionProbabilities = {
+        clear: ((weights.clear || 0) + (weights.sunny || 0)) / totalWeight || 0.2,
+        partlyCloudy: (weights.partly_cloudy || 0) / totalWeight || 0.2,
+        overcast: (weights.overcast || 0) / totalWeight || 0.2,
+        rain: ((weights.rain || 0) +
+            (weights.drizzle || 0) +
+            (weights.thunderstorm || 0)) /
+            totalWeight || 0.2,
+        snow: (weights.snow || 0) / totalWeight || 0,
+    };
+    // Estimate precipitation (inches/day based on precip days)
+    const avgPrecipitation = (profile.monthlyPrecipDays[monthIndex] / 30) * 0.15; // ~0.15" per rainy day
+    return {
+        latitude: 0, // Unknown for fallback
+        longitude: 0,
+        month,
+        avgHigh: profile.monthlyHighs[monthIndex],
+        avgLow: profile.monthlyLows[monthIndex],
+        avgPrecipitation,
+        avgPrecipDays: profile.monthlyPrecipDays[monthIndex],
+        avgHumidity: profile.monthlyHumidity[monthIndex],
+        avgWindSpeed: 8, // Default moderate wind
+        avgCloudCover: 50, // Default moderate clouds
+        avgSunriseHour: sunrise,
+        avgSunsetHour: sunset,
+        tempStdDev: profile.tempStdDev,
+        conditionProbabilities,
+    };
+}
+/**
+ * Get a fallback profile by type
+ */
+function getFallbackProfile(type) {
+    return FALLBACK_PROFILES[type];
+}
+/**
+ * Determine most likely base climate type from temperature and conditions
+ */
+function inferBaseClimateType(avgTemp, humidity, condition) {
+    const conditionLower = condition.toLowerCase();
+    // Check for obvious conditions
+    if (conditionLower.includes('snow') || conditionLower.includes('blizzard')) {
+        return avgTemp < 20 ? 'arctic' : 'continental';
+    }
+    if (conditionLower.includes('hot') || avgTemp > 95) {
+        return humidity < 40 ? 'desert' : 'tropical';
+    }
+    // Temperature-based heuristics
+    if (avgTemp < 32)
+        return 'arctic';
+    if (avgTemp > 85 && humidity > 70)
+        return 'tropical';
+    if (avgTemp > 85 && humidity < 40)
+        return 'desert';
+    if (humidity > 75)
+        return 'oceanic';
+    // Default to temperate
+    return 'temperate';
+}
+
+
+/***/ },
+
+/***/ "./src/weather/forecastCache.ts"
+/*!**************************************!*\
+  !*** ./src/weather/forecastCache.ts ***!
+  \**************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   cacheForecast: () => (/* binding */ cacheForecast),
+/* harmony export */   cleanupCache: () => (/* binding */ cleanupCache),
+/* harmony export */   forecastCoversRange: () => (/* binding */ forecastCoversRange),
+/* harmony export */   getCacheStats: () => (/* binding */ getCacheStats),
+/* harmony export */   getCachedForecast: () => (/* binding */ getCachedForecast),
+/* harmony export */   getDaysRemaining: () => (/* binding */ getDaysRemaining),
+/* harmony export */   getLocationId: () => (/* binding */ getLocationId),
+/* harmony export */   removeCacheEntry: () => (/* binding */ removeCacheEntry),
+/* harmony export */   shouldRegenerateForecast: () => (/* binding */ shouldRegenerateForecast),
+/* harmony export */   touchCacheEntry: () => (/* binding */ touchCacheEntry)
+/* harmony export */ });
+/**
+ * Forecast Cache
+ *
+ * Manages per-location forecast storage and retrieval.
+ */
+// ============================================
+// Location ID
+// ============================================
+/**
+ * Generate consistent location ID from area name
+ */
+function getLocationId(area) {
+    return area.toLowerCase().trim().replace(/\s+/g, '-');
+}
+// ============================================
+// Date Utilities
+// ============================================
+/**
+ * Parse a YYYY-MM-DD date string
+ */
+function parseDate(dateStr) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+}
+/**
+ * Convert NarrativeDateTime to Date
+ */
+function toDate(dt) {
+    return new Date(dt.year, dt.month - 1, dt.day);
+}
+/**
+ * Add days to a date
+ */
+function addDays(date, days) {
+    const result = new Date(date);
+    result.setDate(result.getDate() + days);
+    return result;
+}
+// ============================================
+// Cache Operations
+// ============================================
+/**
+ * Get a cached forecast for an area
+ * Returns null if not found or expired
+ */
+function getCachedForecast(cache, area, currentDate) {
+    const locationId = getLocationId(area);
+    const entry = cache.find(e => getLocationId(e.areaName) === locationId);
+    if (!entry) {
+        return null;
+    }
+    // Check if forecast covers current date
+    const forecastStart = parseDate(entry.forecast.startDate);
+    const forecastEnd = addDays(forecastStart, entry.forecast.days.length);
+    const current = toDate(currentDate);
+    if (current < forecastStart || current >= forecastEnd) {
+        return null; // Forecast doesn't cover this date
+    }
+    return entry.forecast;
+}
+/**
+ * Add or update a forecast in the cache
+ */
+function cacheForecast(cache, area, forecast) {
+    const locationId = getLocationId(area);
+    // Remove existing entry for this location
+    const filtered = cache.filter(e => getLocationId(e.areaName) !== locationId);
+    // Add new entry
+    return [
+        ...filtered,
+        {
+            areaName: area,
+            forecast,
+            lastAccessedDate: new Date().toISOString(),
+        },
+    ];
+}
+/**
+ * Update the last accessed date for a cache entry
+ */
+function touchCacheEntry(cache, area) {
+    const locationId = getLocationId(area);
+    return cache.map(entry => {
+        if (getLocationId(entry.areaName) === locationId) {
+            return {
+                ...entry,
+                lastAccessedDate: new Date().toISOString(),
+            };
+        }
+        return entry;
+    });
+}
+/**
+ * Remove a specific location from the cache
+ */
+function removeCacheEntry(cache, area) {
+    const locationId = getLocationId(area);
+    return cache.filter(e => getLocationId(e.areaName) !== locationId);
+}
+/**
+ * Clean up old cache entries
+ */
+function cleanupCache(cache, maxAgeMs = 30 * 24 * 60 * 60 * 1000) {
+    const cutoff = Date.now() - maxAgeMs;
+    return cache.filter(entry => {
+        const lastAccessed = new Date(entry.lastAccessedDate).getTime();
+        return lastAccessed > cutoff;
+    });
+}
+/**
+ * Get cache statistics
+ */
+function getCacheStats(cache) {
+    if (cache.length === 0) {
+        return {
+            entryCount: 0,
+            totalDays: 0,
+            oldestAccess: null,
+            newestAccess: null,
+        };
+    }
+    const accessDates = cache
+        .map(e => new Date(e.lastAccessedDate).getTime())
+        .sort((a, b) => a - b);
+    return {
+        entryCount: cache.length,
+        totalDays: cache.reduce((sum, e) => sum + e.forecast.days.length, 0),
+        oldestAccess: new Date(accessDates[0]).toISOString(),
+        newestAccess: new Date(accessDates[accessDates.length - 1]).toISOString(),
+    };
+}
+// ============================================
+// Forecast Querying
+// ============================================
+/**
+ * Check if a forecast covers a date range
+ */
+function forecastCoversRange(forecast, startDate, endDate) {
+    const forecastStart = parseDate(forecast.startDate);
+    const forecastEnd = addDays(forecastStart, forecast.days.length);
+    const rangeStart = toDate(startDate);
+    const rangeEnd = toDate(endDate);
+    return rangeStart >= forecastStart && rangeEnd < forecastEnd;
+}
+/**
+ * Get the number of days remaining in a forecast from a given date
+ */
+function getDaysRemaining(forecast, currentDate) {
+    const forecastStart = parseDate(forecast.startDate);
+    const forecastEnd = addDays(forecastStart, forecast.days.length);
+    const current = toDate(currentDate);
+    if (current >= forecastEnd) {
+        return 0;
+    }
+    const diffMs = forecastEnd.getTime() - current.getTime();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+/**
+ * Determine if a forecast should be regenerated
+ * (less than 3 days remaining or doesn't cover current date)
+ */
+function shouldRegenerateForecast(forecast, currentDate, minDaysRemaining = 3) {
+    if (!forecast) {
+        return true;
+    }
+    const daysRemaining = getDaysRemaining(forecast, currentDate);
+    return daysRemaining < minDaysRemaining;
+}
+
+
+/***/ },
+
+/***/ "./src/weather/forecastGenerator.ts"
+/*!******************************************!*\
+  !*** ./src/weather/forecastGenerator.ts ***!
+  \******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   generateForecast: () => (/* binding */ generateForecast),
+/* harmony export */   getDayIndex: () => (/* binding */ getDayIndex),
+/* harmony export */   lookupDay: () => (/* binding */ lookupDay),
+/* harmony export */   lookupWeather: () => (/* binding */ lookupWeather)
+/* harmony export */ });
+/* harmony import */ var seedrandom__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! seedrandom */ "./node_modules/seedrandom/index.js");
+/* harmony import */ var seedrandom__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(seedrandom__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _weatherDeriver__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./weatherDeriver */ "./src/weather/weatherDeriver.ts");
+/**
+ * Forecast Generator
+ *
+ * Generates a 4-week weather forecast with realistic day-to-day variation
+ * using autocorrelated temperature generation and Markov chain precipitation.
+ */
+
+
+// ============================================
+// Random Utilities
+// ============================================
+/**
+ * Box-Muller transform for Gaussian random numbers
+ */
+function gaussianRandom(rng) {
+    let u = 0, v = 0;
+    while (u === 0)
+        u = rng(); // Avoid 0
+    while (v === 0)
+        v = rng();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+/**
+ * Clamp a value between min and max
+ */
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+// ============================================
+// Date Utilities
+// ============================================
+/**
+ * Format date as YYYY-MM-DD
+ */
+function formatDate(year, month, day) {
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+/**
+ * Add days to a date
+ */
+function addDays(year, month, day, daysToAdd) {
+    const date = new Date(year, month - 1, day + daysToAdd);
+    return {
+        year: date.getFullYear(),
+        month: date.getMonth() + 1,
+        day: date.getDate(),
+    };
+}
+// ============================================
+// Temperature Generation
+// ============================================
+/**
+ * Generate daily high/low temperatures using AR(1) process
+ * This creates realistic day-to-day correlation
+ */
+function generateDailyTemps(normals, state, dayIndex, initialAnchor) {
+    const phi = 0.75; // Autocorrelation coefficient
+    const mean = (normals.avgHigh + normals.avgLow) / 2;
+    const range = normals.avgHigh - normals.avgLow;
+    let todayMean;
+    // For day 0 with initial anchor, use the anchor
+    if (dayIndex === 0 && initialAnchor) {
+        todayMean = initialAnchor.temperature;
+    }
+    // For days 1-2 with anchor, blend toward normals
+    else if (dayIndex <= 2 && initialAnchor) {
+        const blendFactor = dayIndex / 3;
+        const noise = gaussianRandom(state.rng) *
+            normals.tempStdDev *
+            Math.sqrt(1 - phi * phi) *
+            blendFactor;
+        todayMean =
+            state.prevDayMeanTemp * (1 - blendFactor) +
+                (mean + phi * (state.prevDayMeanTemp - mean) + noise) * blendFactor;
+    }
+    // Normal AR(1) process
+    else {
+        const noise = gaussianRandom(state.rng) * normals.tempStdDev * Math.sqrt(1 - phi * phi);
+        todayMean = mean + phi * (state.prevDayMeanTemp - mean) + noise;
+    }
+    // Calculate high and low from mean
+    const high = todayMean + range / 2;
+    const low = todayMean - range / 2;
+    return {
+        high: Math.round(high),
+        low: Math.round(low),
+        meanTemp: todayMean,
+    };
+}
+/**
+ * Generate hourly temperatures using sinusoidal interpolation
+ */
+function generateHourlyTemp(hour, high, low, sunrise, sunset) {
+    // Temperature minimum occurs near sunrise
+    // Temperature maximum occurs ~2-3 hours after solar noon
+    const solarNoon = (sunrise + sunset) / 2;
+    const peakHour = solarNoon + 2;
+    // Use sinusoidal model
+    // Minimum at sunrise, maximum at peak hour
+    const range = high - low;
+    if (hour < sunrise) {
+        // Pre-dawn: gradually cooling toward minimum
+        const nightLength = 24 - sunset + sunrise;
+        const hoursFromSunset = hour + (24 - sunset);
+        const progress = hoursFromSunset / nightLength;
+        return low + range * 0.3 * (1 - progress);
+    }
+    else if (hour < peakHour) {
+        // Morning: warming toward peak
+        const morningLength = peakHour - sunrise;
+        const progress = (hour - sunrise) / morningLength;
+        // Sinusoidal ease-in
+        const factor = Math.sin((progress * Math.PI) / 2);
+        return low + range * factor;
+    }
+    else if (hour < sunset) {
+        // Afternoon: cooling from peak
+        const afternoonLength = sunset - peakHour;
+        const progress = (hour - peakHour) / afternoonLength;
+        // Sinusoidal ease-out
+        const factor = Math.cos((progress * Math.PI) / 2);
+        return low + range * factor;
+    }
+    else {
+        // Evening: continued cooling
+        const eveningLength = 24 - sunset + sunrise;
+        const progress = (hour - sunset) / eveningLength;
+        return low + range * 0.3 * (1 - progress);
+    }
+}
+// ============================================
+// Precipitation Generation
+// ============================================
+/**
+ * Determine if it's raining today using Markov chain
+ */
+function willRainToday(normals, state) {
+    const baseProbability = normals.avgPrecipDays / 30;
+    // Persistence: if it rained yesterday, more likely today
+    const persistence = 0.6;
+    const probability = state.wasRaining
+        ? baseProbability + (1 - baseProbability) * persistence
+        : baseProbability * (1 - persistence * 0.5);
+    return state.rng() < probability;
+}
+/**
+ * Generate hourly precipitation amounts
+ */
+function generateHourlyPrecip(isRaining, normals, rng) {
+    const hourly = new Array(24).fill(0);
+    if (!isRaining)
+        return hourly;
+    // Determine rain pattern
+    // 60% chance of sustained rain, 40% chance of scattered showers
+    const sustained = rng() < 0.6;
+    if (sustained) {
+        // Pick a start hour and duration
+        const startHour = Math.floor(rng() * 18); // Start between 0-17
+        const duration = Math.floor(rng() * 8) + 4; // 4-12 hours
+        for (let h = startHour; h < Math.min(startHour + duration, 24); h++) {
+            // Base intensity with some variation
+            const intensity = (0.05 + rng() * 0.15) * (normals.avgPrecipitation * 30);
+            hourly[h] = Math.max(0.01, intensity);
+        }
+    }
+    else {
+        // Scattered showers - 2-4 short bursts
+        const numBursts = Math.floor(rng() * 3) + 2;
+        for (let i = 0; i < numBursts; i++) {
+            const burstHour = Math.floor(rng() * 24);
+            const burstDuration = Math.floor(rng() * 2) + 1;
+            for (let h = burstHour; h < Math.min(burstHour + burstDuration, 24); h++) {
+                const intensity = (0.02 + rng() * 0.1) * (normals.avgPrecipitation * 30);
+                hourly[h] = Math.max(0.01, intensity);
+            }
+        }
+    }
+    return hourly;
+}
+// ============================================
+// Cloud Cover Generation
+// ============================================
+/**
+ * Generate hourly cloud cover
+ */
+function generateHourlyClouds(isRaining, precipHourly, normals, rng) {
+    // Base cloud cover from normals
+    const baseClouds = normals.avgCloudCover;
+    return precipHourly.map((precip, hour) => {
+        // If raining, clouds are high
+        if (precip > 0.01) {
+            return clamp(80 + rng() * 20, 70, 100);
+        }
+        // Otherwise, use base with variation
+        const variation = (rng() - 0.5) * 30;
+        let clouds = baseClouds + variation;
+        // Morning tends to be clearer
+        if (hour >= 6 && hour <= 10) {
+            clouds -= 10;
+        }
+        // Afternoon buildup (especially in summer)
+        if (hour >= 14 && hour <= 17) {
+            clouds += 10;
+        }
+        return clamp(clouds, 0, 100);
+    });
+}
+// ============================================
+// Wind Generation
+// ============================================
+/**
+ * Generate hourly wind speed and direction
+ */
+function generateHourlyWind(normals, rng) {
+    const baseSpeed = normals.avgWindSpeed;
+    const speed = [];
+    const direction = [];
+    // Pick a prevailing direction for the day
+    const prevailingDir = rng() * 360;
+    for (let h = 0; h < 24; h++) {
+        // Wind is typically lighter at night, stronger in afternoon
+        let timeMultiplier = 1;
+        if (h >= 0 && h < 6)
+            timeMultiplier = 0.6;
+        else if (h >= 12 && h < 18)
+            timeMultiplier = 1.3;
+        // Random variation
+        const variation = 0.7 + rng() * 0.6; // 0.7 to 1.3
+        speed.push(Math.max(0, Math.round(baseSpeed * timeMultiplier * variation)));
+        // Direction varies around prevailing
+        const dirVariation = (rng() - 0.5) * 60; // ±30 degrees
+        direction.push((prevailingDir + dirVariation + 360) % 360);
+    }
+    return { speed, direction };
+}
+// ============================================
+// Humidity Generation
+// ============================================
+/**
+ * Generate hourly humidity
+ */
+function generateHourlyHumidity(hourlyTemp, precipHourly, high, low, normals, rng) {
+    const baseHumidity = normals.avgHumidity;
+    return hourlyTemp.map((temp, hour) => {
+        let humidity = baseHumidity;
+        // Humidity inversely related to temperature (warmer = drier)
+        const tempRange = high - low;
+        const tempPosition = tempRange > 0 ? (temp - low) / tempRange : 0.5;
+        humidity -= tempPosition * 15; // Up to 15% drop at peak temp
+        // Rain increases humidity
+        if (precipHourly[hour] > 0.01) {
+            humidity += 20;
+        }
+        // Early morning tends to be more humid
+        if (hour >= 4 && hour <= 7) {
+            humidity += 10;
+        }
+        // Random variation
+        humidity += (rng() - 0.5) * 10;
+        return clamp(Math.round(humidity), 20, 100);
+    });
+}
+// ============================================
+// UV Index Generation
+// ============================================
+/**
+ * Generate hourly UV index
+ */
+function generateHourlyUV(hourlyTemp, hourlyClouds, sunrise, sunset, normals) {
+    return hourlyTemp.map((_, hour) => {
+        // No UV at night
+        if (hour < sunrise || hour > sunset)
+            return 0;
+        // Peak UV at solar noon
+        const solarNoon = (sunrise + sunset) / 2;
+        const hoursFromNoon = Math.abs(hour - solarNoon);
+        const dayLength = sunset - sunrise;
+        // Base UV curve (peaks at 10-11 at solar noon in summer)
+        const maxUV = 8 + (normals.avgHigh - 60) / 10; // Higher temp = higher max UV
+        const timeFactor = Math.cos((hoursFromNoon / (dayLength / 2)) * Math.PI * 0.5);
+        let uv = maxUV * Math.max(0, timeFactor);
+        // Clouds reduce UV
+        const cloudReduction = hourlyClouds[hour] / 100;
+        uv *= 1 - cloudReduction * 0.7;
+        return clamp(Math.round(uv), 0, 11);
+    });
+}
+// ============================================
+// Main Generator
+// ============================================
+/**
+ * Generate a complete day forecast
+ */
+function generateDay(dateStr, normals, state, dayIndex, initialConditions) {
+    // Generate daily temps
+    const { high, low, meanTemp } = generateDailyTemps(normals, state, dayIndex, initialConditions);
+    state.prevDayMeanTemp = meanTemp;
+    // Determine precipitation
+    const isRaining = willRainToday(normals, state);
+    state.wasRaining = isRaining;
+    // Generate hourly data
+    const precipHourly = generateHourlyPrecip(isRaining, normals, state.rng);
+    const cloudHourly = generateHourlyClouds(isRaining, precipHourly, normals, state.rng);
+    const { speed: windSpeed, direction: windDir } = generateHourlyWind(normals, state.rng);
+    const hourly = [];
+    const conditions = [];
+    for (let h = 0; h < 24; h++) {
+        const temp = generateHourlyTemp(h, high, low, normals.avgSunriseHour, normals.avgSunsetHour);
+        const humidity = generateHourlyHumidity([temp], [precipHourly[h]], high, low, normals, state.rng)[0];
+        const hourData = {
+            hour: h,
+            temperature: Math.round(temp),
+            feelsLike: (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_1__.calculateFeelsLike)(temp, humidity, windSpeed[h]),
+            humidity,
+            precipitation: Math.round(precipHourly[h] * 100) / 100,
+            precipProbability: precipHourly[h] > 0.01
+                ? 80 + state.rng() * 20
+                : 10 + state.rng() * 20,
+            cloudCover: Math.round(cloudHourly[h]),
+            windSpeed: windSpeed[h],
+            windDirection: Math.round(windDir[h]),
+            uvIndex: 0, // Will be set below
+        };
+        // Derive condition
+        const condition = (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_1__.deriveCondition)(hourData);
+        conditions.push(condition);
+        hourly.push(hourData);
+    }
+    // Generate UV after we have all hourly data
+    const uvIndex = generateHourlyUV(hourly.map(h => h.temperature), hourly.map(h => h.cloudCover), normals.avgSunriseHour, normals.avgSunsetHour, normals);
+    // Apply UV to hourly data
+    hourly.forEach((h, i) => {
+        h.uvIndex = uvIndex[i];
+    });
+    // Determine dominant condition for the day
+    const dominantCondition = (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_1__.getDominantCondition)(conditions, normals.avgSunriseHour, normals.avgSunsetHour);
+    return {
+        date: dateStr,
+        high,
+        low,
+        sunrise: Math.round(normals.avgSunriseHour * 10) / 10,
+        sunset: Math.round(normals.avgSunsetHour * 10) / 10,
+        hourly,
+        dominantCondition,
+    };
+}
+/**
+ * Generate a complete forecast
+ */
+function generateForecast(params) {
+    const { climateNormals, startDate, initialConditions, seed, days = 28 } = params;
+    // Create seeded RNG
+    const rng = seedrandom__WEBPACK_IMPORTED_MODULE_0___default()(seed);
+    // Initialize state
+    const initialMean = initialConditions
+        ? initialConditions.temperature
+        : (climateNormals.avgHigh + climateNormals.avgLow) / 2;
+    const state = {
+        prevDayMeanTemp: initialMean,
+        wasRaining: false,
+        rng,
+    };
+    // Generate each day
+    const forecastDays = [];
+    for (let i = 0; i < days; i++) {
+        const { year, month, day } = addDays(startDate.year, startDate.month, startDate.day, i);
+        const dateStr = formatDate(year, month, day);
+        // Only use initial conditions for first 3 days (anchor period)
+        const anchor = i < 3 ? initialConditions : null;
+        forecastDays.push(generateDay(dateStr, climateNormals, state, i, anchor));
+    }
+    return {
+        locationId: seed.split('-')[0] || 'unknown',
+        startDate: formatDate(startDate.year, startDate.month, startDate.day),
+        generatedFrom: initialConditions || undefined,
+        days: forecastDays,
+    };
+}
+/**
+ * Look up weather for a specific date/time in a forecast
+ */
+function lookupWeather(forecast, date) {
+    const dateStr = formatDate(date.year, date.month, date.day);
+    const day = forecast.days.find(d => d.date === dateStr);
+    if (!day)
+        return null;
+    const hour = clamp(date.hour, 0, 23);
+    return day.hourly[hour];
+}
+/**
+ * Get the day forecast for a specific date
+ */
+function lookupDay(forecast, date) {
+    const dateStr = formatDate(date.year, date.month, date.day);
+    return forecast.days.find(d => d.date === dateStr) || null;
+}
+/**
+ * Calculate the day index for a date within a forecast
+ */
+function getDayIndex(forecastStartDate, currentDate) {
+    const [startYear, startMonth, startDay] = forecastStartDate.split('-').map(Number);
+    const start = new Date(startYear, startMonth - 1, startDay);
+    const current = new Date(currentDate.year, currentDate.month - 1, currentDate.day);
+    const diffTime = current.getTime() - start.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+}
+
+
+/***/ },
+
+/***/ "./src/weather/index.ts"
+/*!******************************!*\
+  !*** ./src/weather/index.ts ***!
+  \******************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   cacheForecast: () => (/* reexport safe */ _forecastCache__WEBPACK_IMPORTED_MODULE_4__.cacheForecast),
+/* harmony export */   extractProceduralClimate: () => (/* binding */ extractProceduralClimate),
+/* harmony export */   getCachedForecast: () => (/* reexport safe */ _forecastCache__WEBPACK_IMPORTED_MODULE_4__.getCachedForecast),
+/* harmony export */   getDayIndex: () => (/* reexport safe */ _forecastGenerator__WEBPACK_IMPORTED_MODULE_3__.getDayIndex),
+/* harmony export */   isLegacyClimate: () => (/* binding */ isLegacyClimate),
+/* harmony export */   mapLegacyWeather: () => (/* reexport safe */ _weatherDeriver__WEBPACK_IMPORTED_MODULE_5__.mapLegacyWeather),
+/* harmony export */   toLegacyWeather: () => (/* reexport safe */ _weatherDeriver__WEBPACK_IMPORTED_MODULE_5__.toLegacyWeather),
+/* harmony export */   tolegacyClimateFormat: () => (/* binding */ tolegacyClimateFormat)
+/* harmony export */ });
+/* harmony import */ var _locationMapper__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./locationMapper */ "./src/weather/locationMapper.ts");
+/* harmony import */ var _climateApi__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./climateApi */ "./src/weather/climateApi.ts");
+/* harmony import */ var _fallbackProfiles__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./fallbackProfiles */ "./src/weather/fallbackProfiles.ts");
+/* harmony import */ var _forecastGenerator__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./forecastGenerator */ "./src/weather/forecastGenerator.ts");
+/* harmony import */ var _forecastCache__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./forecastCache */ "./src/weather/forecastCache.ts");
+/* harmony import */ var _weatherDeriver__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./weatherDeriver */ "./src/weather/weatherDeriver.ts");
+/* harmony import */ var _indoorTemperature__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./indoorTemperature */ "./src/weather/indoorTemperature.ts");
+/* harmony import */ var _weatherTransitions__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./weatherTransitions */ "./src/weather/weatherTransitions.ts");
+/**
+ * Weather System
+ *
+ * Main entry point for the procedural weather system.
+ * Coordinates location mapping, forecast generation, and climate derivation.
+ */
+
+
+
+
+
+
+
+
+// Re-export utilities
+
+
+// ============================================
+// Legacy Climate Detection
+// ============================================
+/**
+ * Check if a climate object is the legacy format
+ */
+function isLegacyClimate(climate) {
+    return (climate !== null &&
+        typeof climate === 'object' &&
+        'weather' in climate &&
+        'temperature' in climate &&
+        !('conditionType' in climate));
+}
+/**
+ * Main climate extraction function
+ *
+ * Flow:
+ * 1. Check if we have a cached forecast for this location
+ * 2. If not, map the location and generate a new forecast
+ * 3. Look up weather for current date/time
+ * 4. Calculate indoor/outdoor temperature
+ * 5. Derive conditions and check for transitions
+ */
+async function extractProceduralClimate(params) {
+    const { isInitial, currentTime, currentLocation, previousClimate, narrativeContext, abortSignal, } = params;
+    let { forecastCache, locationMappings } = params;
+    const area = currentLocation.area || 'Unknown';
+    // Check for existing forecast
+    let forecast = (0,_forecastCache__WEBPACK_IMPORTED_MODULE_4__.getCachedForecast)(forecastCache, area, currentTime);
+    const needsNewForecast = (0,_forecastCache__WEBPACK_IMPORTED_MODULE_4__.shouldRegenerateForecast)(forecast, currentTime);
+    // Handle initial extraction or missing forecast
+    if (needsNewForecast || !forecast) {
+        // Get initial conditions from previous climate (for anchoring)
+        let initialConditions = null;
+        if (isInitial && previousClimate) {
+            if (isLegacyClimate(previousClimate)) {
+                initialConditions = {
+                    temperature: previousClimate.temperature,
+                    condition: previousClimate.weather,
+                };
+            }
+            else {
+                initialConditions = {
+                    temperature: previousClimate.temperature,
+                    condition: previousClimate.conditionType,
+                };
+            }
+        }
+        // Map location to climate data source
+        const mapping = await (0,_locationMapper__WEBPACK_IMPORTED_MODULE_0__.mapLocation)(area, narrativeContext || '', locationMappings, abortSignal);
+        // Update location mappings cache
+        locationMappings = (0,_locationMapper__WEBPACK_IMPORTED_MODULE_0__.addToCache)(locationMappings, mapping);
+        // Fetch or generate climate normals
+        let climateNormals;
+        if (mapping.latitude !== undefined && mapping.longitude !== undefined) {
+            climateNormals = await (0,_climateApi__WEBPACK_IMPORTED_MODULE_1__.fetchClimateNormals)(mapping.latitude, mapping.longitude, currentTime.month, mapping.baseClimateType);
+        }
+        else if (mapping.baseClimateType) {
+            climateNormals = (0,_fallbackProfiles__WEBPACK_IMPORTED_MODULE_2__.getClimateNormalsFromFallback)(mapping.baseClimateType, currentTime.month);
+        }
+        else {
+            // Ultimate fallback
+            climateNormals = (0,_fallbackProfiles__WEBPACK_IMPORTED_MODULE_2__.getClimateNormalsFromFallback)('temperate', currentTime.month);
+        }
+        // Generate forecast
+        const seed = `${area}-${currentTime.year}-${currentTime.month}-${currentTime.day}`;
+        forecast = (0,_forecastGenerator__WEBPACK_IMPORTED_MODULE_3__.generateForecast)({
+            climateNormals,
+            startDate: currentTime,
+            initialConditions,
+            seed,
+            days: 28,
+        });
+        // Update location info on forecast
+        if (mapping.realWorldAnalog && mapping.latitude && mapping.longitude) {
+            forecast.realWorldAnalog = {
+                name: mapping.realWorldAnalog,
+                latitude: mapping.latitude,
+                longitude: mapping.longitude,
+            };
+        }
+        if (mapping.baseClimateType) {
+            forecast.baseClimateType = mapping.baseClimateType;
+        }
+        // Cache the forecast
+        forecastCache = (0,_forecastCache__WEBPACK_IMPORTED_MODULE_4__.cacheForecast)(forecastCache, area, forecast);
+    }
+    // Look up current weather
+    const hourlyWeather = (0,_forecastGenerator__WEBPACK_IMPORTED_MODULE_3__.lookupWeather)(forecast, currentTime);
+    const dayForecast = (0,_forecastGenerator__WEBPACK_IMPORTED_MODULE_3__.lookupDay)(forecast, currentTime);
+    if (!hourlyWeather || !dayForecast) {
+        // This shouldn't happen if forecast generation is correct
+        console.error('[BlazeTracker] Failed to look up weather for date');
+        // Return a default climate
+        return createDefaultResult(currentTime, currentLocation, forecastCache, locationMappings);
+    }
+    // Calculate indoor/outdoor temperature
+    const tempResult = (0,_indoorTemperature__WEBPACK_IMPORTED_MODULE_6__.calculateEffectiveTemperature)(hourlyWeather.temperature, currentLocation, currentTime.hour);
+    // Derive condition
+    const conditionType = (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_5__.deriveCondition)(hourlyWeather);
+    const conditions = (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_5__.describeCondition)(conditionType);
+    // Build climate object
+    const climate = {
+        temperature: Math.round(tempResult.effectiveTemperature),
+        outdoorTemperature: hourlyWeather.temperature,
+        indoorTemperature: tempResult.indoorTemperature,
+        feelsLike: (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_5__.calculateFeelsLike)(hourlyWeather.temperature, hourlyWeather.humidity, hourlyWeather.windSpeed),
+        humidity: hourlyWeather.humidity,
+        precipitation: hourlyWeather.precipitation,
+        cloudCover: hourlyWeather.cloudCover,
+        windSpeed: hourlyWeather.windSpeed,
+        windDirection: (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_5__.getWindDirection)(hourlyWeather.windDirection),
+        conditions,
+        conditionType,
+        uvIndex: hourlyWeather.uvIndex,
+        daylight: (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_5__.getDaylightPhase)(currentTime.hour, dayForecast.sunrise, dayForecast.sunset),
+        isIndoors: tempResult.isIndoors,
+        buildingType: tempResult.buildingType,
+    };
+    // Check for weather transition
+    let transition = null;
+    if (previousClimate && !isInitial) {
+        const prevProcedural = isLegacyClimate(previousClimate)
+            ? convertLegacyClimate(previousClimate)
+            : previousClimate;
+        if ((0,_weatherTransitions__WEBPACK_IMPORTED_MODULE_7__.shouldMentionTransition)(prevProcedural, climate)) {
+            transition = (0,_weatherTransitions__WEBPACK_IMPORTED_MODULE_7__.generateTransitionInjection)(prevProcedural, climate);
+        }
+    }
+    return {
+        climate,
+        forecast,
+        transition,
+        forecastCache,
+        locationMappings,
+    };
+}
+/**
+ * Convert legacy climate to procedural format (for comparison)
+ */
+function convertLegacyClimate(legacy) {
+    const conditionType = (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_5__.mapLegacyWeather)(legacy.weather);
+    return {
+        temperature: legacy.temperature,
+        outdoorTemperature: legacy.temperature,
+        feelsLike: legacy.temperature,
+        humidity: 50,
+        precipitation: 0,
+        cloudCover: 50,
+        windSpeed: 5,
+        windDirection: 'N',
+        conditions: legacy.weather,
+        conditionType,
+        uvIndex: 5,
+        daylight: 'day',
+        isIndoors: false,
+    };
+}
+/**
+ * Create a default result when forecast lookup fails
+ */
+function createDefaultResult(currentTime, currentLocation, forecastCache, locationMappings) {
+    const climate = {
+        temperature: 70,
+        outdoorTemperature: 70,
+        feelsLike: 70,
+        humidity: 50,
+        precipitation: 0,
+        cloudCover: 30,
+        windSpeed: 5,
+        windDirection: 'N',
+        conditions: 'pleasant weather',
+        conditionType: 'clear',
+        uvIndex: 5,
+        daylight: currentTime.hour >= 6 && currentTime.hour < 18 ? 'day' : 'night',
+        isIndoors: false,
+    };
+    // Create a minimal forecast
+    const forecast = {
+        locationId: currentLocation.area || 'unknown',
+        startDate: `${currentTime.year}-${String(currentTime.month).padStart(2, '0')}-${String(currentTime.day).padStart(2, '0')}`,
+        days: [],
+    };
+    return {
+        climate,
+        forecast,
+        transition: null,
+        forecastCache,
+        locationMappings,
+    };
+}
+// ============================================
+// Utility Functions
+// ============================================
+/**
+ * Convert ProceduralClimate to legacy Climate format
+ * Used for backward compatibility with existing code
+ */
+function tolegacyClimateFormat(climate) {
+    return {
+        weather: (0,_weatherDeriver__WEBPACK_IMPORTED_MODULE_5__.toLegacyWeather)(climate.conditionType),
+        temperature: climate.temperature,
+    };
+}
+/**
+ * Get forecast day index for debugging
+ */
+
+
+
+/***/ },
+
+/***/ "./src/weather/indoorTemperature.ts"
+/*!******************************************!*\
+  !*** ./src/weather/indoorTemperature.ts ***!
+  \******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   calculateEffectiveTemperature: () => (/* binding */ calculateEffectiveTemperature),
+/* harmony export */   calculateIndoorTemp: () => (/* binding */ calculateIndoorTemp),
+/* harmony export */   inferBuildingType: () => (/* binding */ inferBuildingType),
+/* harmony export */   isIndoors: () => (/* binding */ isIndoors)
+/* harmony export */ });
+/**
+ * Indoor Temperature Calculator
+ *
+ * Calculates indoor temperatures based on building type and outdoor conditions.
+ * All temperatures in Fahrenheit.
+ */
+/**
+ * Calculate indoor temperature based on building type
+ */
+function calculateIndoorTemp(params) {
+    const { outdoorTemp, buildingType, hour } = params;
+    switch (buildingType) {
+        case 'modern':
+            // HVAC maintains 65-75°F
+            // Slight variation based on outdoor (AC struggles in extreme heat)
+            if (outdoorTemp > 95)
+                return 75 + (outdoorTemp - 95) * 0.1;
+            if (outdoorTemp < 14)
+                return 65 - (14 - outdoorTemp) * 0.05;
+            return 70;
+        case 'heated': {
+            // Fireplace/hearth - aims for ~65°F but influenced by outdoor
+            // Warmer during "active" hours, cooler at night (fire dies down)
+            const heatedTarget = hour >= 6 && hour <= 22 ? 65 : 57;
+            const heatedDamping = 0.3; // 30% outdoor influence
+            return heatedTarget + (outdoorTemp - heatedTarget) * heatedDamping;
+        }
+        case 'unheated': {
+            // Barn, warehouse - minimal shelter
+            // Slightly warmer than outdoor in cold, slightly cooler in heat
+            const unheatedDamping = 0.7;
+            const shelterEffect = outdoorTemp < 50 ? 5 : outdoorTemp > 77 ? -4 : 0;
+            return (outdoorTemp * unheatedDamping +
+                70 * (1 - unheatedDamping) +
+                shelterEffect);
+        }
+        case 'underground':
+            // Cave, basement - stable year-round
+            // Typically average annual temperature of region (~55°F)
+            return 55;
+        case 'tent': {
+            // Almost no shelter, slight greenhouse effect
+            const tentEffect = hour >= 10 && hour <= 16 ? 9 : 2;
+            return outdoorTemp + tentEffect;
+        }
+        case 'vehicle': {
+            // Car/carriage - moderate shelter
+            // Greenhouse effect when sunny during day
+            const vehicleEffect = hour >= 10 && hour <= 16 ? 15 : 4;
+            return outdoorTemp + vehicleEffect;
+        }
+        default:
+            return outdoorTemp;
+    }
+}
+// ============================================
+// Building Type Detection
+// ============================================
+/**
+ * Pattern definitions for building type detection
+ */
+const BUILDING_PATTERNS = [
+    [
+        'underground',
+        /\b(cave|basement|cellar|mine|tunnel|bunker|crypt|catacomb|sewer|subway|metro|underground)\b/i,
+    ],
+    ['tent', /\b(tent|campsite|bivouac|yurt|pavilion|camping|campground)\b/i],
+    [
+        'vehicle',
+        /\b(car|truck|van|bus|carriage|wagon|train|plane|aircraft|ship|boat|yacht|submarine|spaceship|shuttle)\b/i,
+    ],
+    [
+        'unheated',
+        /\b(barn|warehouse|shed|garage|stable|hangar|greenhouse|storage|attic|loft)\b/i,
+    ],
+    [
+        'modern',
+        /\b(office|apartment|hotel|hospital|mall|store|shop|restaurant|cafe|cafeteria|gym|school|university|library|museum|theater|cinema|supermarket|bank|clinic)\b/i,
+    ],
+    [
+        'heated',
+        /\b(house|home|cabin|cottage|inn|tavern|castle|manor|palace|mansion|villa|lodge|hut|shack|chapel|church|temple|shrine)\b/i,
+    ],
+];
+/**
+ * Infer building type from location description
+ */
+function inferBuildingType(location) {
+    const place = location.place?.toLowerCase() || '';
+    const area = location.area?.toLowerCase() || '';
+    const position = location.position?.toLowerCase() || '';
+    // Combine all location text for matching
+    const fullText = `${area} ${place} ${position}`;
+    for (const [type, pattern] of BUILDING_PATTERNS) {
+        if (pattern.test(fullText)) {
+            return type;
+        }
+    }
+    return null; // Unknown - assume outdoor
+}
+// ============================================
+// Indoor/Outdoor Detection
+// ============================================
+/**
+ * Explicit outdoor indicators
+ */
+const OUTDOOR_PATTERNS = /\b(outside|outdoor|street|road|path|trail|garden|park|beach|field|forest|mountain|river|lake|ocean|sea|sky|rooftop|balcony|patio|deck|yard|lawn|meadow|desert|plains|valley|cliff|shore|woods|jungle|savanna|tundra|swamp|marsh|courtyard|plaza|square|alley|sidewalk|highway|bridge)\b/i;
+/**
+ * Explicit indoor indicators
+ */
+const INDOOR_PATTERNS = /\b(inside|indoor|room|hall|chamber|office|bedroom|kitchen|bathroom|lobby|corridor|basement|attic|closet|pantry|study|den|foyer|vestibule|anteroom|parlor|salon|lounge|ward|cell|vault|treasury|armory|throne room|great hall|dining room|living room|sitting room)\b/i;
+/**
+ * Determine if the current location is indoors
+ */
+function isIndoors(location) {
+    const place = location.place?.toLowerCase() || '';
+    const position = location.position?.toLowerCase() || '';
+    const area = location.area?.toLowerCase() || '';
+    // Check position first (most specific)
+    if (OUTDOOR_PATTERNS.test(position)) {
+        return false;
+    }
+    if (INDOOR_PATTERNS.test(position)) {
+        return true;
+    }
+    // Check place
+    if (OUTDOOR_PATTERNS.test(place)) {
+        return false;
+    }
+    if (INDOOR_PATTERNS.test(place)) {
+        return true;
+    }
+    // Check area
+    if (OUTDOOR_PATTERNS.test(area)) {
+        return false;
+    }
+    // If we can infer a building type, assume indoor
+    const buildingType = inferBuildingType(location);
+    if (buildingType && buildingType !== 'tent') {
+        return true;
+    }
+    // Default to outdoor if uncertain
+    return false;
+}
+/**
+ * Determine indoor/outdoor status and calculate effective temperature
+ */
+function calculateEffectiveTemperature(outdoorTemp, location, hour) {
+    const indoors = isIndoors(location);
+    if (!indoors) {
+        return {
+            isIndoors: false,
+            effectiveTemperature: outdoorTemp,
+        };
+    }
+    const buildingType = inferBuildingType(location);
+    if (!buildingType) {
+        // Indoor but unknown building type - assume heated
+        const indoorTemp = calculateIndoorTemp({
+            outdoorTemp,
+            buildingType: 'heated',
+            hour,
+        });
+        return {
+            isIndoors: true,
+            buildingType: 'heated',
+            indoorTemperature: indoorTemp,
+            effectiveTemperature: indoorTemp,
+        };
+    }
+    const indoorTemp = calculateIndoorTemp({
+        outdoorTemp,
+        buildingType,
+        hour,
+    });
+    return {
+        isIndoors: true,
+        buildingType,
+        indoorTemperature: indoorTemp,
+        effectiveTemperature: indoorTemp,
+    };
+}
+
+
+/***/ },
+
+/***/ "./src/weather/locationMapper.ts"
+/*!***************************************!*\
+  !*** ./src/weather/locationMapper.ts ***!
+  \***************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   addToCache: () => (/* binding */ addToCache),
+/* harmony export */   findInCache: () => (/* binding */ findInCache),
+/* harmony export */   isLikelyRealLocation: () => (/* binding */ isLikelyRealLocation),
+/* harmony export */   mapLocation: () => (/* binding */ mapLocation)
+/* harmony export */ });
+/* harmony import */ var _climateApi__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./climateApi */ "./src/weather/climateApi.ts");
+/* harmony import */ var _settings__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../settings */ "./src/settings.ts");
+/* harmony import */ var _utils_generator__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../utils/generator */ "./src/utils/generator.ts");
+/* harmony import */ var _utils_json__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../utils/json */ "./src/utils/json.ts");
+/**
+ * Location Mapper
+ *
+ * Maps fictional/fantasy locations to real-world climate analogs
+ * or base climate types.
+ */
+
+
+
+
+// ============================================
+// Constants
+// ============================================
+const SYSTEM_PROMPT = 'You are a climate analysis assistant. Return only valid JSON.';
+const LOCATION_ANALYSIS_PROMPT = `
+Analyze this location for climate mapping.
+
+Location: {{location}}
+Context: {{context}}
+
+Determine:
+1. Is the LOCATION itself a real Earth location, or fictional/fantasy?
+2. If fictional, what real-world city has the most similar climate?
+3. If you cannot determine a good real-world equivalent, classify into a base climate type.
+
+CRITICAL: You are classifying the LOCATION, not the characters or story.
+- Fictional characters in a real location = isFantasy: FALSE (the location is still real)
+- A real location in a fictional story = isFantasy: FALSE (the location is still real)
+- Only fictional/fantasy LOCATIONS should be isFantasy: true
+
+Base climate types (use ONLY if no good real-world match):
+- temperate: Mild seasons, moderate precipitation (e.g., generic forests, villages)
+- desert: Hot/dry, large day/night temperature swings
+- arctic: Cold year-round, possible polar day/night cycles
+- tropical: Hot/humid, consistent temperatures, possible monsoons
+- mediterranean: Warm dry summers, mild wet winters
+- continental: Hot summers, cold winters, variable weather
+- oceanic: Mild temperatures, frequent rain, small variations
+
+Examples:
+- "London" → isFantasy: false (real location)
+- "London" (with Doctor Who) → isFantasy: false (London is real regardless of fictional characters)
+- "Tokyo" (in an anime) → isFantasy: false (Tokyo is a real city)
+- "New York" (with Spider-Man) → isFantasy: false (New York is real)
+- "Winterfell" → isFantasy: true, realWorldAnalog: "Reykjavik, Iceland"
+- "The Void Dimension" → isFantasy: true, baseClimateType: "arctic" (no good match)
+- "Generic fantasy tavern" → isFantasy: true, baseClimateType: "temperate"
+- "Tatooine" → isFantasy: true, realWorldAnalog: "Phoenix, Arizona"
+- "King's Landing" → isFantasy: true, realWorldAnalog: "Dubrovnik, Croatia"
+- "Gotham City" → isFantasy: true, realWorldAnalog: "New York City, USA"
+
+Output JSON:
+{
+  "isFantasy": true/false,
+  "realWorldAnalog": "City, Country" or null,
+  "baseClimateType": "temperate" or null,
+  "reasoning": "Brief explanation"
+}
+`;
+// Schema for validation (reserved for future use)
+const _LOCATION_ANALYSIS_SCHEMA = {
+    type: 'object',
+    properties: {
+        isFantasy: { type: 'boolean' },
+        realWorldAnalog: { type: ['string', 'null'] },
+        baseClimateType: {
+            type: ['string', 'null'],
+            enum: [
+                'temperate',
+                'desert',
+                'arctic',
+                'tropical',
+                'mediterranean',
+                'continental',
+                'oceanic',
+                null,
+            ],
+        },
+        reasoning: { type: 'string' },
+    },
+    required: ['isFantasy', 'reasoning'],
+};
+/**
+ * Try geocoding with progressively shorter location strings.
+ * For "Industrial District, Huntsville, AL", tries:
+ * 1. "Industrial District, Huntsville, AL"
+ * 2. "Huntsville, AL"
+ * 3. "AL"
+ */
+async function geocodeWithFallback(location) {
+    // Split by comma and try progressively shorter versions
+    const parts = location.split(',').map(p => p.trim());
+    for (let i = 0; i < parts.length; i++) {
+        const tryLocation = parts.slice(i).join(', ');
+        const coords = await (0,_climateApi__WEBPACK_IMPORTED_MODULE_0__.geocodeLocation)(tryLocation);
+        if (coords) {
+            return {
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                usedLocation: tryLocation,
+            };
+        }
+    }
+    return null;
+}
+// ============================================
+// Main API
+// ============================================
+/**
+ * Map a location to climate data source
+ *
+ * Flow:
+ * 1. Check cache
+ * 2. Ask LLM if fantasy or real
+ * 3. If real, try geocoding
+ * 4. If fantasy with analog, try geocoding analog
+ * 5. If geocoding fails, fall back to base climate type
+ */
+async function mapLocation(location, context, cache, abortSignal) {
+    // Check cache first
+    const normalizedLocation = location.toLowerCase().trim();
+    const cached = cache.find(m => m.fantasyLocation.toLowerCase().trim() === normalizedLocation);
+    if (cached) {
+        return cached;
+    }
+    // Ask LLM to analyze the location
+    const analysis = await analyzeLocation(location, context, abortSignal);
+    // Handle real locations
+    if (!analysis.isFantasy) {
+        const coords = await geocodeWithFallback(location);
+        if (coords) {
+            return {
+                fantasyLocation: location,
+                realWorldAnalog: coords.usedLocation,
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                isFantasy: false,
+                reasoning: analysis.reasoning,
+            };
+        }
+        // Geocoding failed - treat as fantasy and re-analyze
+        console.warn(`[BlazeTracker] Geocoding failed for "${location}", treating as fantasy`);
+    }
+    // Handle fantasy with real-world analog
+    if (analysis.realWorldAnalog) {
+        const coords = await (0,_climateApi__WEBPACK_IMPORTED_MODULE_0__.geocodeLocation)(analysis.realWorldAnalog);
+        if (coords) {
+            return {
+                fantasyLocation: location,
+                realWorldAnalog: analysis.realWorldAnalog,
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                isFantasy: true,
+                reasoning: analysis.reasoning,
+            };
+        }
+        // Analog geocoding failed - fall through to base climate type
+        console.warn(`[BlazeTracker] Geocoding failed for analog "${analysis.realWorldAnalog}"`);
+    }
+    // Fall back to base climate type
+    const baseClimateType = analysis.baseClimateType || 'temperate';
+    return {
+        fantasyLocation: location,
+        baseClimateType: baseClimateType,
+        isFantasy: true,
+        reasoning: analysis.reasoning || 'Using fallback climate type',
+    };
+}
+/**
+ * Quick check if a location is likely real (for optimization)
+ */
+async function isLikelyRealLocation(location) {
+    // Simple heuristics for common real locations
+    const realIndicators = [
+        /^[A-Z][a-z]+,\s*[A-Z][a-z]+/, // "City, Country" format
+        /\b(USA|UK|France|Germany|Japan|China|Australia|Canada)\b/i,
+        /\b(New York|London|Paris|Tokyo|Sydney|Toronto)\b/i,
+    ];
+    const fantasyIndicators = [
+        /\b(castle|kingdom|realm|dimension|void|magical|enchanted)\b/i,
+        /\b(tavern|inn|guild|dungeon|forest|village)\b/i,
+        /'s\s+(lair|tower|fortress|domain)/i,
+    ];
+    const locationLower = location.toLowerCase();
+    // Check fantasy indicators first
+    if (fantasyIndicators.some(r => r.test(locationLower))) {
+        return false;
+    }
+    // Check real indicators
+    if (realIndicators.some(r => r.test(location))) {
+        return true;
+    }
+    // Uncertain - will need LLM analysis
+    return false;
+}
+async function analyzeLocation(location, context, abortSignal) {
+    const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_1__.getSettings)();
+    const prompt = LOCATION_ANALYSIS_PROMPT.replace('{{location}}', location).replace('{{context}}', context || 'No additional context');
+    const messages = (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.buildExtractionMessages)(SYSTEM_PROMPT, prompt);
+    try {
+        const response = await (0,_utils_generator__WEBPACK_IMPORTED_MODULE_2__.makeGeneratorRequest)(messages, {
+            profileId: settings.profileId,
+            maxTokens: 500,
+            temperature: (0,_settings__WEBPACK_IMPORTED_MODULE_1__.getTemperature)('climate_initial'),
+            abortSignal,
+        });
+        const parsed = (0,_utils_json__WEBPACK_IMPORTED_MODULE_3__.parseJsonResponse)(response, {
+            shape: 'object',
+            moduleName: 'BlazeTracker/LocationMapper',
+        });
+        return validateAnalysisResult(parsed);
+    }
+    catch (error) {
+        console.error('[BlazeTracker] Location analysis failed:', error);
+        // Return safe default
+        return {
+            isFantasy: true,
+            realWorldAnalog: null,
+            baseClimateType: 'temperate',
+            reasoning: 'Analysis failed, using default',
+        };
+    }
+}
+function validateAnalysisResult(data) {
+    if (typeof data !== 'object' || data === null) {
+        throw new Error('Invalid location analysis result');
+    }
+    const obj = data;
+    const validBaseTypes = [
+        'temperate',
+        'desert',
+        'arctic',
+        'tropical',
+        'mediterranean',
+        'continental',
+        'oceanic',
+    ];
+    return {
+        isFantasy: typeof obj.isFantasy === 'boolean' ? obj.isFantasy : true,
+        realWorldAnalog: typeof obj.realWorldAnalog === 'string' ? obj.realWorldAnalog : null,
+        baseClimateType: typeof obj.baseClimateType === 'string' &&
+            validBaseTypes.includes(obj.baseClimateType)
+            ? obj.baseClimateType
+            : null,
+        reasoning: typeof obj.reasoning === 'string' ? obj.reasoning : 'No reasoning provided',
+    };
+}
+// ============================================
+// Cache Management
+// ============================================
+/**
+ * Add a mapping to the cache
+ */
+function addToCache(cache, mapping) {
+    const normalizedLocation = mapping.fantasyLocation.toLowerCase().trim();
+    // Remove existing entry if present
+    const filtered = cache.filter(m => m.fantasyLocation.toLowerCase().trim() !== normalizedLocation);
+    return [...filtered, mapping];
+}
+/**
+ * Find a mapping in the cache
+ */
+function findInCache(cache, location) {
+    const normalizedLocation = location.toLowerCase().trim();
+    return cache.find(m => m.fantasyLocation.toLowerCase().trim() === normalizedLocation);
+}
+
+
+/***/ },
+
+/***/ "./src/weather/weatherDeriver.ts"
+/*!***************************************!*\
+  !*** ./src/weather/weatherDeriver.ts ***!
+  \***************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   calculateFeelsLike: () => (/* binding */ calculateFeelsLike),
+/* harmony export */   deriveCondition: () => (/* binding */ deriveCondition),
+/* harmony export */   describeCondition: () => (/* binding */ describeCondition),
+/* harmony export */   getDaylightPhase: () => (/* binding */ getDaylightPhase),
+/* harmony export */   getDominantCondition: () => (/* binding */ getDominantCondition),
+/* harmony export */   getWindDirection: () => (/* binding */ getWindDirection),
+/* harmony export */   mapLegacyWeather: () => (/* binding */ mapLegacyWeather),
+/* harmony export */   toLegacyWeather: () => (/* binding */ toLegacyWeather)
+/* harmony export */ });
+/**
+ * Weather Deriver
+ *
+ * Derives human-readable weather conditions from meteorological metrics.
+ * All temperatures in Fahrenheit, wind in mph, precipitation in inches.
+ */
+// ============================================
+// Condition Derivation
+// ============================================
+/**
+ * Derive weather condition from hourly metrics
+ */
+function deriveCondition(weather) {
+    const { temperature, precipitation, humidity, windSpeed, cloudCover } = weather;
+    // Precipitation takes priority (precipitation in inches)
+    if (precipitation > 0.02) {
+        // Snow vs rain (temperature in °F)
+        if (temperature <= 32) {
+            if (windSpeed > 25 && precipitation > 0.2)
+                return 'blizzard';
+            if (precipitation > 0.2)
+                return 'heavy_snow';
+            return 'snow';
+        }
+        if (temperature <= 35)
+            return 'sleet';
+        // Rain intensity
+        if (precipitation > 0.4)
+            return 'heavy_rain';
+        if (precipitation > 0.2 && windSpeed > 20)
+            return 'thunderstorm';
+        if (precipitation > 0.08)
+            return 'rain';
+        return 'drizzle';
+    }
+    // Fog (high humidity, low wind, near dew point)
+    if (humidity > 95 && windSpeed < 6 && cloudCover > 80) {
+        return 'foggy';
+    }
+    // Wind (mph)
+    if (windSpeed > 30)
+        return 'windy';
+    // Cloud cover
+    if (cloudCover > 85)
+        return 'overcast';
+    if (cloudCover > 50)
+        return 'partly_cloudy';
+    // Temperature extremes (°F)
+    if (temperature > 95)
+        return 'hot';
+    if (temperature < 14)
+        return 'cold';
+    // Humidity extreme
+    if (humidity > 85 && temperature > 75)
+        return 'humid';
+    // Default clear conditions
+    return cloudCover < 20 ? 'sunny' : 'clear';
+}
+// ============================================
+// Condition Descriptions
+// ============================================
+const CONDITION_DESCRIPTIONS = {
+    clear: ['clear skies', 'pleasant weather', 'calm conditions'],
+    sunny: ['bright sunshine', 'sunny skies', 'brilliant sun'],
+    partly_cloudy: ['scattered clouds', 'partly cloudy', 'intermittent sunshine'],
+    overcast: ['gray skies', 'heavy cloud cover', 'overcast'],
+    foggy: ['thick fog', 'misty conditions', 'fog rolling in'],
+    drizzle: ['light drizzle', 'misting rain', 'gentle rain'],
+    rain: ['steady rain', 'rainfall', 'rainy weather'],
+    heavy_rain: ['heavy rain', 'downpour', 'torrential rain'],
+    thunderstorm: ['thunderstorm', 'thunder and lightning', 'electrical storm'],
+    sleet: ['freezing rain', 'sleet', 'icy precipitation'],
+    snow: ['snowfall', 'snow flurries', 'snowing'],
+    heavy_snow: ['heavy snowfall', 'blanketing snow', 'intense snow'],
+    blizzard: ['blizzard conditions', 'whiteout', 'severe blizzard'],
+    windy: ['strong winds', 'gusty conditions', 'blustery weather'],
+    hot: ['scorching heat', 'oppressive heat', 'sweltering'],
+    cold: ['bitter cold', 'freezing temperatures', 'frigid air'],
+    humid: ['muggy conditions', 'humid air', 'sticky weather'],
+};
+/**
+ * Get a human-readable description of the condition
+ */
+function describeCondition(condition, rng) {
+    const options = CONDITION_DESCRIPTIONS[condition] || ['moderate weather'];
+    const random = rng ? rng() : Math.random();
+    return options[Math.floor(random * options.length)];
+}
+// ============================================
+// Wind Direction
+// ============================================
+const WIND_DIRECTIONS = [
+    'N',
+    'NNE',
+    'NE',
+    'ENE',
+    'E',
+    'ESE',
+    'SE',
+    'SSE',
+    'S',
+    'SSW',
+    'SW',
+    'WSW',
+    'W',
+    'WNW',
+    'NW',
+    'NNW',
+];
+/**
+ * Convert wind direction degrees to compass direction
+ */
+function getWindDirection(degrees) {
+    const index = Math.round(degrees / 22.5) % 16;
+    return WIND_DIRECTIONS[index];
+}
+// ============================================
+// Daylight Phase
+// ============================================
+/**
+ * Determine daylight phase based on current hour and sun times
+ */
+function getDaylightPhase(hour, sunrise, sunset) {
+    // Dawn: 30 min before to 30 min after sunrise
+    if (hour >= sunrise - 0.5 && hour < sunrise + 0.5)
+        return 'dawn';
+    // Day: after dawn until 30 min before sunset
+    if (hour >= sunrise + 0.5 && hour < sunset - 0.5)
+        return 'day';
+    // Dusk: 30 min before to 30 min after sunset
+    if (hour >= sunset - 0.5 && hour < sunset + 0.5)
+        return 'dusk';
+    // Night: everything else
+    return 'night';
+}
+// ============================================
+// Feels Like Temperature
+// ============================================
+/**
+ * Calculate "feels like" temperature (wind chill / heat index)
+ * Uses Fahrenheit
+ */
+function calculateFeelsLike(temperature, humidity, windSpeed) {
+    // Wind chill (for cold temperatures)
+    if (temperature <= 50 && windSpeed > 3) {
+        // NWS Wind Chill formula
+        const windChill = 35.74 +
+            0.6215 * temperature -
+            35.75 * Math.pow(windSpeed, 0.16) +
+            0.4275 * temperature * Math.pow(windSpeed, 0.16);
+        return Math.round(windChill);
+    }
+    // Heat index (for hot temperatures)
+    if (temperature >= 80 && humidity >= 40) {
+        // Simplified Rothfusz regression
+        const hi = -42.379 +
+            2.04901523 * temperature +
+            10.14333127 * humidity -
+            0.22475541 * temperature * humidity -
+            0.00683783 * temperature * temperature -
+            0.05481717 * humidity * humidity +
+            0.00122874 * temperature * temperature * humidity +
+            0.00085282 * temperature * humidity * humidity -
+            0.00000199 * temperature * temperature * humidity * humidity;
+        return Math.round(hi);
+    }
+    // No adjustment needed
+    return Math.round(temperature);
+}
+// ============================================
+// Dominant Condition for Day
+// ============================================
+/**
+ * Determine the dominant weather condition for a day
+ * based on hourly conditions (weighted toward daytime hours)
+ */
+function getDominantCondition(hourlyConditions, sunrise, sunset) {
+    const counts = {};
+    hourlyConditions.forEach((condition, hour) => {
+        // Weight daytime hours more heavily
+        const isDaytime = hour >= Math.floor(sunrise) && hour <= Math.ceil(sunset);
+        const weight = isDaytime ? 2 : 1;
+        counts[condition] = (counts[condition] || 0) + weight;
+    });
+    // Find condition with highest count
+    let dominant = 'clear';
+    let maxCount = 0;
+    for (const [condition, count] of Object.entries(counts)) {
+        if (count > maxCount) {
+            maxCount = count;
+            dominant = condition;
+        }
+    }
+    return dominant;
+}
+// ============================================
+// Legacy Condition Mapping
+// ============================================
+/**
+ * Map legacy weather types to new WeatherCondition
+ */
+function mapLegacyWeather(legacyWeather) {
+    const mapping = {
+        sunny: 'sunny',
+        cloudy: 'overcast',
+        snowy: 'snow',
+        rainy: 'rain',
+        windy: 'windy',
+        thunderstorm: 'thunderstorm',
+    };
+    return mapping[legacyWeather.toLowerCase()] || 'clear';
+}
+/**
+ * Map new WeatherCondition back to legacy weather type (for display compatibility)
+ */
+function toLegacyWeather(condition) {
+    switch (condition) {
+        case 'sunny':
+        case 'clear':
+        case 'hot':
+            return 'sunny';
+        case 'partly_cloudy':
+        case 'overcast':
+        case 'foggy':
+        case 'humid':
+            return 'cloudy';
+        case 'snow':
+        case 'heavy_snow':
+        case 'blizzard':
+        case 'sleet':
+        case 'cold':
+            return 'snowy';
+        case 'drizzle':
+        case 'rain':
+        case 'heavy_rain':
+            return 'rainy';
+        case 'windy':
+            return 'windy';
+        case 'thunderstorm':
+            return 'thunderstorm';
+        default:
+            return 'sunny';
+    }
+}
+
+
+/***/ },
+
+/***/ "./src/weather/weatherTransitions.ts"
+/*!*******************************************!*\
+  !*** ./src/weather/weatherTransitions.ts ***!
+  \*******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   generateTransitionInjection: () => (/* binding */ generateTransitionInjection),
+/* harmony export */   getTransitionText: () => (/* binding */ getTransitionText),
+/* harmony export */   shouldMentionTransition: () => (/* binding */ shouldMentionTransition)
+/* harmony export */ });
+/**
+ * Weather Transitions
+ *
+ * Generates narrative text when weather changes significantly.
+ */
+const TRANSITIONS = [
+    // Clear to precipitation
+    {
+        from: 'clear',
+        to: 'overcast',
+        templates: [
+            'Clouds drift across the sky, dimming the light',
+            'The sky grows gray as clouds gather overhead',
+            'A blanket of clouds slowly obscures the sun',
+        ],
+    },
+    {
+        from: 'sunny',
+        to: 'overcast',
+        templates: [
+            'The bright sunshine fades as clouds roll in',
+            'Dark clouds begin to gather, blocking out the sun',
+            'The sunny skies give way to gathering clouds',
+        ],
+    },
+    {
+        from: 'overcast',
+        to: 'rain',
+        templates: [
+            'The first drops of rain begin to fall',
+            'Rain starts to patter down from the gray sky',
+            'The clouds finally release their burden as rain begins',
+        ],
+    },
+    {
+        from: 'clear',
+        to: 'rain',
+        templates: [
+            'Dark clouds roll in quickly, and rain begins to fall',
+            'The weather turns suddenly as rain sweeps across the area',
+        ],
+    },
+    {
+        from: 'partly_cloudy',
+        to: 'rain',
+        templates: [
+            'The scattered clouds thicken and rain begins to fall',
+            'What started as a few clouds has turned to steady rain',
+        ],
+    },
+    {
+        from: 'rain',
+        to: 'heavy_rain',
+        templates: [
+            'The rain intensifies into a downpour',
+            'The steady rain becomes a torrential downpour',
+        ],
+    },
+    {
+        from: 'rain',
+        to: 'thunderstorm',
+        templates: [
+            'Thunder rumbles in the distance as the rain intensifies',
+            'Lightning flashes across the sky as the storm picks up',
+            'The rain turns to a full thunderstorm',
+        ],
+    },
+    {
+        from: 'rain',
+        to: 'snow',
+        templates: [
+            'The rain turns to sleet, then thick snowflakes',
+            'As the temperature drops, the rain becomes snow',
+        ],
+    },
+    // Precipitation clearing
+    {
+        from: 'rain',
+        to: 'clear',
+        templates: [
+            'The rain tapers off as patches of blue appear',
+            'The clouds part and sunlight breaks through',
+            'The storm passes, leaving fresh air in its wake',
+        ],
+    },
+    {
+        from: 'rain',
+        to: 'partly_cloudy',
+        templates: [
+            'The rain stops, leaving behind scattered clouds',
+            'The precipitation ends but clouds remain',
+        ],
+    },
+    {
+        from: 'heavy_rain',
+        to: 'rain',
+        templates: [
+            'The downpour eases to a steady rain',
+            'The torrential rain lessens somewhat',
+        ],
+    },
+    {
+        from: 'thunderstorm',
+        to: 'rain',
+        templates: [
+            'The thunder fades into the distance, leaving just rain',
+            'The storm passes but the rain continues',
+        ],
+    },
+    {
+        from: 'snow',
+        to: 'clear',
+        templates: [
+            'The snowfall gradually stops, revealing clear skies',
+            'The last snowflakes drift down as the clouds disperse',
+        ],
+    },
+    {
+        from: 'heavy_snow',
+        to: 'snow',
+        templates: [
+            'The heavy snowfall eases to light flurries',
+            'The blanketing snow becomes a gentler fall',
+        ],
+    },
+    {
+        from: 'blizzard',
+        to: 'snow',
+        templates: [
+            'The blizzard conditions ease, though snow continues',
+            'The whiteout conditions clear somewhat',
+        ],
+    },
+    // Temperature-related
+    {
+        from: 'clear',
+        to: 'hot',
+        templates: [
+            'The heat intensifies as the sun beats down',
+            'A wave of oppressive heat settles in',
+            'The temperature climbs to sweltering levels',
+        ],
+    },
+    {
+        from: 'hot',
+        to: 'clear',
+        templates: [
+            'The oppressive heat begins to ease',
+            'The temperature becomes more bearable',
+        ],
+    },
+    {
+        from: 'clear',
+        to: 'cold',
+        templates: [
+            'A bitter chill settles over the area',
+            'The temperature plummets as a cold front moves in',
+            'An icy wind brings freezing temperatures',
+        ],
+    },
+    {
+        from: 'cold',
+        to: 'clear',
+        templates: [
+            'The bitter cold begins to moderate',
+            'The freezing temperatures ease somewhat',
+        ],
+    },
+    // Fog
+    {
+        from: 'clear',
+        to: 'foggy',
+        templates: [
+            'A thick fog rolls in, obscuring visibility',
+            'Mist begins to gather, shrouding the surroundings',
+        ],
+    },
+    {
+        from: 'foggy',
+        to: 'clear',
+        templates: [
+            'The fog begins to lift, revealing the surroundings',
+            'The mist burns off as visibility improves',
+        ],
+    },
+    // Wind
+    {
+        from: 'clear',
+        to: 'windy',
+        templates: [
+            'Strong winds pick up, rustling through everything',
+            'Gusts of wind begin to sweep across the area',
+        ],
+    },
+    {
+        from: 'windy',
+        to: 'clear',
+        templates: [
+            'The strong winds die down to a gentle breeze',
+            'The gusts subside and calm returns',
+        ],
+    },
+];
+// ============================================
+// Transition Detection
+// ============================================
+/**
+ * Determine if a weather transition is significant enough to mention
+ */
+function shouldMentionTransition(prevClimate, newClimate) {
+    // Condition type changed
+    if (prevClimate.conditionType !== newClimate.conditionType) {
+        // Some transitions are minor (e.g., clear to sunny)
+        const minorTransitions = [
+            ['clear', 'sunny'],
+            ['sunny', 'clear'],
+            ['partly_cloudy', 'overcast'],
+            ['overcast', 'partly_cloudy'],
+        ];
+        const isMinor = minorTransitions.some(([from, to]) => (prevClimate.conditionType === from &&
+            newClimate.conditionType === to) ||
+            (prevClimate.conditionType === to &&
+                newClimate.conditionType === from));
+        if (!isMinor) {
+            return true;
+        }
+    }
+    // Large temperature change (>10°F)
+    if (Math.abs(prevClimate.temperature - newClimate.temperature) > 10) {
+        return true;
+    }
+    // Precipitation started/stopped
+    const wasRaining = prevClimate.precipitation > 0.02;
+    const isRaining = newClimate.precipitation > 0.02;
+    if (wasRaining !== isRaining) {
+        return true;
+    }
+    // Significant wind change
+    if (Math.abs(prevClimate.windSpeed - newClimate.windSpeed) > 15 &&
+        (prevClimate.windSpeed > 20 || newClimate.windSpeed > 20)) {
+        return true;
+    }
+    return false;
+}
+// ============================================
+// Transition Text Generation
+// ============================================
+/**
+ * Get transition text for a weather change
+ */
+function getTransitionText(from, to, tempChange) {
+    // Find matching transition
+    const transition = TRANSITIONS.find(t => t.from === from && t.to === to);
+    if (transition) {
+        const templates = transition.templates;
+        return templates[Math.floor(Math.random() * templates.length)];
+    }
+    // Try reverse direction with modified text
+    const reverseTransition = TRANSITIONS.find(t => t.from === to && t.to === from);
+    if (reverseTransition) {
+        // Use a generic transition for the reverse
+        const conditions = formatCondition(to);
+        return `The weather shifts to ${conditions}`;
+    }
+    // Generic fallback for unmapped transitions
+    if (from !== to) {
+        const fromStr = formatCondition(from);
+        const toStr = formatCondition(to);
+        return `The weather changes from ${fromStr} to ${toStr}`;
+    }
+    // Temperature-only change
+    if (tempChange && Math.abs(tempChange) > 10) {
+        if (tempChange > 0) {
+            return 'The air grows noticeably warmer';
+        }
+        else {
+            return 'A distinct chill creeps into the air';
+        }
+    }
+    return null; // No significant change
+}
+/**
+ * Format a condition for display
+ */
+function formatCondition(condition) {
+    return condition.replace(/_/g, ' ');
+}
+// ============================================
+// Full Transition Description
+// ============================================
+/**
+ * Generate a complete transition description for injection
+ */
+function generateTransitionInjection(prevClimate, newClimate) {
+    if (!shouldMentionTransition(prevClimate, newClimate)) {
+        return null;
+    }
+    const tempChange = newClimate.temperature - prevClimate.temperature;
+    const transitionText = getTransitionText(prevClimate.conditionType, newClimate.conditionType, tempChange);
+    return transitionText;
+}
+
+
+/***/ },
+
+/***/ "?d4c0"
+/*!************************!*\
+  !*** crypto (ignored) ***!
+  \************************/
+() {
+
+/* (ignored) */
+
 /***/ }
 
 /******/ });
@@ -42520,7 +55111,7 @@ function applyTimeFormat(hour, minute, format) {
 /******/ 	};
 /******/ 
 /******/ 	// Execute the module function
-/******/ 	__webpack_modules__[moduleId](module, module.exports, __webpack_require__);
+/******/ 	__webpack_modules__[moduleId].call(module.exports, module, module.exports, __webpack_require__);
 /******/ 
 /******/ 	// Flag the module as loaded
 /******/ 	module.loaded = true;
@@ -42533,6 +55124,18 @@ function applyTimeFormat(hour, minute, format) {
 /******/ __webpack_require__.m = __webpack_modules__;
 /******/ 
 /************************************************************************/
+/******/ /* webpack/runtime/amd define */
+/******/ (() => {
+/******/ 	__webpack_require__.amdD = function () {
+/******/ 		throw new Error('define cannot be used indirect');
+/******/ 	};
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/amd options */
+/******/ (() => {
+/******/ 	__webpack_require__.amdO = {};
+/******/ })();
+/******/ 
 /******/ /* webpack/runtime/compat get default export */
 /******/ (() => {
 /******/ 	// getDefaultExport function for compatibility with non-harmony modules
@@ -42636,7 +55239,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./constants */ "./src/constants.ts");
 /* harmony import */ var _utils_messageState__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./utils/messageState */ "./src/utils/messageState.ts");
 /* harmony import */ var _migrations_migrateOldTime__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./migrations/migrateOldTime */ "./src/migrations/migrateOldTime.ts");
-console.log('[BlazeTracker] Script loading...');
+/* harmony import */ var _commands_slashCommands__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./commands/slashCommands */ "./src/commands/slashCommands.ts");
+/* harmony import */ var _state_narrativeState__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./state/narrativeState */ "./src/state/narrativeState.ts");
+/* harmony import */ var sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! sillytavern-utils-lib/config */ "./node_modules/sillytavern-utils-lib/dist/config.js");
 
 
 
@@ -42645,8 +55250,127 @@ console.log('[BlazeTracker] Script loading...');
 
 
 
-function log(...args) {
-    console.log(`[${_constants__WEBPACK_IMPORTED_MODULE_5__.EXTENSION_NAME}]`, ...args);
+
+
+
+function log(..._args) {
+    // Logging disabled for production
+}
+/**
+ * Check if chat has legacy BlazeTracker data without narrative state.
+ * This indicates the ancient format that needs full re-extraction.
+ */
+function hasLegacyDataWithoutNarrativeState(context) {
+    // If there's already a narrative state, we're good
+    const narrativeState = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_9__.getNarrativeState)();
+    if (narrativeState) {
+        return false;
+    }
+    // Check if any messages have old BlazeTracker data
+    for (const message of context.chat) {
+        if (message.extra?.[_constants__WEBPACK_IMPORTED_MODULE_5__.EXTENSION_KEY]) {
+            return true;
+        }
+    }
+    return false;
+}
+/**
+ * Show popup offering migration options when legacy data is detected.
+ */
+async function showLegacyDataPopup(context) {
+    return new Promise(resolve => {
+        const container = document.createElement('div');
+        container.innerHTML = `
+			<div style="padding: 10px;">
+				<p style="margin-bottom: 15px;">
+					<strong>🔥 BlazeTracker: Outdated Data Detected</strong>
+				</p>
+				<p style="margin-bottom: 15px;">
+					This chat has tracker data from an older version that is no longer compatible.
+				</p>
+				<div style="display: flex; flex-direction: column; gap: 10px;">
+					<button id="bt-migrate-all" class="menu_button" style="padding: 10px; width: 100%;">
+						<strong>Re-extract All State</strong> (slow, accurate)
+						<br><small>Rebuild state for every message. Best for important chats.</small>
+					</button>
+					<button id="bt-migrate-recent" class="menu_button" style="padding: 10px; width: 100%;">
+						<strong>Re-extract Recent State</strong> (fast)
+						<br><small>Only extract the latest message. Good enough for most cases.</small>
+					</button>
+					<button id="bt-migrate-empty" class="menu_button" style="padding: 10px; width: 100%;">
+						<strong>Initialize Empty State</strong>
+						<br><small style="color: #f59e0b;">⚠️ Discards old data. State will build from new messages.</small>
+					</button>
+				</div>
+			</div>
+		`;
+        // Show as TEXT popup (no buttons) - we provide our own
+        context.callGenericPopup(container, context.POPUP_TYPE.TEXT, null, {
+            wide: true,
+        });
+        // Wire up button handlers
+        const handleMigrateAll = async () => {
+            cleanup();
+            log('User chose to re-extract all messages');
+            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_10__.st_echo)?.('info', '🔥 Starting full re-extraction...');
+            const state = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_9__.initializeNarrativeState)();
+            (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_9__.setNarrativeState)(state);
+            clearAllPerMessageState(context);
+            await context.saveChat();
+            const { extracted, failed } = await (0,_commands_slashCommands__WEBPACK_IMPORTED_MODULE_8__.runExtractAll)();
+            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_10__.st_echo)?.('success', `🔥 Re-extraction complete: ${extracted} extracted, ${failed} failed`);
+            resolve();
+        };
+        const handleMigrateRecent = async () => {
+            cleanup();
+            log('User chose to re-extract recent message only');
+            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_10__.st_echo)?.('info', '🔥 Re-extracting recent state...');
+            const state = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_9__.initializeNarrativeState)();
+            (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_9__.setNarrativeState)(state);
+            clearAllPerMessageState(context);
+            await context.saveChat();
+            // Just extract the most recent message
+            const lastMessageId = context.chat.length - 1;
+            if (lastMessageId > 0) {
+                await (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_2__.doExtractState)(lastMessageId);
+            }
+            (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_2__.renderAllStates)();
+            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_10__.st_echo)?.('success', '🔥 Recent state extracted');
+            resolve();
+        };
+        const handleMigrateEmpty = async () => {
+            cleanup();
+            log('User chose to initialize empty state');
+            const state = (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_9__.initializeNarrativeState)();
+            (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_9__.setNarrativeState)(state);
+            // Don't clear per-message state - just let it be ignored
+            await context.saveChat();
+            (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_2__.renderAllStates)();
+            (0,sillytavern_utils_lib_config__WEBPACK_IMPORTED_MODULE_10__.st_echo)?.('info', '🔥 Initialized with empty state');
+            resolve();
+        };
+        const cleanup = () => {
+            // Close the popup
+            document.querySelector('.popup-button-ok')?.click();
+        };
+        // Add event listeners after a tick to ensure DOM is ready
+        setTimeout(() => {
+            document.getElementById('bt-migrate-all')?.addEventListener('click', handleMigrateAll);
+            document.getElementById('bt-migrate-recent')?.addEventListener('click', handleMigrateRecent);
+            document.getElementById('bt-migrate-empty')?.addEventListener('click', handleMigrateEmpty);
+        }, 0);
+    });
+}
+/**
+ * Clear all per-message BlazeTracker state.
+ */
+function clearAllPerMessageState(context) {
+    for (let i = 0; i < context.chat.length; i++) {
+        const message = context.chat[i];
+        if (message.extra && message.extra[_constants__WEBPACK_IMPORTED_MODULE_5__.EXTENSION_KEY]) {
+            delete message.extra[_constants__WEBPACK_IMPORTED_MODULE_5__.EXTENSION_KEY];
+        }
+    }
 }
 async function init() {
     const context = SillyTavern.getContext();
@@ -42658,6 +55382,8 @@ async function init() {
     // Initialize state display (handles chat change)
     (0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_2__.initStateDisplay)();
     (0,_extractors_extractState__WEBPACK_IMPORTED_MODULE_0__.setupExtractionAbortHandler)();
+    // Register slash commands
+    (0,_commands_slashCommands__WEBPACK_IMPORTED_MODULE_8__.registerSlashCommands)();
     const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_3__.getSettings)();
     const autoExtractResponses = settings.autoMode === 'responses' || settings.autoMode === 'both';
     const autoExtractInputs = settings.autoMode === 'inputs' || settings.autoMode === 'both';
@@ -42696,6 +55422,16 @@ async function init() {
                 log('Generation was aborted, skipping extraction');
                 return;
             }
+            // Skip if batch extraction is in progress (bt-extract-all)
+            if ((0,_extractors_extractState__WEBPACK_IMPORTED_MODULE_0__.isBatchExtractionInProgress)()) {
+                log('Batch extraction in progress, skipping auto-extraction');
+                return;
+            }
+            // Skip if manual extraction is in progress (fire button, slash command)
+            if ((0,_ui_stateDisplay__WEBPACK_IMPORTED_MODULE_2__.isManualExtractionInProgress)()) {
+                log('Manual extraction in progress, skipping auto-extraction');
+                return;
+            }
             // messageId might not be passed, get the last message
             const stContext = SillyTavern.getContext();
             const lastMessageId = stContext.chat.length - 1;
@@ -42713,7 +55449,17 @@ async function init() {
     context.eventSource.on(context.event_types.CHAT_CHANGED, (async () => {
         const ctx = SillyTavern.getContext();
         const settings = (0,_settings__WEBPACK_IMPORTED_MODULE_3__.getSettings)();
-        // Run migration before rendering
+        // Check for ancient legacy data that needs full re-extraction
+        if (hasLegacyDataWithoutNarrativeState(ctx)) {
+            log('Detected legacy BlazeTracker data without narrative state');
+            // Show popup - don't await, let it run in background
+            showLegacyDataPopup(ctx);
+        }
+        else {
+            // Ensure narrative state is migrated to latest version
+            (0,_state_narrativeState__WEBPACK_IMPORTED_MODULE_9__.getOrInitializeNarrativeState)();
+        }
+        // Run time format migration
         if (settings.profileId) {
             await (0,_migrations_migrateOldTime__WEBPACK_IMPORTED_MODULE_7__.migrateOldTimeFormats)(ctx, settings.profileId);
         }

@@ -136,10 +136,7 @@ function repairSingleQuotes(jsonStr: string): string {
  * Converts: { footwear: null } -> { "footwear": null }
  */
 function repairUnquotedKeys(jsonStr: string): string {
-	return jsonStr.replace(
-		/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g,
-		'$1"$2"$3',
-	);
+	return jsonStr.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3');
 }
 
 /**
@@ -150,10 +147,7 @@ function repairUnquotedKeys(jsonStr: string): string {
 function repairUnquotedKeyApostropheTypo(jsonStr: string): string {
 	// Match: after { or , (with any whitespace including newlines),
 	// an identifier followed by apostrophe, then colon
-	return jsonStr.replace(
-		/([{,][\s]*)([a-zA-Z_][a-zA-Z0-9_]*)'([\s]*:)/g,
-		'$1$2$3',
-	);
+	return jsonStr.replace(/([{,][\s]*)([a-zA-Z_][a-zA-Z0-9_]*)'([\s]*:)/g, '$1$2$3');
 }
 
 /**
@@ -177,31 +171,28 @@ function repairDotApostropheTypo(jsonStr: string): string {
  * Only attempts to fix values that look like unquoted strings.
  */
 function repairUnquotedValues(jsonStr: string): string {
-	return jsonStr.replace(
-		/:\s*([a-zA-Z][^,}\]\n]*?)(\s*[,}\]])/g,
-		(match, value, ending) => {
-			const trimmed = value.trim();
+	return jsonStr.replace(/:\s*([a-zA-Z][^,}\]\n]*?)(\s*[,}\]])/g, (match, value, ending) => {
+		const trimmed = value.trim();
 
-			// Don't quote JSON literals
-			if (['null', 'true', 'false'].includes(trimmed)) {
-				return `: ${trimmed}${ending}`;
-			}
+		// Don't quote JSON literals
+		if (['null', 'true', 'false'].includes(trimmed)) {
+			return `: ${trimmed}${ending}`;
+		}
 
-			// Don't quote if already quoted
-			if (/^["'].*["']$/.test(trimmed)) {
-				return match;
-			}
+		// Don't quote if already quoted
+		if (/^["'].*["']$/.test(trimmed)) {
+			return match;
+		}
 
-			// Don't quote numbers
-			if (/^-?\d+\.?\d*$/.test(trimmed)) {
-				return `: ${trimmed}${ending}`;
-			}
+		// Don't quote numbers
+		if (/^-?\d+\.?\d*$/.test(trimmed)) {
+			return `: ${trimmed}${ending}`;
+		}
 
-			// Quote the unquoted string value
-			const escaped = trimmed.replace(/"/g, '\\"');
-			return `: "${escaped}"${ending}`;
-		},
-	);
+		// Quote the unquoted string value
+		const escaped = trimmed.replace(/"/g, '\\"');
+		return `: "${escaped}"${ending}`;
+	});
 }
 
 /**
@@ -319,6 +310,13 @@ export function asStringOrNull(value: unknown): string | null {
  */
 export function asNumber(value: unknown, fallback: number): number {
 	return typeof value === 'number' ? value : fallback;
+}
+
+/**
+ * Safely extract a boolean from an unknown value.
+ */
+export function asBoolean(value: unknown, fallback: boolean): boolean {
+	return typeof value === 'boolean' ? value : fallback;
 }
 
 /**

@@ -299,7 +299,9 @@ describe('parseJsonResponse', () => {
 			const input = '{temperature: 72.5, price: 19.99, ratio: 0.5}';
 			const result = parseJsonResponse(input);
 			expect(result).toEqual({ temperature: 72.5, price: 19.99, ratio: 0.5 });
-			expect(typeof (result as { temperature: unknown }).temperature).toBe('number');
+			expect(typeof (result as { temperature: unknown }).temperature).toBe(
+				'number',
+			);
 		});
 
 		it('preserves zero', () => {
@@ -466,7 +468,8 @@ describe('parseJsonResponse', () => {
 		});
 
 		it('handles complex garbage with thinking and XML', () => {
-			const input = '<think>Processing request</think><output>{"result": "success"}</output>';
+			const input =
+				'<think>Processing request</think><output>{"result": "success"}</output>';
 			const result = parseJsonResponse(input);
 			expect(result).toEqual({ result: 'success' });
 		});
@@ -667,7 +670,7 @@ describe('isObject', () => {
 	});
 
 	it('returns false for function', () => {
-		expect(isObject(() => { })).toBe(false);
+		expect(isObject(() => {})).toBe(false);
 	});
 
 	it('returns true for Object.create(null)', () => {

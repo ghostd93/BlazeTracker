@@ -2,22 +2,35 @@ import { getSettings, getTemperature } from '../settings';
 import { getPrompt } from './prompts';
 import { makeGeneratorRequest, buildExtractionMessages } from '../utils/generator';
 import { parseJsonResponse, asNumber } from '../utils/json';
-import type { NarrativeDateTime } from '../types/state';
+import type { NarrativeDateTime, Climate, ProceduralClimate } from '../types/state';
 import type { LocationState } from './extractLocation';
+import {
+	extractProceduralClimate,
+	isLegacyClimate,
+	type ExtractClimateParams,
+	type ExtractClimateResult,
+} from '../weather';
+import type { ForecastCacheEntry, LocationMapping } from '../weather/types';
 
 // ============================================
 // Types
 // ============================================
 
-export type WeatherType = 'sunny' | 'cloudy' | 'snowy' | 'rainy' | 'windy' | 'thunderstorm';
+export type WeatherType = Climate['weather'];
 
-export interface ClimateState {
-	weather: WeatherType;
-	temperature: number;
+// Alias for backward compatibility
+export type ClimateState = Climate;
+
+// Extended result type that includes cache updates for procedural weather
+export interface ClimateExtractionResult {
+	climate: Climate | ProceduralClimate;
+	transition: string | null;
+	forecastCache?: ForecastCacheEntry[];
+	locationMappings?: LocationMapping[];
 }
 
 // ============================================
-// Schema & Example
+// Schema & Example (Legacy)
 // ============================================
 
 export const CLIMATE_SCHEMA = {
@@ -68,7 +81,107 @@ const VALID_WEATHER: readonly WeatherType[] = [
 // Public API
 // ============================================
 
+export interface ExtractClimateOptions {
+	isInitial: boolean;
+	messages: string;
+	narrativeTime: NarrativeDateTime;
+	location: LocationState;
+	characterInfo: string;
+	previousClimate: Climate | ProceduralClimate | null;
+	forecastCache: ForecastCacheEntry[];
+	locationMappings: LocationMapping[];
+	abortSignal?: AbortSignal;
+}
+
+/**
+ * Main climate extraction function.
+ * Uses procedural weather system if enabled, otherwise falls back to LLM extraction.
+ */
+export async function extractClimateWithContext(
+	options: ExtractClimateOptions,
+): Promise<ClimateExtractionResult> {
+	const settings = getSettings();
+
+	if (settings.useProceduralWeather) {
+		return extractProceduralClimateWrapper(options);
+	} else {
+		const climate = await extractLegacyClimate(
+			options.isInitial,
+			options.messages,
+			options.narrativeTime,
+			options.location,
+			options.characterInfo,
+			isLegacyClimate(options.previousClimate) ? options.previousClimate : null,
+			options.abortSignal,
+		);
+
+		return {
+			climate,
+			transition: null,
+			// Return unchanged caches when using legacy mode
+			forecastCache: options.forecastCache,
+			locationMappings: options.locationMappings,
+		};
+	}
+}
+
+/**
+ * Legacy extraction function for backward compatibility.
+ * Uses LLM to extract climate data.
+ */
 export async function extractClimate(
+	isInitial: boolean,
+	messages: string,
+	narrativeTime: NarrativeDateTime,
+	location: LocationState,
+	characterInfo: string,
+	previousClimate: ClimateState | null,
+	abortSignal?: AbortSignal,
+): Promise<ClimateState> {
+	return extractLegacyClimate(
+		isInitial,
+		messages,
+		narrativeTime,
+		location,
+		characterInfo,
+		previousClimate,
+		abortSignal,
+	);
+}
+
+// ============================================
+// Procedural Weather Wrapper
+// ============================================
+
+async function extractProceduralClimateWrapper(
+	options: ExtractClimateOptions,
+): Promise<ClimateExtractionResult> {
+	const params: ExtractClimateParams = {
+		isInitial: options.isInitial,
+		currentTime: options.narrativeTime,
+		currentLocation: options.location,
+		previousClimate: options.previousClimate,
+		narrativeContext: options.messages,
+		forecastCache: options.forecastCache,
+		locationMappings: options.locationMappings,
+		abortSignal: options.abortSignal,
+	};
+
+	const result: ExtractClimateResult = await extractProceduralClimate(params);
+
+	return {
+		climate: result.climate,
+		transition: result.transition,
+		forecastCache: result.forecastCache,
+		locationMappings: result.locationMappings,
+	};
+}
+
+// ============================================
+// Legacy LLM Extraction
+// ============================================
+
+async function extractLegacyClimate(
 	isInitial: boolean,
 	messages: string,
 	narrativeTime: NarrativeDateTime,
@@ -163,3 +276,9 @@ function validateClimate(data: unknown): ClimateState {
 
 	return { weather, temperature };
 }
+
+// ============================================
+// Type Guards
+// ============================================
+
+export { isLegacyClimate } from '../weather';

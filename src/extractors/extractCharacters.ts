@@ -20,11 +20,6 @@ export const CHARACTERS_SCHEMA = {
 				type: 'string',
 				description: "Character's name as used in the scene",
 			},
-			goals: {
-				type: 'array',
-				description: "Character's short-term goals",
-				items: { type: 'string' },
-			},
 			position: {
 				type: 'string',
 				description:
@@ -57,9 +52,19 @@ export const CHARACTERS_SCHEMA = {
 						type: ['string', 'null'],
 						description: 'Headwear (null if none)',
 					},
+					neck: {
+						type: ['string', 'null'],
+						description:
+							'Neckwear - necklaces, chokers, scarves, ties (null if none)',
+					},
 					jacket: {
 						type: ['string', 'null'],
 						description: 'Outer layer (null if none)',
+					},
+					back: {
+						type: ['string', 'null'],
+						description:
+							'Items worn on back - backpacks, quivers, cloaks, capes (null if none)',
 					},
 					torso: {
 						type: ['string', 'null'],
@@ -87,7 +92,9 @@ export const CHARACTERS_SCHEMA = {
 				},
 				required: [
 					'head',
+					'neck',
 					'jacket',
+					'back',
 					'torso',
 					'legs',
 					'underwear',
@@ -121,14 +128,15 @@ const CHARACTERS_EXAMPLE = JSON.stringify(
 	[
 		{
 			name: 'Elena',
-			position: 'Sitting in the booth, facing the entrance, hands wrapped around a coffee mug',
-			activity: 'Watching the door nervously',
+			position: 'Sitting in the booth, facing the entrance',
+			activity: 'Watching the door nervously, hands wrapped around a coffee mug',
 			mood: ['anxious', 'hopeful'],
-			goals: ['find out what Marcus wants', 'protect Sarah'],
 			physicalState: ['tired'],
 			outfit: {
 				head: null,
+				neck: 'Silver pendant necklace',
 				jacket: null,
+				back: null,
 				torso: 'Dark red blouse',
 				legs: 'Black jeans',
 				underwear: 'Black lace bra and matching panties',
@@ -238,13 +246,13 @@ function validateCharacter(data: unknown): Character {
 		name,
 		position,
 		activity: typeof data.activity === 'string' ? data.activity : undefined,
-		goals: asStringArray(data.goals),
+		// Note: goals removed in v1.0.0, now tracked in CharacterArc
 		mood: Array.isArray(data.mood) ? asStringArray(data.mood, 5) : ['neutral'],
 		physicalState: Array.isArray(data.physicalState)
 			? asStringArray(data.physicalState, 5)
 			: undefined,
 		outfit,
-		dispositions: validateDispositions(data.dispositions),
+		// Note: dispositions removed in v1.0.0, now tracked in Relationship
 	};
 }
 
@@ -252,7 +260,9 @@ function validateOutfit(data: unknown): CharacterOutfit {
 	if (!isObject(data)) {
 		return {
 			head: null,
+			neck: null,
 			jacket: null,
+			back: null,
 			torso: null,
 			legs: null,
 			underwear: null,
@@ -263,27 +273,13 @@ function validateOutfit(data: unknown): CharacterOutfit {
 
 	return {
 		head: asStringOrNull(data.head),
+		neck: asStringOrNull(data.neck),
 		jacket: asStringOrNull(data.jacket),
+		back: asStringOrNull(data.back),
 		torso: asStringOrNull(data.torso),
 		legs: asStringOrNull(data.legs),
 		underwear: asStringOrNull(data.underwear),
 		socks: asStringOrNull(data.socks),
 		footwear: asStringOrNull(data.footwear),
 	};
-}
-
-function validateDispositions(data: unknown): Record<string, string[]> | undefined {
-	if (!isObject(data)) {
-		return undefined;
-	}
-
-	const result: Record<string, string[]> = {};
-
-	for (const [key, value] of Object.entries(data)) {
-		if (Array.isArray(value)) {
-			result[key] = asStringArray(value, 5);
-		}
-	}
-
-	return Object.keys(result).length > 0 ? result : undefined;
 }

@@ -1,16 +1,45 @@
 import type { STContext } from '../types/st';
-import type { TrackedState, NarrativeDateTime, Scene, Character } from '../types/state';
+import type {
+	TrackedState,
+	NarrativeDateTime,
+	Scene,
+	Character,
+	TimestampedEvent,
+	Climate,
+	ProceduralClimate,
+	Relationship,
+} from '../types/state';
 import { getSettings } from '../settings';
-import { getMessageState } from '../utils/messageState';
+import { getMessageState, setMessageState } from '../utils/messageState';
 
 // Import extractors
 import { extractTime, setTimeTrackerState } from './extractTime';
 import { extractLocation, type LocationState } from './extractLocation';
-import { extractClimate } from './extractClimate';
+import { extractClimateWithContext } from './extractClimate';
 import { extractCharacters } from './extractCharacters';
 import { extractScene, shouldExtractScene } from './extractScene';
+import { extractEvent } from './extractEvent';
+import { extractChapterBoundary } from './extractChapter';
+import {
+	extractInitialRelationship,
+	updateRelationshipFromSignal,
+	refreshRelationship,
+} from './extractRelationships';
 import { propAlreadyExists } from '../utils/clothingMatch';
 import { setExtractionStep, setEnabledSteps } from './extractionProgress';
+import {
+	getOrInitializeNarrativeState,
+	saveNarrativeState,
+	addChapter,
+	updateRelationship,
+	getRelationship,
+} from '../state/narrativeState';
+import { checkChapterBoundary } from '../state/chapters';
+import {
+	findUnestablishedPairs,
+	popVersionForMessage,
+	getLatestVersionMessageId,
+} from '../state/relationships';
 
 // ============================================
 // Module State
@@ -19,6 +48,22 @@ import { setExtractionStep, setEnabledSteps } from './extractionProgress';
 let currentAbortController: AbortController | null = null;
 let extractionCount = 0;
 let generationWasStopped = false;
+let batchExtractionInProgress = false;
+
+/**
+ * Check if a batch extraction is currently in progress.
+ */
+export function isBatchExtractionInProgress(): boolean {
+	return batchExtractionInProgress;
+}
+
+/**
+ * Set the batch extraction flag. Used by bt-extract-all to prevent
+ * GENERATION_ENDED handler from interfering.
+ */
+export function setBatchExtractionInProgress(value: boolean): void {
+	batchExtractionInProgress = value;
+}
 
 // ============================================
 // Types
@@ -27,6 +72,8 @@ let generationWasStopped = false;
 export interface ExtractionResult {
 	state: TrackedState;
 	raw: Record<string, string>;
+	/** Weather transition text to inject into prompt (if procedural weather enabled) */
+	weatherTransition?: string;
 }
 
 export interface ExtractionOptions {
@@ -105,14 +152,14 @@ function getDefaultLocation(): LocationState {
 	};
 }
 
-function getDefaultClimate() {
+function _getDefaultClimate() {
 	return {
 		weather: 'sunny' as const,
 		temperature: 70,
 	};
 }
 
-function getDefaultCharacters(): Character[] {
+function _getDefaultCharacters(): Character[] {
 	return [];
 }
 
@@ -125,7 +172,6 @@ function getDefaultScene(): Scene {
 			direction: 'stable',
 			type: 'conversation',
 		},
-		recentEvents: ['Scene in progress'],
 	};
 }
 
@@ -177,6 +223,9 @@ export async function extractState(
 			(options.forceSceneExtraction ||
 				shouldExtractScene(messageId, isAssistantMessage));
 
+		// Determine if event extraction should run
+		const shouldRunEvent = settings.trackEvents !== false && isAssistantMessage;
+
 		// Configure enabled steps for progress display
 		setEnabledSteps({
 			time: settings.trackTime !== false,
@@ -184,6 +233,7 @@ export async function extractState(
 			climate: settings.trackClimate !== false,
 			characters: settings.trackCharacters !== false,
 			scene: shouldRunScene,
+			event: shouldRunEvent,
 		});
 
 		// ========================================
@@ -192,6 +242,11 @@ export async function extractState(
 		if (previousState?.time) {
 			setTimeTrackerState(previousState.time);
 		}
+
+		// ========================================
+		// Get narrative state (needed for climate cache and relationships)
+		// ========================================
+		const narrativeState = getOrInitializeNarrativeState();
 
 		// ========================================
 		// Get message window for extraction
@@ -244,7 +299,8 @@ export async function extractState(
 		// ========================================
 		// STEP 3: Extract Climate (if enabled)
 		// ========================================
-		let climate: { weather: 'sunny' | 'cloudy' | 'snowy' | 'rainy' | 'windy' | 'thunderstorm'; temperature: number } | undefined;
+		let climate: Climate | ProceduralClimate | undefined;
+		let weatherTransition: string | null = null;
 
 		if (settings.trackClimate !== false) {
 			setExtractionStep('climate');
@@ -253,15 +309,28 @@ export async function extractState(
 			const timeForClimate = narrativeTime ?? getDefaultTime();
 			const locationForClimate = location ?? getDefaultLocation();
 
-			climate = await extractClimate(
+			const climateResult = await extractClimateWithContext({
 				isInitial,
-				formattedMessages,
-				timeForClimate,
-				locationForClimate,
-				isInitial ? characterInfo : '',
-				previousState?.climate ?? null,
-				abortController.signal,
-			);
+				messages: formattedMessages,
+				narrativeTime: timeForClimate,
+				location: locationForClimate,
+				characterInfo: isInitial ? characterInfo : '',
+				previousClimate: previousState?.climate ?? null,
+				forecastCache: narrativeState.forecastCache,
+				locationMappings: narrativeState.locationMappings,
+				abortSignal: abortController.signal,
+			});
+
+			climate = climateResult.climate;
+			weatherTransition = climateResult.transition;
+
+			// Update narrative state caches if they changed
+			if (climateResult.forecastCache) {
+				narrativeState.forecastCache = climateResult.forecastCache;
+			}
+			if (climateResult.locationMappings) {
+				narrativeState.locationMappings = climateResult.locationMappings;
+			}
 		} else {
 			// Use previous or undefined
 			climate = previousState?.climate;
@@ -295,10 +364,6 @@ export async function extractState(
 				const cleanup = cleanupOutfitsAndMoveProps(characters, location);
 				characters = cleanup.characters;
 				location = cleanup.location;
-
-				if (cleanup.movedItems.length > 0) {
-					console.log('[BlazeTracker] Moved removed clothing to props:', cleanup.movedItems);
-				}
 			}
 		} else {
 			// Use previous or undefined
@@ -341,7 +406,251 @@ export async function extractState(
 		}
 
 		// ========================================
-		// STEP 6: Assemble Final State
+		// STEP 6: Extract Event (conditional)
+		// ========================================
+		// Filter out any events from this messageId (handles re-extraction)
+		let currentEvents: TimestampedEvent[] = (previousState?.currentEvents ?? []).filter(
+			e => e.messageId !== messageId,
+		);
+
+		if (shouldRunEvent) {
+			setExtractionStep('event');
+
+			// Use effective values for event extraction
+			const timeForEvent = narrativeTime ?? getDefaultTime();
+			const locationForEvent = location ?? getDefaultLocation();
+			const sceneForEvent = scene ?? getDefaultScene();
+
+			const extractedEvent = await extractEvent({
+				messages: formattedMessages,
+				messageId,
+				currentTime: timeForEvent,
+				currentLocation: locationForEvent,
+				currentTensionType: sceneForEvent.tension.type,
+				currentTensionLevel: sceneForEvent.tension.level,
+				relationships: narrativeState.relationships,
+				characters: characters ?? [],
+				abortSignal: abortController.signal,
+			});
+
+			if (extractedEvent) {
+				// Append the new event with messageId for re-extraction tracking
+				const eventWithId: TimestampedEvent = {
+					...extractedEvent,
+					messageId,
+				};
+				currentEvents = [...currentEvents, eventWithId];
+
+				// Apply relationship signal if present
+				if (
+					extractedEvent.relationshipSignal &&
+					settings.trackRelationships !== false
+				) {
+					const signal = extractedEvent.relationshipSignal;
+					const [char1, char2] = signal.pair;
+
+					let relationship = getRelationship(
+						narrativeState,
+						char1,
+						char2,
+					);
+
+					if (relationship) {
+						// Pop version if re-extracting this message (swipe/re-extract)
+						popVersionForMessage(
+							relationship,
+							messageId,
+						);
+						// Check if signal has milestones - if so, do a full LLM refresh
+						const hasMilestones =
+							signal.milestones &&
+							signal.milestones.length > 0;
+
+						if (hasMilestones) {
+
+							const relationshipMessages =
+								formatMessagesForRelationship(
+									context,
+									messageId,
+									lastXMessages,
+									relationship,
+								);
+
+							const refreshed = await refreshRelationship(
+								{
+									relationship,
+									events: currentEvents,
+									messages: relationshipMessages,
+									messageId,
+									abortSignal:
+										abortController.signal,
+								},
+							);
+
+							if (refreshed) {
+								// Apply milestones from signal (LLM might not include them)
+								relationship =
+									updateRelationshipFromSignal(
+										refreshed,
+										signal,
+									);
+							} else {
+								// Fallback to simple update if refresh fails
+								relationship =
+									updateRelationshipFromSignal(
+										relationship,
+										signal,
+									);
+							}
+						} else {
+							// Simple update for non-milestone signals
+							relationship = updateRelationshipFromSignal(
+								relationship,
+								signal,
+							);
+						}
+
+						updateRelationship(narrativeState, relationship);
+					} else {
+						// Need to initialize this relationship first
+						const relationshipMessages =
+							formatMessagesForRelationship(
+								context,
+								messageId,
+								lastXMessages,
+								undefined, // No existing relationship
+							);
+
+						const newRelationship =
+							await extractInitialRelationship({
+								char1,
+								char2,
+								messages: relationshipMessages,
+								characterInfo: isInitial
+									? characterInfo
+									: '',
+								messageId,
+								currentTime: narrativeTime,
+								currentLocation: location,
+								abortSignal: abortController.signal,
+							});
+
+						if (newRelationship) {
+							// Apply the signal to the new relationship
+							const withSignal =
+								updateRelationshipFromSignal(
+									newRelationship,
+									signal,
+								);
+							updateRelationship(
+								narrativeState,
+								withSignal,
+							);
+						}
+					}
+				}
+			}
+		}
+
+		// ========================================
+		// STEP 6.3: Initialize Missing Relationships
+		// ========================================
+		// Check if there are character pairs that don't have relationships yet
+		if (settings.trackRelationships !== false && characters && characters.length >= 2) {
+			const characterNames = characters.map(c => c.name);
+			const unestablishedPairs = findUnestablishedPairs(
+				characterNames,
+				narrativeState.relationships,
+			);
+
+			// Limit to initializing one relationship per extraction to avoid slowdown
+			if (unestablishedPairs.length > 0) {
+				const [char1, char2] = unestablishedPairs[0];
+
+				const relationshipMessages = formatMessagesForRelationship(
+					context,
+					messageId,
+					lastXMessages,
+					undefined, // No existing relationship
+				);
+
+				const newRelationship = await extractInitialRelationship({
+					char1,
+					char2,
+					messages: relationshipMessages,
+					characterInfo: isInitial ? characterInfo : '',
+					messageId,
+					currentTime: narrativeTime,
+					currentLocation: location,
+					abortSignal: abortController.signal,
+				});
+
+				if (newRelationship) {
+					updateRelationship(narrativeState, newRelationship);
+				}
+			}
+		}
+
+		// ========================================
+		// STEP 6.5: Check Chapter Boundary
+		// ========================================
+		let currentChapter = previousState?.currentChapter ?? 0;
+		let chapterEnded: TrackedState['chapterEnded'] = undefined;
+
+		// Only check for chapter boundary if we have a previous state (not initial extraction)
+		if (previousState && currentEvents.length > 0) {
+			const boundaryCheck = checkChapterBoundary(
+				previousState.location,
+				location,
+				previousState.time,
+				narrativeTime,
+			);
+
+			if (boundaryCheck.triggered) {
+				// Get the time range from events
+				const startTime =
+					currentEvents[0]?.timestamp ??
+					previousState.time ??
+					getDefaultTime();
+				const endTime = narrativeTime ?? getDefaultTime();
+				const primaryLocation = previousState.location
+					? `${previousState.location.area} - ${previousState.location.place}`
+					: 'Unknown';
+
+				// Extract chapter summary via LLM
+				const chapterResult = await extractChapterBoundary({
+					events: currentEvents,
+					narrativeState,
+					chapterIndex: currentChapter,
+					startTime,
+					endTime,
+					primaryLocation,
+					abortSignal: abortController.signal,
+				});
+
+				if (chapterResult.isChapterBoundary && chapterResult.chapter) {
+					// Store chapter ended summary for display
+					chapterEnded = {
+						index: currentChapter,
+						title: chapterResult.chapter.title,
+						summary: chapterResult.chapter.summary,
+						eventCount: currentEvents.length,
+						reason: boundaryCheck.reason!,
+					};
+
+					// Add chapter to narrative state
+					addChapter(narrativeState, chapterResult.chapter);
+					await saveNarrativeState(narrativeState);
+
+					// Increment chapter counter and clear current events
+					currentChapter++;
+					currentEvents = [];
+				}
+			}
+		}
+
+		// ========================================
+		// STEP 7: Assemble Final State
 		// ========================================
 		setExtractionStep('complete');
 
@@ -351,9 +660,16 @@ export async function extractState(
 			climate,
 			scene,
 			characters,
+			currentChapter,
+			currentEvents: currentEvents.length > 0 ? currentEvents : undefined,
+			chapterEnded,
 		};
 
-		return { state, raw: rawResponses };
+		return {
+			state,
+			raw: rawResponses,
+			weatherTransition: weatherTransition ?? undefined,
+		};
 	} finally {
 		extractionCount--;
 		if (extractionCount === 0) {
@@ -363,6 +679,67 @@ export async function extractState(
 		if (currentAbortController === abortController) {
 			currentAbortController = null;
 		}
+	}
+}
+
+// ============================================
+// Re-extraction Event Cleanup
+// ============================================
+
+/**
+ * Update subsequent messages after re-extracting a message.
+ * Removes old events from the re-extracted messageId and optionally adds the new event.
+ */
+export function updateSubsequentMessagesEvents(
+	context: STContext,
+	reExtractedMessageId: number,
+	newEvent: TimestampedEvent | undefined,
+): void {
+	// Iterate through all messages after the re-extracted one
+	for (let i = reExtractedMessageId + 1; i < context.chat.length; i++) {
+		const message = context.chat[i];
+		const stateData = getMessageState(message);
+
+		if (!stateData?.state?.currentEvents) {
+			continue;
+		}
+
+		// Filter out events from the re-extracted messageId
+		const filteredEvents = stateData.state.currentEvents.filter(
+			(e: TimestampedEvent) => e.messageId !== reExtractedMessageId,
+		);
+
+		// If we have a new event and it should be included (before any chapter boundary that cleared events)
+		// Add it to the filtered list if this message's events include events after the new one
+		let updatedEvents = filteredEvents;
+		if (newEvent) {
+			// Insert the new event at the right position (by messageId order)
+			const insertIndex = filteredEvents.findIndex(
+				(e: TimestampedEvent) => (e.messageId ?? 0) > reExtractedMessageId,
+			);
+			if (insertIndex === -1) {
+				// No events after this one, append
+				updatedEvents = [...filteredEvents, newEvent];
+			} else {
+				// Insert before events from later messages
+				updatedEvents = [
+					...filteredEvents.slice(0, insertIndex),
+					newEvent,
+					...filteredEvents.slice(insertIndex),
+				];
+			}
+		}
+
+		// Update the message state
+		const newStateData = {
+			...stateData,
+			state: {
+				...stateData.state,
+				currentEvents: updatedEvents.length > 0 ? updatedEvents : undefined,
+			},
+		};
+
+		setMessageState(message, newStateData);
 	}
 }
 
@@ -446,8 +823,8 @@ function prepareExtractionContext(
 	const userPersona = context.powerUserSettings?.persona_description || '';
 	const userInfo = userPersona
 		? `Name: ${context.name1}\nDescription: ${userPersona
-			.replace(/\{\{user\}\}/gi, context.name1)
-			.replace(/\{\{char\}\}/gi, context.name2)}`
+				.replace(/\{\{user\}\}/gi, context.name1)
+				.replace(/\{\{char\}\}/gi, context.name2)}`
 		: `Name: ${context.name1}`;
 
 	// Get character info
@@ -458,6 +835,45 @@ function prepareExtractionContext(
 	const characterInfo = `Name: ${context.name2}\nDescription: ${charDescription}`;
 
 	return { formattedMessages, characterInfo, userInfo };
+}
+
+/**
+ * Format messages for relationship extraction.
+ * Uses messages since the last status change (or lastXMessages, whichever is smaller).
+ * Ensures a minimum of MIN_RELATIONSHIP_MESSAGES for context.
+ */
+function formatMessagesForRelationship(
+	context: STContext,
+	messageId: number,
+	lastXMessages: number,
+	relationship?: Relationship,
+): string {
+	const MIN_RELATIONSHIP_MESSAGES = 3;
+
+	// Calculate the start based on last version's messageId
+	let statusChangeStart = 0;
+	const lastVersionMessageId = relationship
+		? getLatestVersionMessageId(relationship)
+		: undefined;
+	if (lastVersionMessageId !== undefined) {
+		// Start from the message after the last status change
+		statusChangeStart = lastVersionMessageId + 1;
+	}
+
+	// Calculate start: take minimum of (messages since status change, lastXMessages)
+	// But ensure we have at least MIN_RELATIONSHIP_MESSAGES
+	const minStart = Math.max(0, messageId - MIN_RELATIONSHIP_MESSAGES + 1);
+	const limitStart = Math.max(0, messageId - lastXMessages);
+
+	// Take the later of: limit start or status change start
+	// This ensures we don't exceed lastXMessages
+	const constrainedStart = Math.max(limitStart, statusChangeStart);
+
+	// But ensure we have at least MIN_RELATIONSHIP_MESSAGES
+	const effectiveStart = Math.min(constrainedStart, minStart);
+
+	const chatMessages = context.chat.slice(effectiveStart, messageId + 1);
+	return chatMessages.map(msg => `${msg.name}: ${msg.mes}`).join('\n\n');
 }
 
 // ============================================
@@ -477,16 +893,7 @@ const REMOVED_PATTERNS = [
 /**
  * Values that should be treated as null (no item).
  */
-const NULL_VALUES = new Set([
-	'none',
-	'nothing',
-	'bare',
-	'naked',
-	'n/a',
-	'na',
-	'-',
-	'',
-]);
+const NULL_VALUES = new Set(['none', 'nothing', 'bare', 'naked', 'n/a', 'na', '-', '']);
 
 interface OutfitCleanupResult {
 	characters: Character[];
@@ -509,7 +916,17 @@ function cleanupOutfitsAndMoveProps(
 		if (!char.outfit) return char;
 
 		const newOutfit = { ...char.outfit };
-		const outfitSlots = ['head', 'jacket', 'torso', 'legs', 'underwear', 'socks', 'footwear'] as const;
+		const outfitSlots = [
+			'head',
+			'neck',
+			'jacket',
+			'back',
+			'torso',
+			'legs',
+			'underwear',
+			'socks',
+			'footwear',
+		] as const;
 
 		for (const slot of outfitSlots) {
 			const value = newOutfit[slot];
@@ -535,7 +952,13 @@ function cleanupOutfitsAndMoveProps(
 
 					// Add to props if we have a real item name and it's not already there
 					if (itemName && !NULL_VALUES.has(itemName.toLowerCase())) {
-						if (!propAlreadyExists(itemName, char.name, existingProps)) {
+						if (
+							!propAlreadyExists(
+								itemName,
+								char.name,
+								existingProps,
+							)
+						) {
 							const propEntry = `${char.name}'s ${itemName}`;
 							movedItems.push(propEntry);
 							existingProps.add(propEntry.toLowerCase());
@@ -550,9 +973,8 @@ function cleanupOutfitsAndMoveProps(
 	});
 
 	// Build new props array if we added items
-	const newProps = movedItems.length > 0
-		? [...(location.props || []), ...movedItems]
-		: location.props;
+	const newProps =
+		movedItems.length > 0 ? [...(location.props || []), ...movedItems] : location.props;
 
 	return {
 		characters: processedCharacters,

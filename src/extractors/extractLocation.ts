@@ -2,17 +2,10 @@ import { getSettings, getTemperature } from '../settings';
 import { getPrompt } from './prompts';
 import { makeGeneratorRequest, buildExtractionMessages } from '../utils/generator';
 import { parseJsonResponse, asString, asStringArray } from '../utils/json';
+import type { LocationState } from '../types/state';
 
-// ============================================
-// Types
-// ============================================
-
-export interface LocationState {
-	area: string;
-	place: string;
-	position: string;
-	props: string[];
-}
+// Re-export for convenience (maintains backward compatibility)
+export type { LocationState };
 
 // ============================================
 // Schema & Example
@@ -49,13 +42,13 @@ const LOCATION_SCHEMA = {
 const LOCATION_EXAMPLE = JSON.stringify(
 	{
 		area: 'Downtown Seattle',
-		place: 'The Rusty Nail bar',
-		position: 'Corner booth near the jukebox',
+		place: 'The Rusty Nail Bar',
+		position: 'Corner booth',
 		props: [
 			'Jukebox playing soft rock',
-			'Empty beer glasses',
+			'Empty beer glasses on the table',
 			'Bowl of peanuts',
-			'Flickering neon sign',
+			'Flickering neon sign above the bar',
 		],
 	},
 	null,

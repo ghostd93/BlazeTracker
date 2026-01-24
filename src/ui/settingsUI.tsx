@@ -12,6 +12,7 @@ import {
 	type PromptKey,
 	type PromptDefinition,
 } from '../extractors/prompts';
+import { SelectField, NumberField, CheckboxField } from './components/form';
 
 // ============================================
 // Types
@@ -20,104 +21,6 @@ import {
 interface ConnectionProfile {
 	id: string;
 	name?: string;
-}
-
-// ============================================
-// Sub-components
-// ============================================
-
-interface SelectFieldProps {
-	id: string;
-	label: string;
-	description: string;
-	value: string;
-	options: Array<{ value: string; label: string }>;
-	onChange: (value: string) => void;
-}
-
-function SelectField({ id, label, description, value, options, onChange }: SelectFieldProps) {
-	return (
-		<div className="flex-container flexFlowColumn">
-			<label htmlFor={id}>{label}</label>
-			<small>{description}</small>
-			<select
-				id={id}
-				className="text_pole"
-				value={value}
-				onChange={e => onChange(e.target.value)}
-			>
-				{options.map(opt => (
-					<option key={opt.value} value={opt.value}>
-						{opt.label}
-					</option>
-				))}
-			</select>
-		</div>
-	);
-}
-
-interface NumberFieldProps {
-	id: string;
-	label: string;
-	description: string;
-	value: number;
-	min: number;
-	max: number;
-	step: number;
-	onChange: (value: number) => void;
-}
-
-function NumberField({
-	id,
-	label,
-	description,
-	value,
-	min,
-	max,
-	step,
-	onChange,
-}: NumberFieldProps) {
-	return (
-		<div className="flex-container flexFlowColumn">
-			<label htmlFor={id}>{label}</label>
-			<small>{description}</small>
-			<input
-				type="number"
-				id={id}
-				className="text_pole"
-				min={min}
-				max={max}
-				step={step}
-				value={value}
-				onChange={e => onChange(parseInt(e.target.value) || min)}
-			/>
-		</div>
-	);
-}
-
-interface CheckboxFieldProps {
-	id: string;
-	label: string;
-	description: string;
-	checked: boolean;
-	onChange: (checked: boolean) => void;
-}
-
-function CheckboxField({ id, label, description, checked, onChange }: CheckboxFieldProps) {
-	return (
-		<div className="flex-container flexFlowColumn">
-			<label className="checkbox_label">
-				<input
-					type="checkbox"
-					id={id}
-					checked={checked}
-					onChange={e => onChange(e.target.checked)}
-				/>
-				<span>{label}</span>
-			</label>
-			<small>{description}</small>
-		</div>
-	);
 }
 
 // ============================================
@@ -356,12 +259,29 @@ function PromptsSection({
 // Extraction Toggles Section
 // ============================================
 
+// Keys that are boolean toggles in extraction settings
+type BooleanSettingKey =
+	| 'trackTime'
+	| 'trackLocation'
+	| 'trackClimate'
+	| 'trackCharacters'
+	| 'trackScene'
+	| 'useProceduralWeather'
+	| 'injectWeatherTransitions';
+// Keys that are numeric settings in extraction settings
+type NumericSettingKey = 'leapThresholdMinutes';
+
 interface ExtractionTogglesSectionProps {
 	settings: BlazeTrackerSettings;
-	onToggle: (key: keyof BlazeTrackerSettings, value: boolean) => void;
+	onToggle: (key: BooleanSettingKey, value: boolean) => void;
+	onNumericChange: (key: NumericSettingKey, value: number) => void;
 }
 
-function ExtractionTogglesSection({ settings, onToggle }: ExtractionTogglesSectionProps) {
+function ExtractionTogglesSection({
+	settings,
+	onToggle,
+	onNumericChange,
+}: ExtractionTogglesSectionProps) {
 	return (
 		<div className="bt-extraction-toggles">
 			<div className="bt-section-header">
@@ -387,7 +307,9 @@ function ExtractionTogglesSection({ settings, onToggle }: ExtractionTogglesSecti
 						min={5}
 						max={1440}
 						step={5}
-						onChange={v => onToggle('leapThresholdMinutes' as any, v as any)}
+						onChange={v =>
+							onNumericChange('leapThresholdMinutes', v)
+						}
 					/>
 				</div>
 			)}
@@ -407,6 +329,41 @@ function ExtractionTogglesSection({ settings, onToggle }: ExtractionTogglesSecti
 				checked={settings.trackClimate}
 				onChange={checked => onToggle('trackClimate', checked)}
 			/>
+
+			{settings.trackClimate && (
+				<div className="bt-nested-setting">
+					<CheckboxField
+						id="blazetracker-proceduralweather"
+						label="Procedural Weather"
+						description="Use procedural forecast generation instead of LLM extraction"
+						checked={settings.useProceduralWeather}
+						onChange={checked =>
+							onToggle(
+								'useProceduralWeather' as BooleanSettingKey,
+								checked,
+							)
+						}
+					/>
+					{settings.useProceduralWeather && (
+						<div className="bt-nested-setting">
+							<CheckboxField
+								id="blazetracker-weathertransitions"
+								label="Weather Transitions"
+								description="Inject transition notes when weather changes significantly"
+								checked={
+									settings.injectWeatherTransitions
+								}
+								onChange={checked =>
+									onToggle(
+										'injectWeatherTransitions' as BooleanSettingKey,
+										checked,
+									)
+								}
+							/>
+						</div>
+					)}
+				</div>
+			)}
 
 			<CheckboxField
 				id="blazetracker-trackcharacters"
@@ -440,8 +397,8 @@ function SettingsPanel() {
 		const context = SillyTavern.getContext();
 		const connectionManager = context.extensionSettings?.connectionManager as
 			| {
-				profiles?: ConnectionProfile[];
-			}
+					profiles?: ConnectionProfile[];
+			  }
 			| undefined;
 		setProfiles(connectionManager?.profiles || []);
 	}, []);
@@ -463,11 +420,19 @@ function SettingsPanel() {
 		[handleUpdate],
 	);
 
-	// Generic toggle handler for extraction settings
+	// Handler for boolean extraction toggles
 	const handleExtractionToggle = useCallback(
-		(key: keyof BlazeTrackerSettings, value: boolean) => {
-			handleUpdate(key, value as any);
+		(key: BooleanSettingKey, value: boolean) => {
+			handleUpdate(key, value);
 			setTimeout(() => renderAllStates(), 100);
+		},
+		[handleUpdate],
+	);
+
+	// Handler for numeric extraction settings
+	const handleExtractionNumericChange = useCallback(
+		(key: NumericSettingKey, value: number) => {
+			handleUpdate(key, value);
 		},
 		[handleUpdate],
 	);
@@ -608,6 +573,7 @@ function SettingsPanel() {
 			<ExtractionTogglesSection
 				settings={settings}
 				onToggle={handleExtractionToggle}
+				onNumericChange={handleExtractionNumericChange}
 			/>
 
 			<hr />
@@ -704,8 +670,6 @@ export async function initSettingsUI() {
 		settingsRoot = ReactDOM.createRoot(root);
 		settingsRoot.render(<SettingsPanel />);
 	}
-
-	console.log('[BlazeTracker] Settings UI initialized');
 }
 
 export function unmountSettingsUI() {

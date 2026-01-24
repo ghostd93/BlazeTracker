@@ -16,7 +16,11 @@
             "ES2022",
             "DOM",
             "DOM.Iterable"
-        ]
+        ],
+        "baseUrl": "./src",
+        "paths": {
+            "@/*": ["./*"]
+        }
     },
     "include": [
         "src/**/*"

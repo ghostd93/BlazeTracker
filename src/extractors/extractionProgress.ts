@@ -9,6 +9,7 @@ export type ExtractionStep =
 	| 'climate'
 	| 'characters'
 	| 'scene'
+	| 'event'
 	| 'complete';
 
 export interface ExtractionProgress {
@@ -23,6 +24,7 @@ export interface EnabledSteps {
 	climate: boolean;
 	characters: boolean;
 	scene: boolean;
+	event: boolean;
 }
 
 type ProgressCallback = (progress: ExtractionProgress) => void;
@@ -41,10 +43,18 @@ let enabledSteps: EnabledSteps = {
 	climate: true,
 	characters: true,
 	scene: true,
+	event: true,
 };
 
 // All possible extraction steps (in order)
-const ALL_EXTRACTION_STEPS: ExtractionStep[] = ['time', 'location', 'climate', 'characters', 'scene'];
+const ALL_EXTRACTION_STEPS: ExtractionStep[] = [
+	'time',
+	'location',
+	'climate',
+	'characters',
+	'scene',
+	'event',
+];
 
 // ============================================
 // Public API
@@ -120,6 +130,8 @@ export function getStepLabel(step: ExtractionStep): string {
 			return 'Extracting characters...';
 		case 'scene':
 			return 'Extracting scene...';
+		case 'event':
+			return 'Extracting events...';
 		case 'complete':
 			return 'Complete';
 	}

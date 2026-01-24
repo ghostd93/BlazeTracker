@@ -1,7 +1,7 @@
 import { getSettings, getTemperature } from '../settings';
 import { getPrompt } from './prompts';
 import { makeGeneratorRequest, buildExtractionMessages } from '../utils/generator';
-import { parseJsonResponse, asString, asStringArray, isObject } from '../utils/json';
+import { parseJsonResponse, asString, isObject } from '../utils/json';
 import type { Scene, Character } from '../types/state';
 import { calculateTensionDirection } from '../utils/tension';
 
@@ -83,34 +83,20 @@ export const SCENE_SCHEMA = {
 			},
 			required: ['level', 'direction', 'type'],
 		},
-		recentEvents: {
-			type: 'array',
-			description:
-				'List of significant recent events (max 5). Prune resolved/superseded events, keep most salient.',
-			items: {
-				type: 'string',
-				description: 'A significant event affecting the scene',
-			},
-			minItems: 1,
-			maxItems: 5,
-		},
+		// Note: recentEvents removed in v1.0.0, replaced by event extraction
 	},
-	required: ['topic', 'tone', 'tension', 'recentEvents'],
+	required: ['topic', 'tone', 'tension'],
 };
 
 const SCENE_EXAMPLE = JSON.stringify(
 	{
-		topic: "Marcus's heist plans",
-		tone: 'Hushed, secretive',
+		topic: "Discussing Marcus's heist plans",
+		tone: 'Hushed, conspiratorial',
 		tension: {
 			level: 'tense',
 			direction: 'escalating',
 			type: 'negotiation',
 		},
-		recentEvents: [
-			'Marcus invited Elena and Sarah to discuss a jewellery heist',
-			'Marcus discovered that Sarah has stolen a rare painting',
-		],
 	},
 	null,
 	2,
@@ -170,21 +156,21 @@ export async function extractScene(
 
 	const prompt = isInitial
 		? getPrompt('scene_initial')
-			.replace('{{userInfo}}', userInfo)
-			.replace('{{characterInfo}}', characterInfo)
-			.replace('{{charactersSummary}}', charactersSummary)
-			.replace('{{messages}}', messages)
-			.replace('{{schema}}', schemaStr)
-			.replace('{{schemaExample}}', SCENE_EXAMPLE)
+				.replace('{{userInfo}}', userInfo)
+				.replace('{{characterInfo}}', characterInfo)
+				.replace('{{charactersSummary}}', charactersSummary)
+				.replace('{{messages}}', messages)
+				.replace('{{schema}}', schemaStr)
+				.replace('{{schemaExample}}', SCENE_EXAMPLE)
 		: getPrompt('scene_update')
-			.replace('{{charactersSummary}}', charactersSummary)
-			.replace(
-				'{{previousState}}',
-				JSON.stringify(previousScene, null, 2),
-			)
-			.replace('{{messages}}', messages)
-			.replace('{{schema}}', schemaStr)
-			.replace('{{schemaExample}}', SCENE_EXAMPLE);
+				.replace('{{charactersSummary}}', charactersSummary)
+				.replace(
+					'{{previousState}}',
+					JSON.stringify(previousScene, null, 2),
+				)
+				.replace('{{messages}}', messages)
+				.replace('{{schema}}', schemaStr)
+				.replace('{{schemaExample}}', SCENE_EXAMPLE);
 
 	const llmMessages = buildExtractionMessages(SYSTEM_PROMPT, prompt);
 
@@ -247,17 +233,11 @@ function validateScene(data: unknown): Scene {
 		? (tensionData.type as TensionType)
 		: 'conversation';
 
-	// Validate recent events
-	let recentEvents = asStringArray(data.recentEvents, 5).filter(e => e.length > 0);
-
-	if (recentEvents.length === 0) {
-		recentEvents = ['Scene in progress'];
-	}
+	// Note: recentEvents removed in v1.0.0, replaced by currentEvents on TrackedState
 
 	return {
 		topic: data.topic,
 		tone: asString(data.tone, 'neutral'),
 		tension: { level, direction, type },
-		recentEvents,
 	};
 }

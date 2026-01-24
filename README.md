@@ -1,6 +1,6 @@
 # BlazeTracker 🔥
 
-A SillyTavern extension that uses LLM analysis to track and maintain scene state across roleplay conversations. Helps AI models stay consistent with physical positions, outfits, time of day, mood, and narrative tension.
+A SillyTavern extension that uses LLM analysis to track and maintain scene state across roleplay conversations. Helps AI models stay consistent with physical positions, outfits, time of day, mood, narrative tension, relationships, and story progression.
 
 ## Examples
 
@@ -44,7 +44,7 @@ A SillyTavern extension that uses LLM analysis to track and maintain scene state
 - **Time**: Full narrative date and time tracking (year, month, day, hour, minute, day of week) with intelligent inference from scene context
 - **Location**: Area, place, position, nearby props
 - **Climate**: Weather and temperature (informed by time/season)
-- **Characters**: Position, activity, mood, goals, physical state, outfit (head, jacket, torso, legs, underwear, socks, footwear), and dispositions toward other characters
+- **Characters**: Position, activity, mood, physical state, outfit (head, neck, jacket, back, torso, legs, underwear, socks, footwear)
 
 ### Intelligent Time Tracking
 BlazeTracker uses a dedicated LLM call to track narrative time:
@@ -56,23 +56,53 @@ BlazeTracker uses a dedicated LLM call to track narrative time:
 ### Scene Context
 - **Topic**: What the scene is about (3-5 words)
 - **Tone**: Emotional quality of the scene (2-3 words)
-- **Tension**: 
+- **Tension**:
   - Level: relaxed → aware → guarded → tense → charged → volatile → explosive
   - Direction: escalating, stable, or decreasing
   - Type: confrontation, intimate, vulnerable, celebratory, negotiation, suspense, conversation
-- **Recent Events**: Up to 5 significant events affecting the narrative (secrets discovered, injuries, intimacy changes, etc.)
+
+### Events & Story Tracking
+BlazeTracker extracts significant narrative events from each assistant message:
+- **Event Types**: conversation, confession, argument, discovery, secret_shared, emotional, intimate_touch, intimate_kiss, combat, betrayal, and many more
+- **Witnesses**: Characters present during the event
+- **Relationship Signals**: Attitude changes and milestones detected from events
+- Events are accumulated through the current chapter and archived when a chapter ends
+
+### Relationships
+Track how characters feel about each other with bidirectional relationship modeling:
+- **Status Levels**: strangers → acquaintances → friendly → close → intimate (also: strained, hostile, complicated)
+- **Attitudes**: Each character's feelings, secrets, and wants toward the other
+- **Milestones**: First meeting, first kiss, confession, betrayal, reconciliation, and more
+- **Version History**: Full relationship history with snapshots at each change, tied to message IDs
+- **Per-Message View**: Each message's "View Details" shows relationships as they were at that point in time
+- **Rollback Support**: Re-extracting or swiping automatically rolls back relationship changes from that message
+- Relationships are automatically initialized when new character pairs appear and updated based on events
+
+### Chapters
+Organize your narrative into chapters:
+- **Automatic Detection**: Chapter boundaries detected on major location or time changes
+- **Manual Control**: Force chapter breaks with `/bt-chapter` command
+- **Chapter Data**: Title, summary, time range, primary location, events, outcomes
+- **Tension Graph**: Visual representation of tension across all events
+
+### Narrative Overview Modal
+Click the 📖 button to open the Narrative Overview with three tabs:
+- **Events**: Current chapter events with type icons, tension indicators, and relationship signals
+- **Chapters**: Chapter history with summaries, events, and a tension graph over time
+- **Relationships**: All tracked relationships with status, feelings, milestones, and filtering by present characters
 
 ### Smart Extraction
-- Modular extraction pipeline: Time → Location → Climate → Characters → Scene
+- Modular extraction pipeline: Time → Location → Climate → Characters → Scene → Event
 - Each extractor has its own optimized prompt and temperature setting
-- Scene analysis runs after assistant responses (when both sides of the conversation are available)
+- Scene and event analysis run after assistant responses (when both sides of the conversation are available)
 - Delta-based updates - only changes what actually changed
 - Grounded in character cards and lorebook for accuracy
 - Swipe-aware storage - each swipe maintains its own state
+- Removed clothing is automatically moved to location props
 
 ### Custom Prompts
 All extraction prompts are fully customizable for different models and RP styles:
-- 10 prompts: time (initial/delta), location (initial/update), climate (initial/update), characters (initial/update), scene (initial/update)
+- Prompts for: time, location, climate, characters, scene, events, relationships, milestones
 - Each prompt documents available placeholders ({{messages}}, {{schema}}, {{previousState}}, etc.)
 - Reset to defaults at any time
 - Tune prompts to improve extraction accuracy for your specific use case
@@ -80,6 +110,7 @@ All extraction prompts are fully customizable for different models and RP styles
 ### Context Injection
 - Automatically injects current scene state into the prompt
 - Full date/time included (e.g., "Monday, June 15th, 2024 at 2:30 PM")
+- Active relationships and current events included
 - Helps the AI maintain consistency without manual reminders
 
 ### Visual Display
@@ -89,13 +120,21 @@ All extraction prompts are fully customizable for different models and RP styles
 - Tension visualized with icons (☕ relaxed, 👁 aware, 🛡 guarded, 😬 tense, ⚡ charged, 🔥 volatile, 💥 explosive)
 - Direction indicators (📈 escalating, ➖ stable, 📉 decreasing)
 - Expandable details for characters and props
+- Character cards show relationship badges with present characters
 - Step-by-step progress indicator during extraction
 
 ### Manual Editing
 - Full state editor UI
-- Edit any field: date, time, location, characters, outfits, tension, events
+- Edit any field: date, time, location, characters, outfits, tension
 - Date picker with automatic day-of-week calculation
-- Add/remove characters and dispositions
+- Add/remove characters
+
+### Slash Commands
+BlazeTracker provides STScript commands for automation:
+- `/bt-extract [id=N]` - Extract state for a specific message (defaults to most recent)
+- `/bt-chapter [title="..."]` - Force a chapter break with optional custom title
+- `/bt-extract-all` - Clear all state and re-extract the entire chat
+- `/bt-status` - Show extraction status (messages, chapters, relationships, events)
 
 ## Configuration
 
@@ -144,6 +183,12 @@ Display temperatures in Fahrenheit or Celsius. The LLM always extracts in Fahren
 - **24-hour**: Display as 14:30
 - **12-hour**: Display as 2:30 PM
 
+### Enable Event Tracking
+When enabled, BlazeTracker extracts significant narrative events from each assistant message. Events track what happened, who was involved, and relationship implications.
+
+### Enable Relationship Tracking
+When enabled, BlazeTracker tracks relationships between character pairs. Relationships are automatically initialized when new pairs appear and updated based on events.
+
 ### Custom Prompts
 Click to expand the Custom Prompts section to view and edit extraction prompts:
 - Click any prompt to open the editor
@@ -172,21 +217,26 @@ Each swipe maintains its own state. When you swipe to a new response, BlazeTrack
 
 ## How It Works
 
-BlazeTracker uses a modular extraction pipeline with 5 specialized extractors:
+BlazeTracker uses a modular extraction pipeline with specialized extractors:
 
 1. **Time Extraction**: If enabled, extracts narrative date/time (initial) or time delta (subsequent). Temperature: 0.3
 2. **Location Extraction**: Extracts area, place, position, and props. Uses time context. Temperature: 0.5
 3. **Climate Extraction**: Extracts weather and temperature. Uses time and location for inference. Temperature: 0.3
-4. **Character Extraction**: Extracts all character states including outfits and dispositions. Temperature: 0.7
-5. **Scene Extraction**: Extracts topic, tone, tension, and events. Only runs on assistant messages to ensure both sides of conversation are available. Temperature: 0.6
+4. **Character Extraction**: Extracts all character states including outfits. Temperature: 0.7
+5. **Scene Extraction**: Extracts topic, tone, and tension. Only runs on assistant messages. Temperature: 0.6
+6. **Event Extraction**: Extracts significant events with relationship signals. Only runs on assistant messages. Temperature: 0.7
+7. **Relationship Initialization**: Automatically initializes new character pair relationships. Temperature: 0.6
+8. **Chapter Detection**: Checks for chapter boundaries based on location/time changes.
 
 Each extractor:
 - Has its own optimized prompt (customizable in settings)
-- Uses appropriate temperature for its task (deterministic for time/climate, creative for characters)
+- Uses appropriate temperature for its task (deterministic for time/climate, creative for characters/events)
 - Receives relevant context from previous extractors (e.g., climate knows the time and location)
 
 After extraction:
-- **Storage**: State is stored in `message.extra.blazetracker` for each message/swipe
+- **Per-message State**: Stored in `message.extra.blazetracker` for each message/swipe
+- **Narrative State**: Chapters and relationships (with version history) stored in message 0
+- **Relationship Versioning**: Each relationship change creates a version snapshot with the message ID, enabling per-message relationship views and rollback on re-extraction
 - **Injection**: The most recent state is formatted and injected into the prompt context
 - **Display**: React components render the state inline with each message
 
@@ -219,6 +269,23 @@ npm run format
 # Output appears in dist/
 ```
 
+## Upgrading from Older Versions
+
+### Legacy Data Migration
+When opening a chat with BlazeTracker data from an older incompatible version (before relationship versioning was added), you'll see a migration popup with three options:
+
+1. **Re-extract All State** (slow, accurate) - Clears all existing state and re-extracts every message from scratch. Best for important chats where you want accurate relationship history.
+
+2. **Re-extract Recent State** (fast) - Clears all existing state but only extracts the most recent message. Good enough for most cases where you just want to continue the chat.
+
+3. **Initialize Empty State** - Creates an empty narrative state without re-extracting. Old per-message state will be ignored. New state will build from future messages.
+
+### Automatic State Migration
+When opening chats with compatible but older state formats, BlazeTracker automatically migrates the data:
+- **v1 → v2**: Adds version history to existing relationships (creates initial version snapshot from current state)
+
+These migrations happen silently and preserve your existing data.
+
 ## Troubleshooting
 
 ### State not extracting
@@ -227,9 +294,9 @@ npm run format
 - Check browser console for errors
 
 ### Extraction seems slow
-- BlazeTracker makes 5-6 sequential LLM calls per extraction (time + location + climate + characters + scene)
+- BlazeTracker makes multiple sequential LLM calls per extraction (time + location + climate + characters + scene + event + relationships)
 - Each call is small (~100-300 tokens), but latency adds up
-- Disable time tracking if you don't need it to reduce calls
+- Disable individual tracking features you don't need to reduce calls
 
 ### Old state showing after swipe
 - This is usually a timing issue - state should update within a moment
@@ -248,6 +315,21 @@ npm run format
 - Use Custom Prompts to tune extraction for your specific model
 - Add more explicit instructions if fields are being ignored
 - Adjust the field descriptions in your custom prompts
+
+### Relationships not appearing
+- Relationships are only tracked when at least 2 characters are present
+- Check that relationship tracking is enabled in settings
+- New character pairs are initialized one at a time per extraction to avoid slowdown
+
+### Events not being extracted
+- Events only extract on assistant messages (not user messages)
+- Event tracking must be enabled in settings
+- The LLM may determine no significant event occurred (routine conversation)
+
+### Chapter not ending
+- Automatic chapter breaks require both a major location/area change AND sufficient time passage
+- Use `/bt-chapter` to manually force a chapter break
+- Check that events exist in the current chapter (chapters need events to finalize)
 
 ### Extension not appearing
 - Ensure you have the latest SillyTavern version
