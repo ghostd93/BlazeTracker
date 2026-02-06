@@ -155,6 +155,7 @@ export function buildExtractionSettingsFromV2(settings: V2Settings): ExtractionS
 		maxChapterMessagesToSend: settings.v2MaxChapterMessagesToSend,
 		promptPrefix: settings.v2PromptPrefix || undefined,
 		promptSuffix: settings.v2PromptSuffix || undefined,
+		includeWorldinfo: settings.v2IncludeWorldinfo,
 	};
 }
 
