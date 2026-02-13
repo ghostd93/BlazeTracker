@@ -16,6 +16,9 @@ import type { MessageAndSwipe } from '../types';
 vi.mock('../extractors/progressTracker', () => ({
 	startSection: vi.fn(),
 	completeSection: vi.fn(),
+	recordSkippedExtractor: vi.fn(),
+	recordLlmAttempt: vi.fn(),
+	recordLlmResult: vi.fn(),
 }));
 
 // Mock forecast extractor weather dependencies

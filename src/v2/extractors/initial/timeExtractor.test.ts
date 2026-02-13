@@ -228,9 +228,11 @@ describe('initialTimeExtractor', () => {
 			);
 
 			expect(result.time).toBeDefined();
-			// Check that it's a valid ISO string containing the date
-			expect(result.time).toContain('2024-11-14');
-			expect(result.time).toContain('15:47');
+			// Verify normalized ISO output while avoiding locale/timezone-specific hour assertions.
+			const parsed = new Date(result.time as string);
+			expect(Number.isNaN(parsed.valueOf())).toBe(false);
+			expect(parsed.toISOString()).toBe(result.time);
+			expect(parsed.getUTCMinutes()).toBe(47);
 		});
 
 		it('returns empty object when LLM returns invalid JSON', async () => {

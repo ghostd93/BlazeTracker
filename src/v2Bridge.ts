@@ -26,6 +26,7 @@ import {
 	setProgressCallback,
 	startExtractionRun,
 	completeExtractionRun,
+	getLatestExtractionTelemetry,
 	type V2ExtractionProgress,
 } from './v2/extractors/progressTracker';
 import { st_echo } from 'sillytavern-utils-lib/config';
@@ -331,6 +332,27 @@ export interface V2ExtractionOptions {
 	onMessageEnd?: (messageId: number) => void;
 }
 
+function logLatestTelemetry(messageId: number): void {
+	const telemetry = getLatestExtractionTelemetry();
+	if (!telemetry) return;
+
+	debugLog('Extraction telemetry summary:', {
+		messageId,
+		totalMs: telemetry.totalMs,
+		llmAttempts: telemetry.llmAttempts,
+		llmRetries: telemetry.llmRetries,
+		llmSuccesses: telemetry.llmSuccesses,
+		llmFailures: telemetry.llmFailures,
+		skippedExtractors: telemetry.skippedExtractors.length,
+		sectionDurationsMs: telemetry.sectionDurationsMs,
+	});
+
+	if (telemetry.skippedExtractors.length > 0) {
+		debugLog('Skipped extractors:', telemetry.skippedExtractors);
+	}
+	debugLog('Per-prompt telemetry:', telemetry.prompts);
+}
+
 /**
  * Run v2 extraction for the current turn.
  *
@@ -450,6 +472,7 @@ export async function runV2Extraction(
 			);
 			debugLog('Extraction aborted');
 			completeExtractionRun();
+			logLatestTelemetry(msgId);
 			return null;
 		}
 
@@ -459,6 +482,7 @@ export async function runV2Extraction(
 		}
 
 		completeExtractionRun();
+		logLatestTelemetry(messageId);
 		return result;
 	} catch (error: any) {
 		if (error.name === 'AbortError' || abortController.signal.aborted) {

@@ -7,6 +7,7 @@ import { buildPrompt } from '../../generator';
 import type { PromptTemplate, BuiltPrompt } from '../../prompts';
 import { debugLog, debugWarn, errorLog } from '../../../utils/debug';
 import { getV2Settings } from '../../settings';
+import { recordLlmAttempt, recordLlmResult } from '../progressTracker';
 
 /**
  * Options for parsing with retry.
@@ -85,6 +86,7 @@ export async function generateAndParse<T>(
 
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		const currentTemp = attempt === 0 ? temperature : retryTemperature;
+		recordLlmAttempt(prompt.name, attempt > 0);
 
 		try {
 			const generatorPrompt = buildPrompt(
@@ -107,6 +109,7 @@ export async function generateAndParse<T>(
 
 			if (parsed !== null) {
 				const reasoning = extractReasoning(parsed);
+				recordLlmResult(prompt.name, true);
 
 				if (logReasoning && reasoning) {
 					debugLog(`${prompt.name} reasoning:`, reasoning);
@@ -150,6 +153,7 @@ export async function generateAndParse<T>(
 
 	// All attempts failed
 	errorLog(`${prompt.name} failed after ${maxRetries + 1} attempts:`, lastError);
+	recordLlmResult(prompt.name, false);
 	if (lastResponse) {
 		errorLog(`Last response:`, lastResponse.substring(0, 500));
 	}

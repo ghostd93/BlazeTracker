@@ -32,7 +32,12 @@ import {
 	globalRelationshipExtractors,
 	perPairExtractors,
 } from '../extractors/events';
-import { startSection, completeSection, updateSectionLabel } from '../extractors/progressTracker';
+import {
+	startSection,
+	completeSection,
+	updateSectionLabel,
+	recordSkippedExtractor,
+} from '../extractors/progressTracker';
 import { debugLog, errorLog } from '../../utils/debug';
 
 /** State tracked for each extractor across turns */
@@ -106,6 +111,7 @@ export async function extractEvents(
 		const strategyContext = buildContext(extractor);
 		if (!extractor.shouldRun(strategyContext)) {
 			debugLog(`Skipping ${extractor.name} - shouldRun returned false`);
+			recordSkippedExtractor(extractor.name, 'shouldRun=false');
 			return;
 		}
 
@@ -234,6 +240,7 @@ export async function extractEvents(
 
 		const strategyContext = buildContext(extractor as any);
 		if (!extractor.shouldRun(strategyContext)) {
+			recordSkippedExtractor(extractor.name, 'shouldRun=false');
 			return false;
 		}
 
@@ -346,6 +353,7 @@ export async function extractEvents(
 
 		const strategyContext = buildContext(extractor as any);
 		if (!extractor.shouldRun(strategyContext)) {
+			recordSkippedExtractor(extractor.name, 'shouldRun=false');
 			return false;
 		}
 

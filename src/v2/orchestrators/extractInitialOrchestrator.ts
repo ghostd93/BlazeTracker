@@ -9,7 +9,11 @@ import type { Snapshot, MessageAndSwipe, LocationState } from '../types';
 import { createEmptySnapshot } from '../types/snapshot';
 import { isValidLocationType, serializeMoment } from '../types/common';
 import { initialExtractors } from '../extractors/initial';
-import { startSection, completeSection } from '../extractors/progressTracker';
+import {
+	startSection,
+	completeSection,
+	recordSkippedExtractor,
+} from '../extractors/progressTracker';
 import type { CardExtensions } from '../cardExtensions/types';
 import { debugLog, errorLog } from '../../utils/debug';
 
@@ -84,6 +88,7 @@ export async function extractInitialSnapshot(
 					`chat.length=${context.chat.length}, ` +
 					`has location=${!!partialSnapshot?.location})`,
 			);
+			recordSkippedExtractor(extractor.name, 'shouldRun=false');
 			continue;
 		}
 

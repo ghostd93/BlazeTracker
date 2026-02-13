@@ -25,6 +25,26 @@ interface TimingData {
 	version: number;
 }
 
+interface PromptTelemetry {
+	attempts: number;
+	retries: number;
+	successes: number;
+	failures: number;
+}
+
+export interface V2ExtractionTelemetry {
+	startedAt: number;
+	completedAt: number | null;
+	totalMs: number;
+	llmAttempts: number;
+	llmRetries: number;
+	llmSuccesses: number;
+	llmFailures: number;
+	skippedExtractors: Array<{ name: string; reason: string }>;
+	sectionDurationsMs: Record<string, number>;
+	prompts: Record<string, PromptTelemetry>;
+}
+
 type ProgressCallback = (progress: V2ExtractionProgress) => void;
 
 // ============================================
@@ -101,6 +121,8 @@ let completedSections: string[] = [];
 let currentSection: string | null = null;
 let sectionStartTime: number = 0;
 let currentLabel: string = '';
+let currentTelemetry: V2ExtractionTelemetry | null = null;
+let latestCompletedTelemetry: V2ExtractionTelemetry | null = null;
 
 // ============================================
 // Timing Data Persistence
@@ -230,6 +252,18 @@ export function startExtractionRun(sectionNames: string[]): void {
 	currentSection = null;
 	sectionStartTime = 0;
 	currentLabel = '';
+	currentTelemetry = {
+		startedAt: Date.now(),
+		completedAt: null,
+		totalMs: 0,
+		llmAttempts: 0,
+		llmRetries: 0,
+		llmSuccesses: 0,
+		llmFailures: 0,
+		skippedExtractors: [],
+		sectionDurationsMs: {},
+		prompts: {},
+	};
 
 	emitProgress('Starting extraction...');
 }
@@ -260,6 +294,9 @@ export function completeSection(name: string): void {
 	if (sectionStartTime > 0 && currentSection === name) {
 		const duration = Date.now() - sectionStartTime;
 		recordSectionTiming(name, duration);
+		if (currentTelemetry) {
+			currentTelemetry.sectionDurationsMs[name] = duration;
+		}
 	}
 
 	if (!completedSections.includes(name)) {
@@ -284,6 +321,12 @@ export function completeSection(name: string): void {
 export function completeExtractionRun(): void {
 	currentSection = null;
 	sectionStartTime = 0;
+	if (currentTelemetry) {
+		currentTelemetry.completedAt = Date.now();
+		currentTelemetry.totalMs =
+			currentTelemetry.completedAt - currentTelemetry.startedAt;
+		latestCompletedTelemetry = { ...currentTelemetry };
+	}
 
 	if (progressCallback) {
 		progressCallback({
@@ -292,6 +335,74 @@ export function completeExtractionRun(): void {
 			label: 'Extraction complete',
 		});
 	}
+}
+
+function ensurePromptTelemetry(promptName: string): PromptTelemetry {
+	if (!currentTelemetry) {
+		return { attempts: 0, retries: 0, successes: 0, failures: 0 };
+	}
+	if (!currentTelemetry.prompts[promptName]) {
+		currentTelemetry.prompts[promptName] = {
+			attempts: 0,
+			retries: 0,
+			successes: 0,
+			failures: 0,
+		};
+	}
+	return currentTelemetry.prompts[promptName];
+}
+
+/**
+ * Record a single LLM attempt for telemetry.
+ */
+export function recordLlmAttempt(promptName: string, isRetry: boolean): void {
+	if (!currentTelemetry) return;
+	currentTelemetry.llmAttempts += 1;
+	if (isRetry) {
+		currentTelemetry.llmRetries += 1;
+	}
+	const prompt = ensurePromptTelemetry(promptName);
+	prompt.attempts += 1;
+	if (isRetry) {
+		prompt.retries += 1;
+	}
+}
+
+/**
+ * Record result for a prompt generation pipeline.
+ */
+export function recordLlmResult(promptName: string, success: boolean): void {
+	if (!currentTelemetry) return;
+	const prompt = ensurePromptTelemetry(promptName);
+	if (success) {
+		currentTelemetry.llmSuccesses += 1;
+		prompt.successes += 1;
+	} else {
+		currentTelemetry.llmFailures += 1;
+		prompt.failures += 1;
+	}
+}
+
+/**
+ * Record a skipped extractor with a short reason.
+ */
+export function recordSkippedExtractor(name: string, reason: string): void {
+	if (!currentTelemetry) return;
+	currentTelemetry.skippedExtractors.push({ name, reason });
+}
+
+/**
+ * Get telemetry for the current active run.
+ */
+export function getCurrentExtractionTelemetry(): V2ExtractionTelemetry | null {
+	return currentTelemetry ? { ...currentTelemetry } : null;
+}
+
+/**
+ * Get telemetry from the most recently completed run.
+ */
+export function getLatestExtractionTelemetry(): V2ExtractionTelemetry | null {
+	return latestCompletedTelemetry ? { ...latestCompletedTelemetry } : null;
 }
 
 /**
