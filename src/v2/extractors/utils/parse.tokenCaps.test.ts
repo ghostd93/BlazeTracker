@@ -32,6 +32,40 @@ describe('generateAndParse token caps', () => {
 		} as ReturnType<typeof getV2Settings>);
 	});
 
+	it('attempts strict JSON repair before retrying', async () => {
+		const generator: Generator = {
+			generate: vi.fn().mockResolvedValue('{"ok":true,'),
+			abort: vi.fn(),
+		};
+
+		const repairPrompt: PromptTemplate<{ ok: boolean }> = {
+			name: 'repair',
+			description: 'repair test prompt',
+			placeholders: [],
+			systemPrompt: '',
+			userTemplate: '',
+			responseSchema: { type: 'object' },
+			defaultTemperature: 0.5,
+			parseResponse: vi.fn(response =>
+				response.trim() === '{"ok":true}' ? { ok: true } : null,
+			),
+		};
+
+		const result = await generateAndParse(
+			generator,
+			repairPrompt,
+			{ system: 'sys', user: 'user' },
+			0.5,
+			{ maxRetries: 0 },
+		);
+
+		expect(result.success).toBe(true);
+		expect(result.data).toEqual({ ok: true });
+		expect(generator.generate).toHaveBeenCalledOnce();
+		expect(repairPrompt.parseResponse).toHaveBeenCalledWith('{"ok":true,');
+		expect(repairPrompt.parseResponse).toHaveBeenCalledWith('{"ok":true}');
+	});
+
 	it('applies conservative cap for short-output prompts', async () => {
 		const generator: Generator = {
 			generate: vi.fn().mockResolvedValue('{"ok":true}'),

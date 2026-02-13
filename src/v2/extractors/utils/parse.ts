@@ -47,6 +47,34 @@ function toStringIfPresent(value: unknown): string | undefined {
 	return undefined;
 }
 
+export function repairJsonStructure(value: string): string | null {
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+	if (!/^[\[\{]/.test(trimmed)) return null;
+
+	let repaired = trimmed.replace(/,\s*([}\]])/g, '$1');
+	repaired = repaired.replace(/,\s*$/, '');
+	const openBraces = (repaired.match(/{/g) ?? []).length;
+	const closeBraces = (repaired.match(/}/g) ?? []).length;
+	const openBrackets = (repaired.match(/\[/g) ?? []).length;
+	const closeBrackets = (repaired.match(/]/g) ?? []).length;
+
+	const missingBraces = openBraces - closeBraces;
+	if (missingBraces > 0) {
+		repaired += '}'.repeat(missingBraces);
+	}
+
+	const missingBrackets = openBrackets - closeBrackets;
+	if (missingBrackets > 0) {
+		repaired += ']'.repeat(missingBrackets);
+	}
+
+	if (repaired === trimmed) {
+		return null;
+	}
+	return repaired;
+}
+
 function snapshotObject(
 	value: unknown,
 	depth: number = 0,
@@ -283,6 +311,7 @@ export async function generateAndParse<T>(
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		const currentTemp = attempt === 0 ? temperature : retryTemperature;
 		recordLlmAttempt(prompt.name, attempt > 0);
+		let attemptedRepair = false;
 
 		try {
 			const generatorPrompt = buildPrompt(
@@ -314,12 +343,39 @@ export async function generateAndParse<T>(
 					debugLog(`${prompt.name} reasoning:`, reasoning);
 				}
 
-				return {
-					success: true,
-					data: parsed,
+					return {
+						success: true,
+						data: parsed,
 					reasoning,
 					rawResponse: response,
 				};
+			}
+
+			if (!attemptedRepair) {
+				const repaired = repairJsonStructure(response);
+				if (repaired) {
+					attemptedRepair = true;
+					const repairedParsed = prompt.parseResponse(repaired);
+					if (repairedParsed !== null) {
+						const reasoning = extractReasoning(repairedParsed);
+						recordLlmResult(prompt.name, true);
+						recordPromptBackoffSuccess(prompt.name);
+						if (!isVitestEnv && cacheKey) {
+							setCachedPromptResult(cacheKey, repairedParsed, reasoning, repaired);
+						}
+						if (logReasoning && reasoning) {
+							debugLog(`${prompt.name} reasoning (repaired):`, reasoning);
+						}
+						debugLog(`${prompt.name} parse succeeded after strict JSON repair`);
+						return {
+							success: true,
+							data: repairedParsed,
+							reasoning,
+							rawResponse: repaired,
+						};
+					}
+					debugWarn(`${prompt.name} strict JSON repair produced invalid data`);
+				}
 			}
 
 			lastError = 'parseResponse returned null';

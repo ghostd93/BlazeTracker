@@ -11,3 +11,5 @@ This fork keeps BlazeTracker's core tracking behavior and adds focused performan
 - Per-prompt cooldown/backoff for unstable prompts (currently `topic_tone_change`)
 - Prompt-result cache for unchanged prompt windows (skips duplicate extractor calls)
 - Conservative token caps for short-response event prompts (`location_change`, `tension_change`, `presence_change`, `chapter_ended`)
+- Deduplicated per-run relationship pairs so duplicate character entries don't double-request the same pair
+- Strict JSON-repair pass before retrying when a response almost parses successfully

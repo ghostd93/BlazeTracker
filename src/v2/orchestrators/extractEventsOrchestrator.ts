@@ -76,6 +76,24 @@ async function mapWithConcurrency<T, R>(
 	return results;
 }
 
+export function buildUniqueSortedPairs(characters: string[]): [string, string][] {
+	const seen = new Set<string>();
+	const pairs: [string, string][] = [];
+
+	for (let i = 0; i < characters.length; i++) {
+		for (let j = i + 1; j < characters.length; j++) {
+			if (characters[i] === characters[j]) continue;
+			const pair = sortPair(characters[i], characters[j]);
+			const key = `${pair[0]}|${pair[1]}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			pairs.push(pair);
+		}
+	}
+
+	return pairs;
+}
+
 /**
  * Run event extraction for a turn.
  */
@@ -289,9 +307,9 @@ export async function extractEvents(
 
 		if (abortSignal?.aborted) {
 			return true;
-		}
-		return false; // Not aborted
 	}
+	return false; // Not aborted
+}
 
 	// Helper to run per-pair extractor for all present pairs
 	async function runPerPair(extractor: PerPairExtractor): Promise<boolean> {
@@ -303,13 +321,8 @@ export async function extractEvents(
 		const characters = projection.charactersPresent;
 		const maxConcurrent = Math.max(1, settings.maxConcurrentRequests ?? 1);
 
-		// Generate all pairs
-		const pairs: [string, string][] = [];
-		for (let i = 0; i < characters.length; i++) {
-			for (let j = i + 1; j < characters.length; j++) {
-				pairs.push(sortPair(characters[i], characters[j]));
-			}
-		}
+	// Generate all unique sorted pairs and avoid duplicates
+	const pairs = buildUniqueSortedPairs(characters);
 
 		if (maxConcurrent <= 1) {
 			for (const pair of pairs) {
