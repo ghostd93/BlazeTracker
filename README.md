@@ -6,6 +6,15 @@ Built for longer, slower-burn narratives. Prioritises accuracy over speed.
 
 **[📖 Documentation](https://lunarblazepony.github.io/BlazeTracker/)** — Concepts, guides, and reference.
 
+## Fork Note (ghostd93)
+
+This fork adds performance-oriented extraction improvements while keeping the original tracking behavior:
+
+- Maximum Concurrent Requests setting in BlazeTracker Advanced Settings
+- Batched per-character extraction for position/activity, mood/physical, and outfit (fewer LLM calls per turn)
+- Manifest metadata and release updates for the ghostd93/BlazeTracker fork
+
+
 ![Compact view](./img/compact_block.png)
 
 ### Is This For You?
