@@ -602,6 +602,10 @@ function V2SettingsPanel() {
 		};
 	}, [latestTelemetry]);
 
+	const skippedExtractors = useMemo(() => {
+		return latestTelemetry?.skippedExtractors ?? [];
+	}, [latestTelemetry]);
+
 	const handleUpdate = useCallback(
 		<K extends keyof V2Settings>(key: K, value: V2Settings[K]) => {
 			updateV2Setting(key, value);
@@ -967,8 +971,8 @@ function V2SettingsPanel() {
 								<strong>Last Extraction Telemetry</strong>
 								<small>Live summary of the most recently completed extraction run</small>
 							</div>
-							{telemetrySummary ? (
-								<div className="bt-telemetry-grid">
+								{telemetrySummary ? (
+									<div className="bt-telemetry-grid">
 									<div className="bt-telemetry-item">
 										<span>Completed At</span>
 										<code>{new Date(telemetrySummary.runAt).toLocaleString()}</code>
@@ -1020,12 +1024,26 @@ function V2SettingsPanel() {
 										</div>
 									)}
 								</div>
-							) : (
-								<small className="bt-telemetry-empty">
-									No completed extraction yet in this session.
-								</small>
-							)}
-						</div>
+									) : (
+										<small className="bt-telemetry-empty">
+											No completed extraction yet in this session.
+										</small>
+									)}
+									{skippedExtractors.length > 0 && (
+										<div className="bt-skipped-list">
+											<div className="bt-skipped-header">Skipped Extractors</div>
+											{skippedExtractors.slice(0, 8).map((item, index) => (
+												<div className="bt-skipped-item" key={`${item.name}-${index}`}>
+													<span>{item.name}</span>
+													<span>{item.reason}</span>
+												</div>
+											))}
+											{skippedExtractors.length > 8 && (
+												<small>and {skippedExtractors.length - 8} more...</small>
+											)}
+										</div>
+									)}
+								</div>
 
 						<hr />
 

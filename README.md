@@ -13,3 +13,4 @@ This fork keeps BlazeTracker's core tracking behavior and adds focused performan
 - Conservative token caps for short-response event prompts (`location_change`, `tension_change`, `presence_change`, `chapter_ended`)
 - Deduplicated per-run relationship pairs so duplicate character entries don't double-request the same pair
 - Strict JSON-repair pass before retrying when a response almost parses successfully
+- Telemetry view now lists the latest skipped extractors (name + reason) directly in Advanced Settings
