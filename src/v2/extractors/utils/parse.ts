@@ -13,6 +13,12 @@ import {
 	recordPromptBackoffFailure,
 	recordPromptBackoffSuccess,
 } from './promptBackoff';
+import { getCachedPromptResult, setCachedPromptResult } from './promptResultCache';
+
+const isVitestEnv =
+	typeof process !== 'undefined' &&
+	typeof process.env !== 'undefined' &&
+	process.env.VITEST === 'true';
 
 /**
  * Options for parsing with retry.
@@ -77,6 +83,7 @@ export async function generateAndParse<T>(
 		logReasoning = true,
 		abortSignal,
 	} = options;
+	const settings = getV2Settings();
 
 	// Check if already aborted before starting
 	if (abortSignal?.aborted) {
@@ -84,6 +91,28 @@ export async function generateAndParse<T>(
 			success: false,
 			aborted: true,
 		};
+	}
+
+	// Prompt cache for unchanged windows: reuse prior successful parse.
+	let cacheKey = '';
+	if (!isVitestEnv) {
+		const cacheLookup = getCachedPromptResult<T>(
+			prompt.name,
+			builtPrompt.system,
+			builtPrompt.user,
+			temperature,
+			settings.v2ProfileId,
+		);
+		cacheKey = cacheLookup.key;
+		if (cacheLookup.cached) {
+			recordSkippedExtractor(prompt.name, 'prompt-cache-hit');
+			return {
+				success: true,
+				data: cacheLookup.cached.data,
+				reasoning: cacheLookup.cached.reasoning,
+				rawResponse: cacheLookup.cached.rawResponse,
+			};
+		}
 	}
 
 	// Prompt-level cooldown/backoff for repeatedly failing prompts.
@@ -113,7 +142,6 @@ export async function generateAndParse<T>(
 				prompt.name,
 			);
 
-			const settings = getV2Settings();
 			const response = await generator.generate(generatorPrompt, {
 				temperature: currentTemp,
 				maxTokens: settings.v2MaxTokens,
@@ -129,6 +157,9 @@ export async function generateAndParse<T>(
 				const reasoning = extractReasoning(parsed);
 				recordLlmResult(prompt.name, true);
 				recordPromptBackoffSuccess(prompt.name);
+				if (!isVitestEnv && cacheKey) {
+					setCachedPromptResult(cacheKey, parsed, reasoning, response);
+				}
 
 				if (logReasoning && reasoning) {
 					debugLog(`${prompt.name} reasoning:`, reasoning);

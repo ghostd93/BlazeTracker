@@ -8,3 +8,4 @@ This fork keeps BlazeTracker's core tracking behavior and adds focused performan
 - Batched per-character extraction for position/activity, mood/physical, and outfit updates
 - Extraction telemetry logging (prompt attempts/retries/results, skipped extractors, section durations)
 - Per-prompt cooldown/backoff for unstable prompts (currently `topic_tone_change`)
+- Prompt-result cache for unchanged prompt windows (skips duplicate extractor calls)
