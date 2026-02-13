@@ -64,6 +64,22 @@ export interface ProjectionDisplayProps {
 	onViewChapterDetails?: (chapterIndex: number) => void;
 }
 
+const sanitizeConsistencyLine = (line: string): string => {
+	const strippedTags = line.replace(/<[^>]*>/g, '');
+	const withoutBold = strippedTags.replace(/\*\*(.*?)\*\*/g, '$1');
+	const withoutInlineCode = withoutBold.replace(/`([^`]+)`/g, '$1');
+	const withoutLinks = withoutInlineCode.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+	const withoutHashes = withoutLinks.replace(/#+\s*/g, '');
+	const withoutNumbers = withoutHashes.replace(/^\d+\.\s*/g, '');
+	const withoutFaded = withoutNumbers.replace(/^[>-]\s*/g, '');
+	const withoutEventLabels = withoutFaded.replace(/^Event\s*\d+:\s*/i, '');
+	const normalized = withoutEventLabels.replace(/\s+/g, ' ').trim();
+	if (/^(mismatches|verdict|consistency check result)\s*:?\s*$/i.test(normalized)) {
+		return '';
+	}
+	return normalized;
+};
+
 /**
  * Format location for display.
  */
@@ -391,11 +407,15 @@ export function ProjectionDisplay({
 		const lastLine = lines[lines.length - 1];
 		const isVerdict = /Tracker (?:is|may be)/i.test(lastLine);
 		const isWarning = isVerdict && /(may|might|could)/i.test(lastLine);
+		const detailLines = isVerdict ? lines.slice(0, -1) : lines;
+		const sanitizedDetails = detailLines.map(sanitizeConsistencyLine).filter(line => line.length > 0);
+		const sanitizedVerdict = isVerdict ? sanitizeConsistencyLine(lastLine) : '';
+		const sanitizedRaw = sanitizedDetails.length ? sanitizedDetails.join('\n') : sanitizeConsistencyLine(summaryText);
 		return {
-			verdict: isVerdict ? lastLine : '',
-			details: isVerdict ? lines.slice(0, -1) : lines,
+			verdict: sanitizedVerdict,
+			details: sanitizedDetails,
 			isWarning,
-			raw: summaryText,
+			raw: sanitizedRaw || summaryText,
 		};
 	}, [consistencyResult?.summary]);
 

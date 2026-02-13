@@ -100,34 +100,31 @@ function formatRecentEvents(lastMessageId: number) {
 		})
 		.slice(-MAX_EVENTS_TO_INCLUDE);
 
-	return events
-		.map((event, index) => `${index + 1}. ${describeEvent(event)}`)
-		.join('\n');
+	const formatted = events.map(describeEvent).filter(Boolean);
+	return formatted.join('\n');
 }
 
 function describeEvent(event: Event): string {
-	const base = `${event.kind}/${(event as { subkind?: string }).subkind ?? 'unknown'} @ msg ${event.source.messageId}`;
+	const kindLabel = formatEventLabel(event);
+	const messageRef = `msg ${event.source.messageId}`;
 	const details: string[] = [];
 
-	const push = (key: string, value: unknown) => {
+	const push = (label: string, value?: unknown) => {
 		if (value === undefined || value === null) return;
-		const safe = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : String(value);
-		details.push(`${key}=${safe}`);
+		const text = String(value).replace(/\s+/g, ' ').trim();
+		if (!text.length) return;
+		details.push(`${label} ${text}`);
 	};
-
-	if ('swipeId' in event.source) {
-		push('swipe', event.source.swipeId);
-	}
 
 	switch (event.kind) {
 		case 'time': {
 			const timeEvent = event as TimeEvent;
 			if (timeEvent.subkind === 'initial') {
-				push('time', (timeEvent as { time?: string }).time);
+				push('Initial time:', (timeEvent as { time?: string }).time);
 			} else {
 				const delta = (timeEvent as { delta?: { days?: number; hours?: number; minutes?: number } }).delta;
 				if (delta) {
-					push('delta', `${delta.days ?? 0}d ${delta.hours ?? 0}h ${delta.minutes ?? 0}m`);
+					push('Delta:', `${delta.days ?? 0}d ${delta.hours ?? 0}h ${delta.minutes ?? 0}m`);
 				}
 			}
 			break;
@@ -135,62 +132,70 @@ function describeEvent(event: Event): string {
 		case 'location': {
 			const location = event as LocationEvent;
 			if (location.subkind === 'moved') {
-				push('area', (location as { newArea?: string }).newArea);
-				push('place', (location as { newPlace?: string }).newPlace);
+				push('Moved to area:', (location as { newArea?: string }).newArea);
+				push('Place:', (location as { newPlace?: string }).newPlace);
 			} else {
-				push('prop', (location as { prop?: string }).prop);
+				push('Prop change:', (location as { prop?: string }).prop);
 			}
 			break;
 		}
 		case 'character': {
 			const character = event as CharacterEvent;
-			push('character', (character as { character?: string }).character);
-			push('detail', getCharacterDetail(character));
+			push('Character:', (character as { character?: string }).character);
+			push('Detail:', getCharacterDetail(character));
 			break;
 		}
 		case 'relationship': {
 			const relationship = event as RelationshipEvent;
-			push('from', (relationship as { fromCharacter?: string }).fromCharacter);
-			push('toward', (relationship as { towardCharacter?: string }).towardCharacter);
-			push('value', (relationship as { value?: string }).value);
+			push('From:', (relationship as { fromCharacter?: string }).fromCharacter);
+			push('To:', (relationship as { towardCharacter?: string }).towardCharacter);
+			push('Value:', (relationship as { value?: string }).value);
 			break;
 		}
 		case 'topic_tone': {
 			const topic = event as TopicToneEvent;
-			push('topic', (topic as { topic?: string }).topic);
-			push('tone', (topic as { tone?: string }).tone);
+			push('Topic:', (topic as { topic?: string }).topic);
+			push('Tone:', (topic as { tone?: string }).tone);
 			break;
 		}
 		case 'tension': {
 			const tension = event as TensionEvent;
-			push('level', tension.level);
-			push('type', tension.type);
+			push('Level:', tension.level);
+			push('Type:', tension.type);
 			break;
 		}
 		case 'narrative_description': {
 			const narrative = event as NarrativeDescriptionEvent;
-			push('description', narrative.description);
+			push('Description:', narrative.description);
 			break;
 		}
 		case 'chapter': {
 			const chapter = event as ChapterEvent;
-			push('chapter', chapter.chapterIndex);
+			push('Chapter:', chapter.chapterIndex);
 			if (chapter.subkind === 'described') {
-				push('title', (chapter as { title?: string }).title);
+				push('Title:', (chapter as { title?: string }).title);
 			} else {
-				push('reason', (chapter as { reason?: string }).reason);
+				push('Reason:', (chapter as { reason?: string }).reason);
 			}
 			break;
 		}
 		case 'forecast_generated': {
 			const forecast = event as ForecastGeneratedEvent;
-			push('area', forecast.areaName);
-			push('start', forecast.startDate);
+			push('Forecast area:', forecast.areaName);
+			push('Starts:', forecast.startDate);
 			break;
 		}
 	}
 
-	return `${base}${details.length ? ' [' + details.join(', ') + ']' : ''}`;
+	const trailing = details.length ? `: ${details.join('; ')}` : '';
+	return `${kindLabel} (${messageRef})${trailing}`;
+}
+
+function formatEventLabel(event: Event) {
+	const baseKind = event.kind;
+	const prettyKind = baseKind.charAt(0).toUpperCase() + baseKind.slice(1).replace('_', ' ');
+	const subkind = (event as { subkind?: string }).subkind;
+	return subkind ? `${prettyKind} (${subkind.replace(/_/g, ' ')})` : prettyKind;
 }
 
 function getCharacterDetail(event: CharacterEvent) {
