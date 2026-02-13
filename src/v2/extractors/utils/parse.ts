@@ -7,7 +7,12 @@ import { buildPrompt } from '../../generator';
 import type { PromptTemplate, BuiltPrompt } from '../../prompts';
 import { debugLog, debugWarn, errorLog } from '../../../utils/debug';
 import { getV2Settings } from '../../settings';
-import { recordLlmAttempt, recordLlmResult } from '../progressTracker';
+import { recordLlmAttempt, recordLlmResult, recordSkippedExtractor } from '../progressTracker';
+import {
+	shouldSkipPromptByBackoff,
+	recordPromptBackoffFailure,
+	recordPromptBackoffSuccess,
+} from './promptBackoff';
 
 /**
  * Options for parsing with retry.
@@ -81,6 +86,19 @@ export async function generateAndParse<T>(
 		};
 	}
 
+	// Prompt-level cooldown/backoff for repeatedly failing prompts.
+	const backoff = shouldSkipPromptByBackoff(prompt.name);
+	if (backoff.skip) {
+		recordSkippedExtractor(prompt.name, `prompt-cooldown:${backoff.remainingMs}ms`);
+		debugWarn(
+			`${prompt.name} skipped due to cooldown (${Math.ceil(backoff.remainingMs / 1000)}s remaining)`,
+		);
+		return {
+			success: false,
+			error: `cooldown active (${backoff.remainingMs}ms remaining)`,
+		};
+	}
+
 	let lastError: string | undefined;
 	let lastResponse: string | undefined;
 
@@ -110,6 +128,7 @@ export async function generateAndParse<T>(
 			if (parsed !== null) {
 				const reasoning = extractReasoning(parsed);
 				recordLlmResult(prompt.name, true);
+				recordPromptBackoffSuccess(prompt.name);
 
 				if (logReasoning && reasoning) {
 					debugLog(`${prompt.name} reasoning:`, reasoning);
@@ -154,6 +173,7 @@ export async function generateAndParse<T>(
 	// All attempts failed
 	errorLog(`${prompt.name} failed after ${maxRetries + 1} attempts:`, lastError);
 	recordLlmResult(prompt.name, false);
+	recordPromptBackoffFailure(prompt.name);
 	if (lastResponse) {
 		errorLog(`Last response:`, lastResponse.substring(0, 500));
 	}
