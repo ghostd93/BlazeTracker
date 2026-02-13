@@ -25,6 +25,7 @@ import {
 	getLatestExtractionTelemetry,
 	type V2ExtractionTelemetry,
 } from '../extractors/progressTracker';
+import { runTrackerConsistencyCheck, type TrackerConsistencyCheckResult } from '../consistencyChecker';
 
 // ============================================
 // Types
@@ -545,6 +546,10 @@ function V2SettingsPanel() {
 	const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
 	const [editingPrompt, setEditingPrompt] = useState<PromptTemplate<unknown> | null>(null);
 	const [latestTelemetry, setLatestTelemetry] = useState<V2ExtractionTelemetry | null>(null);
+	const [consistencyResult, setConsistencyResult] =
+		useState<TrackerConsistencyCheckResult | null>(null);
+	const [consistencyTimestamp, setConsistencyTimestamp] = useState<number | null>(null);
+	const [isCheckingConsistency, setIsCheckingConsistency] = useState(false);
 
 	// Get all V2 prompt definitions
 	const promptDefinitions = useMemo(() => getAllV2Prompts(), []);
@@ -566,6 +571,30 @@ function V2SettingsPanel() {
 			| undefined;
 		setProfiles(connectionManager?.profiles || []);
 	}, []);
+
+	const handleConsistencyCheck = useCallback(async () => {
+		if (isCheckingConsistency) return;
+		setIsCheckingConsistency(true);
+		setConsistencyResult(null);
+		try {
+			const result = await runTrackerConsistencyCheck();
+			setConsistencyResult(result);
+			setConsistencyTimestamp(Date.now());
+		} finally {
+			setIsCheckingConsistency(false);
+		}
+	}, [isCheckingConsistency]);
+
+	const consistencyStatusLabel = isCheckingConsistency
+		? 'Checking tracker consistency…'
+		: consistencyResult
+			? consistencyResult.success
+				? 'Last consistency check succeeded'
+				: 'Last consistency check failed'
+			: 'Tracker consistency not checked yet';
+	const consistencyLastChecked = consistencyTimestamp
+		? new Date(consistencyTimestamp).toLocaleString()
+		: null;
 
 	useEffect(() => {
 		const syncTelemetry = () => {
@@ -1038,12 +1067,64 @@ function V2SettingsPanel() {
 													<span>{item.reason}</span>
 												</div>
 											))}
-											{skippedExtractors.length > 8 && (
-												<small>and {skippedExtractors.length - 8} more...</small>
-											)}
-										</div>
-									)}
-								</div>
+								{skippedExtractors.length > 8 && (
+									<small>and {skippedExtractors.length - 8} more...</small>
+								)}
+							</div>
+						)}
+					</div>
+
+					<CheckboxField
+						id="bt-v2-consistency-toggle"
+						label="Show 'Check tracker consistency' button"
+						description="Add a manual verification that asks the AI to confirm tracker data against recent messages."
+						checked={settings.v2EnableConsistencyCheck}
+						onChange={checked =>
+							handleUpdate('v2EnableConsistencyCheck', checked)
+						}
+					/>
+
+					{settings.v2EnableConsistencyCheck && (
+						<div className="bt-consistency-check">
+							<div className="bt-consistency-header">
+								<strong>Tracker Consistency</strong>
+								<small>
+									Ask the AI to verify the tracker events using the latest conversation.
+								</small>
+							</div>
+							<button
+								className="bt-consistency-button"
+								type="button"
+								disabled={isCheckingConsistency || !settings.v2ProfileId}
+								onClick={handleConsistencyCheck}
+							>
+								{isCheckingConsistency ? 'Checking QA...' : 'Check tracker consistency'}
+							</button>
+							<div className="bt-consistency-status">
+								{consistencyStatusLabel}
+								{consistencyLastChecked && (
+									<span className="bt-consistency-timestamp">
+										Last checked at {consistencyLastChecked}
+									</span>
+								)}
+							</div>
+							{consistencyResult?.summary && (
+								<pre className="bt-consistency-result">
+									{consistencyResult.summary}
+								</pre>
+							)}
+							{consistencyResult?.error && (
+								<small className="bt-consistency-error">
+									{consistencyResult.error}
+								</small>
+							)}
+							{!settings.v2ProfileId && (
+								<small className="bt-consistency-error">
+									Configure a connection profile before running this check.
+								</small>
+							)}
+						</div>
+					)}
 
 						<hr />
 

@@ -14,3 +14,4 @@ This fork keeps BlazeTracker's core tracking behavior and adds focused performan
 - Deduplicated per-run relationship pairs so duplicate character entries don't double-request the same pair
 - Strict JSON-repair pass before retrying when a response almost parses successfully
 - Telemetry view now lists the latest skipped extractors (name + reason) directly in Advanced Settings
+- Optional "Check tracker consistency" action that asks the AI to verify the tracker state against the latest messages

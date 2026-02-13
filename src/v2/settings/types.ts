@@ -58,6 +58,8 @@ export interface V2Settings {
 	v2MaxConcurrentRequests: number;
 	/** Include worldinfo (lorebook) data in extractor prompts */
 	v2IncludeWorldinfo: boolean;
+	/** Enable the consistency check control in Advanced Settings */
+	v2EnableConsistencyCheck: boolean;
 
 	// Debug & Display
 	/** Enable debug logging to console */
@@ -126,14 +128,16 @@ export interface V2Settings {
 export function isV2Settings(obj: unknown): obj is V2Settings {
 	if (typeof obj !== 'object' || obj === null) return false;
 	const s = obj as Record<string, unknown>;
-	return (
-		typeof s.v2ProfileId === 'string' &&
-		typeof s.v2AutoExtract === 'boolean' &&
+		return (
+			typeof s.v2ProfileId === 'string' &&
+			typeof s.v2AutoExtract === 'boolean' &&
 		(typeof s.v2MaxTokens === 'number' || s.v2MaxTokens === undefined) &&
 		(typeof s.v2MaxReqsPerMinute === 'number' || s.v2MaxReqsPerMinute === undefined) &&
 		(typeof s.v2MaxConcurrentRequests === 'number' ||
 			s.v2MaxConcurrentRequests === undefined) &&
 		(typeof s.v2IncludeWorldinfo === 'boolean' || s.v2IncludeWorldinfo === undefined) &&
+		(typeof s.v2EnableConsistencyCheck === 'boolean' ||
+			s.v2EnableConsistencyCheck === undefined) &&
 		typeof s.v2DebugLogging === 'boolean' &&
 		typeof s.v2DisplayPosition === 'string' &&
 		typeof s.v2TemperatureUnit === 'string' &&

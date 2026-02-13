@@ -369,6 +369,75 @@
 	opacity: 0.9;
 }
 
+.bt-consistency-check {
+	margin-top: 0.8rem;
+	border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+	border-radius: 6px;
+	padding: 0.75rem 0.9rem;
+	background: rgba(255, 255, 255, 0.02);
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+}
+
+.bt-consistency-header strong {
+	font-size: 1rem;
+}
+
+.bt-consistency-button {
+	align-self: flex-start;
+	min-width: 220px;
+	padding: 0.45rem 0.95rem;
+	border-radius: 6px;
+	border: 1px solid transparent;
+	background: var(--SmartAccentColor, #6c5ce7);
+	color: #fff;
+	font-weight: 600;
+	cursor: pointer;
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bt-consistency-button:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.bt-consistency-button:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+	box-shadow: none;
+}
+
+.bt-consistency-status {
+	font-size: 0.85rem;
+	color: var(--SmartThemeTextLightColor);
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+
+.bt-consistency-timestamp {
+	font-size: 0.75rem;
+	opacity: 0.7;
+}
+
+.bt-consistency-result {
+	background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.25));
+	border-radius: 4px;
+	padding: 0.5rem;
+	font-size: 0.85rem;
+	white-space: pre-wrap;
+	max-height: 220px;
+	overflow-y: auto;
+	border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+	font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Menlo, monospace;
+}
+
+.bt-consistency-error {
+	color: #f87171;
+	font-size: 0.8rem;
+}
+
 /* Custom Prompts Section */
 
 .bt-prompt-section {
