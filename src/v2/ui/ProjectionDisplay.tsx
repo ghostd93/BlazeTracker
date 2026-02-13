@@ -376,6 +376,29 @@ export function ProjectionDisplay({
 		}
 	}, [consistencyEnabled, isCheckingConsistency, effectiveProfileId, profileReady]);
 
+	const formattedConsistencySummary = useMemo(() => {
+		const summaryText = consistencyResult?.summary?.trim();
+		if (!summaryText) {
+			return null;
+		}
+		const lines = summaryText
+			.split('\n')
+			.map(line => line.trim())
+			.filter(line => line.length > 0);
+		if (!lines.length) {
+			return null;
+		}
+		const lastLine = lines[lines.length - 1];
+		const isVerdict = /Tracker (?:is|may be)/i.test(lastLine);
+		const isWarning = isVerdict && /(may|might|could)/i.test(lastLine);
+		return {
+			verdict: isVerdict ? lastLine : '',
+			details: isVerdict ? lines.slice(0, -1) : lines,
+			isWarning,
+			raw: summaryText,
+		};
+	}, [consistencyResult?.summary]);
+
 	// Filter narrative events to current chapter only
 	const currentChapterEvents = useMemo(() => {
 		if (!projection) return [];
@@ -651,10 +674,34 @@ export function ProjectionDisplay({
 							Consistency check is running…
 						</small>
 					)}
-					{consistencyResult?.summary && (
-						<pre className="bt-consistency-result">
-							{consistencyResult.summary}
-						</pre>
+					{formattedConsistencySummary && (
+						<div className="bt-consistency-result-block">
+							<div className="bt-consistency-result-header">
+								<span>Consistency check result</span>
+								{formattedConsistencySummary.verdict && (
+									<span
+										className={`bt-consistency-verdict ${
+											formattedConsistencySummary.isWarning
+												? 'bt-consistency-verdict--warn'
+												: 'bt-consistency-verdict--ok'
+										}`}
+									>
+										{formattedConsistencySummary.verdict}
+									</span>
+								)}
+							</div>
+							{formattedConsistencySummary.details.length ? (
+								<ul className="bt-consistency-detail-list">
+									{formattedConsistencySummary.details.map((detail, index) => (
+										<li key={index}>{detail}</li>
+									))}
+								</ul>
+							) : (
+								<pre className="bt-consistency-raw">
+									{formattedConsistencySummary.raw}
+								</pre>
+							)}
+						</div>
 					)}
 					{consistencyResult?.error && (
 						<small className="bt-consistency-error">

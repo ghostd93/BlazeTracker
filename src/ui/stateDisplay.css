@@ -2682,15 +2682,65 @@
     opacity: 0.85;
 }
 
-.bt-consistency-result {
-    background: rgba(255, 255, 255, 0.08);
+.bt-consistency-result-block {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.65rem 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.bt-consistency-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.bt-consistency-verdict {
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+}
+
+.bt-consistency-verdict--ok {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border-color: rgba(34, 197, 94, 0.4);
+}
+
+.bt-consistency-verdict--warn {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.35);
+}
+
+.bt-consistency-detail-list {
+    margin: 0;
+    padding-left: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.bt-consistency-raw {
+    background: rgba(0, 0, 0, 0.4);
     border-radius: 4px;
-    padding: 0.5rem;
-    font-size: 0.8rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.78rem;
     white-space: pre-wrap;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Menlo, monospace;
-    max-height: 200px;
+    max-height: 220px;
     overflow-y: auto;
 }
 
