@@ -21,6 +21,10 @@ import { setDebugEnabled, errorLog } from '../../utils/debug';
 import { SelectField, CheckboxField } from '../../ui/components/form';
 import { mountAllV2ProjectionDisplays } from './mountV2Display';
 import { getAllV2Prompts, type PromptTemplate } from '../prompts';
+import {
+	getLatestExtractionTelemetry,
+	type V2ExtractionTelemetry,
+} from '../extractors/progressTracker';
 
 // ============================================
 // Types
@@ -540,6 +544,7 @@ function V2SettingsPanel() {
 	const [settings, setSettings] = useState<V2Settings | null>(null);
 	const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
 	const [editingPrompt, setEditingPrompt] = useState<PromptTemplate<unknown> | null>(null);
+	const [latestTelemetry, setLatestTelemetry] = useState<V2ExtractionTelemetry | null>(null);
 
 	// Get all V2 prompt definitions
 	const promptDefinitions = useMemo(() => getAllV2Prompts(), []);
@@ -561,6 +566,41 @@ function V2SettingsPanel() {
 			| undefined;
 		setProfiles(connectionManager?.profiles || []);
 	}, []);
+
+	useEffect(() => {
+		const syncTelemetry = () => {
+			setLatestTelemetry(getLatestExtractionTelemetry());
+		};
+		syncTelemetry();
+		const timer = window.setInterval(syncTelemetry, 1000);
+		return () => window.clearInterval(timer);
+	}, []);
+
+	const telemetrySummary = useMemo(() => {
+		if (!latestTelemetry) return null;
+		const promptEntries = Object.entries(latestTelemetry.prompts);
+		const promptFailures = promptEntries
+			.filter(([, data]) => data.failures > 0)
+			.sort((a, b) => b[1].failures - a[1].failures);
+		const promptRetries = promptEntries
+			.filter(([, data]) => data.retries > 0)
+			.sort((a, b) => b[1].retries - a[1].retries);
+		const sectionDurations = Object.entries(latestTelemetry.sectionDurationsMs).sort(
+			(a, b) => b[1] - a[1],
+		);
+		return {
+			runAt: latestTelemetry.completedAt ?? latestTelemetry.startedAt,
+			totalMs: latestTelemetry.totalMs,
+			attempts: latestTelemetry.llmAttempts,
+			retries: latestTelemetry.llmRetries,
+			successes: latestTelemetry.llmSuccesses,
+			failures: latestTelemetry.llmFailures,
+			skippedCount: latestTelemetry.skippedExtractors.length,
+			slowestSection: sectionDurations[0] ?? null,
+			topFailurePrompt: promptFailures[0] ?? null,
+			topRetryPrompt: promptRetries[0] ?? null,
+		};
+	}, [latestTelemetry]);
 
 	const handleUpdate = useCallback(
 		<K extends keyof V2Settings>(key: K, value: V2Settings[K]) => {
@@ -922,6 +962,73 @@ function V2SettingsPanel() {
 						LLM configuration and category temperature defaults
 					</small>
 					<div className="bt-advanced-content">
+						<div className="bt-telemetry-panel">
+							<div className="bt-section-header">
+								<strong>Last Extraction Telemetry</strong>
+								<small>Live summary of the most recently completed extraction run</small>
+							</div>
+							{telemetrySummary ? (
+								<div className="bt-telemetry-grid">
+									<div className="bt-telemetry-item">
+										<span>Completed At</span>
+										<code>{new Date(telemetrySummary.runAt).toLocaleString()}</code>
+									</div>
+									<div className="bt-telemetry-item">
+										<span>Total Runtime</span>
+										<code>{telemetrySummary.totalMs} ms</code>
+									</div>
+									<div className="bt-telemetry-item">
+										<span>LLM Attempts</span>
+										<code>{telemetrySummary.attempts}</code>
+									</div>
+									<div className="bt-telemetry-item">
+										<span>Retries</span>
+										<code>{telemetrySummary.retries}</code>
+									</div>
+									<div className="bt-telemetry-item">
+										<span>Prompt Failures</span>
+										<code>{telemetrySummary.failures}</code>
+									</div>
+									<div className="bt-telemetry-item">
+										<span>Skipped Extractors</span>
+										<code>{telemetrySummary.skippedCount}</code>
+									</div>
+									{telemetrySummary.slowestSection && (
+										<div className="bt-telemetry-item">
+											<span>Slowest Section</span>
+											<code>
+												{telemetrySummary.slowestSection[0]} ({telemetrySummary.slowestSection[1]} ms)
+											</code>
+										</div>
+									)}
+									{telemetrySummary.topRetryPrompt && (
+										<div className="bt-telemetry-item">
+											<span>Most Retried Prompt</span>
+											<code>
+												{telemetrySummary.topRetryPrompt[0]} ({telemetrySummary.topRetryPrompt[1].retries}{' '}
+												retries)
+											</code>
+										</div>
+									)}
+									{telemetrySummary.topFailurePrompt && (
+										<div className="bt-telemetry-item">
+											<span>Most Failed Prompt</span>
+											<code>
+												{telemetrySummary.topFailurePrompt[0]} ({telemetrySummary.topFailurePrompt[1].failures}{' '}
+												failure)
+											</code>
+										</div>
+									)}
+								</div>
+							) : (
+								<small className="bt-telemetry-empty">
+									No completed extraction yet in this session.
+								</small>
+							)}
+						</div>
+
+						<hr />
+
 						{/* Max Tokens */}
 						<div
 							className="flex-container flexFlowColumn"

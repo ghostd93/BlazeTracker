@@ -302,6 +302,44 @@
 	border-radius: 4px;
 }
 
+/* Telemetry Summary */
+.bt-telemetry-panel {
+	padding: 10px;
+	background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.15));
+	border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+	border-radius: 4px;
+	margin-bottom: 10px;
+}
+
+.bt-telemetry-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.bt-telemetry-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+}
+
+.bt-telemetry-item span {
+	opacity: 0.8;
+}
+
+.bt-telemetry-item code {
+	background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.3));
+	border-radius: 3px;
+	padding: 2px 6px;
+	font-family: monospace;
+	font-size: 0.9em;
+}
+
+.bt-telemetry-empty {
+	opacity: 0.7;
+}
+
 /* Custom Prompts Section */
 
 .bt-prompt-section {
