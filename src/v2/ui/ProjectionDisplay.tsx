@@ -5,7 +5,7 @@
  * Works with v2 types directly - no legacy dependencies.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type moment from 'moment';
 import type { Projection, RelationshipState, SceneState, NarrativeEvent } from '../types/snapshot';
 import { getMilestoneDisplayName, type MilestoneInfo } from '../store/projection';
@@ -19,7 +19,14 @@ import {
 } from './components';
 import type { LocationForecast } from '../../weather/types';
 import { getTensionLevelIcon, getTensionColor, getTensionIcon, getTensionTypeColor } from './icons';
+import { getV2Settings } from '../settings/manager';
+import { runTrackerConsistencyCheck, type TrackerConsistencyCheckResult } from '../consistencyChecker';
 import type { ComputedChapter } from '../narrative/computeChapters';
+
+interface ConnectionProfile {
+	id: string;
+	name?: string;
+}
 
 export interface ExtractionProgress {
 	step: string;
@@ -308,6 +315,67 @@ export function ProjectionDisplay({
 	const [isExpanded, setIsExpanded] = useState(false);
 	const [showForecastModal, setShowForecastModal] = useState(false);
 
+	const settingsSnapshot = getV2Settings();
+	const consistencyProfileIdFromSettings =
+		settingsSnapshot.v2ConsistencyProfileId ?? '';
+	const consistencyEnabled = settingsSnapshot.v2EnableConsistencyCheck;
+	const [consistencyProfileId, setConsistencyProfileId] = useState(
+		consistencyProfileIdFromSettings,
+	);
+	const [isCheckingConsistency, setIsCheckingConsistency] = useState(false);
+	const [consistencyResult, setConsistencyResult] =
+		useState<TrackerConsistencyCheckResult | null>(null);
+	const [consistencyTimestamp, setConsistencyTimestamp] = useState<number | null>(
+		null,
+	);
+	const isMountedRef = useRef(true);
+
+	useEffect(() => {
+		return () => {
+			isMountedRef.current = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		setConsistencyProfileId(consistencyProfileIdFromSettings);
+	}, [consistencyProfileIdFromSettings]);
+
+	const effectiveProfileId = consistencyProfileId || settingsSnapshot.v2ProfileId;
+	const context = SillyTavern.getContext();
+	const connectionManager = context.extensionSettings?.connectionManager as
+		| { profiles?: ConnectionProfile[] }
+		| undefined;
+	const connectionProfiles = connectionManager?.profiles ?? [];
+	const selectedProfile =
+		connectionProfiles.find(profile => profile.id === effectiveProfileId) ??
+		connectionProfiles.find(profile => profile.id === settingsSnapshot.v2ProfileId);
+	const profileLabel =
+		selectedProfile?.name || selectedProfile?.id || effectiveProfileId || 'Not configured';
+	const profileReady = Boolean(effectiveProfileId);
+
+	const handleConsistencyCheck = useCallback(async () => {
+		if (!consistencyEnabled || isCheckingConsistency || !profileReady) return;
+		setIsCheckingConsistency(true);
+		setConsistencyResult(null);
+		try {
+			const result = await runTrackerConsistencyCheck(effectiveProfileId);
+			if (!isMountedRef.current) return;
+			setConsistencyResult(result);
+			setConsistencyTimestamp(Date.now());
+		} catch (error: any) {
+			if (!isMountedRef.current) return;
+			setConsistencyResult({
+				success: false,
+				summary: '',
+				error: error?.message ?? 'Consistency check failed',
+			});
+		} finally {
+			if (isMountedRef.current) {
+				setIsCheckingConsistency(false);
+			}
+		}
+	}, [consistencyEnabled, isCheckingConsistency, effectiveProfileId, profileReady]);
+
 	// Filter narrative events to current chapter only
 	const currentChapterEvents = useMemo(() => {
 		if (!projection) return [];
@@ -555,6 +623,50 @@ export function ProjectionDisplay({
 					areaName={currentArea}
 					onClose={() => setShowForecastModal(false)}
 				/>
+			)}
+			{isLatestMessage && consistencyEnabled && (
+				<div className="bt-consistency-panel">
+					<div className="bt-consistency-row">
+						<button
+							className="bt-consistency-btn"
+							type="button"
+							disabled={isCheckingConsistency || !profileReady}
+							onClick={handleConsistencyCheck}
+						>
+							{isCheckingConsistency
+								? 'Checking tracker consistency…'
+								: 'Check tracker consistency'}
+						</button>
+						<div className="bt-consistency-meta">
+							<span className="bt-consistency-profile-label">
+								Profile: {profileLabel}
+							</span>
+							<small className="bt-consistency-disclaimer">
+								Consistency checks ask for a more intelligent model (GPT-4+ or similar) to confirm the tracker state.
+							</small>
+						</div>
+					</div>
+					{isCheckingConsistency && (
+						<small className="bt-consistency-status">
+							Consistency check is running…
+						</small>
+					)}
+					{consistencyResult?.summary && (
+						<pre className="bt-consistency-result">
+							{consistencyResult.summary}
+						</pre>
+					)}
+					{consistencyResult?.error && (
+						<small className="bt-consistency-error">
+							{consistencyResult.error}
+						</small>
+					)}
+					{consistencyTimestamp && (
+						<small className="bt-consistency-timestamp">
+							Last checked at {new Date(consistencyTimestamp).toLocaleString()}
+						</small>
+					)}
+				</div>
 			)}
 		</div>
 	);

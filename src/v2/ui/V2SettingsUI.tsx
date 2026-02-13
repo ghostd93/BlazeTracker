@@ -25,7 +25,6 @@ import {
 	getLatestExtractionTelemetry,
 	type V2ExtractionTelemetry,
 } from '../extractors/progressTracker';
-import { runTrackerConsistencyCheck, type TrackerConsistencyCheckResult } from '../consistencyChecker';
 
 // ============================================
 // Types
@@ -546,10 +545,6 @@ function V2SettingsPanel() {
 	const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
 	const [editingPrompt, setEditingPrompt] = useState<PromptTemplate<unknown> | null>(null);
 	const [latestTelemetry, setLatestTelemetry] = useState<V2ExtractionTelemetry | null>(null);
-	const [consistencyResult, setConsistencyResult] =
-		useState<TrackerConsistencyCheckResult | null>(null);
-	const [consistencyTimestamp, setConsistencyTimestamp] = useState<number | null>(null);
-	const [isCheckingConsistency, setIsCheckingConsistency] = useState(false);
 
 	// Get all V2 prompt definitions
 	const promptDefinitions = useMemo(() => getAllV2Prompts(), []);
@@ -571,30 +566,6 @@ function V2SettingsPanel() {
 			| undefined;
 		setProfiles(connectionManager?.profiles || []);
 	}, []);
-
-	const handleConsistencyCheck = useCallback(async () => {
-		if (isCheckingConsistency) return;
-		setIsCheckingConsistency(true);
-		setConsistencyResult(null);
-		try {
-			const result = await runTrackerConsistencyCheck();
-			setConsistencyResult(result);
-			setConsistencyTimestamp(Date.now());
-		} finally {
-			setIsCheckingConsistency(false);
-		}
-	}, [isCheckingConsistency]);
-
-	const consistencyStatusLabel = isCheckingConsistency
-		? 'Checking tracker consistency…'
-		: consistencyResult
-			? consistencyResult.success
-				? 'Last consistency check succeeded'
-				: 'Last consistency check failed'
-			: 'Tracker consistency not checked yet';
-	const consistencyLastChecked = consistencyTimestamp
-		? new Date(consistencyTimestamp).toLocaleString()
-		: null;
 
 	useEffect(() => {
 		const syncTelemetry = () => {
@@ -649,7 +620,9 @@ function V2SettingsPanel() {
 			if (
 				key === 'v2TemperatureUnit' ||
 				key === 'v2TimeFormat' ||
-				key === 'v2DisplayPosition'
+				key === 'v2DisplayPosition' ||
+				key === 'v2EnableConsistencyCheck' ||
+				key === 'v2ConsistencyProfileId'
 			) {
 				mountAllV2ProjectionDisplays();
 			}
@@ -703,6 +676,19 @@ function V2SettingsPanel() {
 		},
 		[settings, handleUpdate],
 	);
+
+	const consistencyProfileOptions = useMemo(() => {
+		const profileOptions = profiles.map(profile => ({
+			value: profile.id,
+			label: profile.name
+				? `${profile.name} (${profile.id})`
+				: profile.id,
+		}));
+		return [
+			{ value: '', label: 'Use extraction profile' },
+			...profileOptions,
+		];
+	}, [profiles]);
 
 	if (!settings) {
 		return <div className="bt-settings-loading">Loading...</div>;
@@ -1000,8 +986,8 @@ function V2SettingsPanel() {
 								<strong>Last Extraction Telemetry</strong>
 								<small>Live summary of the most recently completed extraction run</small>
 							</div>
-								{telemetrySummary ? (
-									<div className="bt-telemetry-grid">
+							{telemetrySummary ? (
+								<div className="bt-telemetry-grid">
 									<div className="bt-telemetry-item">
 										<span>Completed At</span>
 										<code>{new Date(telemetrySummary.runAt).toLocaleString()}</code>
@@ -1053,78 +1039,51 @@ function V2SettingsPanel() {
 										</div>
 									)}
 								</div>
-									) : (
-										<small className="bt-telemetry-empty">
-											No completed extraction yet in this session.
-										</small>
+							) : (
+								<small className="bt-telemetry-empty">
+									No completed extraction yet in this session.
+								</small>
+							)}
+							{skippedExtractors.length > 0 && (
+								<div className="bt-skipped-list">
+									<div className="bt-skipped-header">Skipped Extractors</div>
+									{skippedExtractors.slice(0, 8).map((item, index) => (
+										<div className="bt-skipped-item" key={`${item.name}-${index}`}>
+											<span>{item.name}</span>
+											<span>{item.reason}</span>
+										</div>
+									))}
+									{skippedExtractors.length > 8 && (
+										<small>and {skippedExtractors.length - 8} more...</small>
 									)}
-									{skippedExtractors.length > 0 && (
-										<div className="bt-skipped-list">
-											<div className="bt-skipped-header">Skipped Extractors</div>
-											{skippedExtractors.slice(0, 8).map((item, index) => (
-												<div className="bt-skipped-item" key={`${item.name}-${index}`}>
-													<span>{item.name}</span>
-													<span>{item.reason}</span>
-												</div>
-											))}
-								{skippedExtractors.length > 8 && (
-									<small>and {skippedExtractors.length - 8} more...</small>
-								)}
-							</div>
-						)}
-					</div>
-
-					<CheckboxField
-						id="bt-v2-consistency-toggle"
-						label="Show 'Check tracker consistency' button"
-						description="Add a manual verification that asks the AI to confirm tracker data against recent messages."
-						checked={settings.v2EnableConsistencyCheck}
-						onChange={checked =>
-							handleUpdate('v2EnableConsistencyCheck', checked)
-						}
-					/>
-
-					{settings.v2EnableConsistencyCheck && (
-						<div className="bt-consistency-check">
-							<div className="bt-consistency-header">
-								<strong>Tracker Consistency</strong>
-								<small>
-									Ask the AI to verify the tracker events using the latest conversation.
-								</small>
-							</div>
-							<button
-								className="bt-consistency-button"
-								type="button"
-								disabled={isCheckingConsistency || !settings.v2ProfileId}
-								onClick={handleConsistencyCheck}
-							>
-								{isCheckingConsistency ? 'Checking QA...' : 'Check tracker consistency'}
-							</button>
-							<div className="bt-consistency-status">
-								{consistencyStatusLabel}
-								{consistencyLastChecked && (
-									<span className="bt-consistency-timestamp">
-										Last checked at {consistencyLastChecked}
-									</span>
-								)}
-							</div>
-							{consistencyResult?.summary && (
-								<pre className="bt-consistency-result">
-									{consistencyResult.summary}
-								</pre>
-							)}
-							{consistencyResult?.error && (
-								<small className="bt-consistency-error">
-									{consistencyResult.error}
-								</small>
-							)}
-							{!settings.v2ProfileId && (
-								<small className="bt-consistency-error">
-									Configure a connection profile before running this check.
-								</small>
+								</div>
 							)}
 						</div>
-					)}
+
+						<div className="bt-consistency-settings">
+							<CheckboxField
+								id="bt-v2-consistency-toggle"
+								label="Show 'Check tracker consistency' button"
+								description="Expose a manual verification that asks the AI to compare tracker data with recent messages."
+								checked={settings.v2EnableConsistencyCheck}
+								onChange={checked =>
+									handleUpdate('v2EnableConsistencyCheck', checked)
+								}
+							/>
+							{settings.v2EnableConsistencyCheck && (
+								<SelectField
+									id="bt-v2-consistency-profile"
+									label="Consistency check profile"
+									description="Choose a connection profile dedicated to consistency checks (leave empty to reuse the extraction profile)."
+									value={settings.v2ConsistencyProfileId}
+									options={consistencyProfileOptions}
+									onChange={value => handleUpdate('v2ConsistencyProfileId', value)}
+								/>
+							)}
+							<small className="bt-consistency-disclaimer">
+								Consistency verification relies on a more capable model (e.g., GPT-4+ or similar). Select a higher-end profile if available.
+							</small>
+						</div>
 
 						<hr />
 

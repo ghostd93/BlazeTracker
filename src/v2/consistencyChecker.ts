@@ -21,11 +21,14 @@ export interface TrackerConsistencyCheckResult {
 }
 
 export async function runTrackerConsistencyCheck(
+	profileId?: string,
 	abortSignal?: AbortSignal,
 ): Promise<TrackerConsistencyCheckResult> {
 	try {
 		const settings = getV2Settings();
-		if (!settings.v2ProfileId) {
+		const profileToUse =
+			profileId || settings.v2ConsistencyProfileId || settings.v2ProfileId;
+		if (!profileToUse) {
 			throw new Error('No connection profile configured');
 		}
 
@@ -45,7 +48,7 @@ export async function runTrackerConsistencyCheck(
 			VERDICT_PROMPT,
 		].join('\n\n');
 
-		const generator = new SillyTavernGenerator({ profileId: settings.v2ProfileId });
+		const generator = new SillyTavernGenerator({ profileId: profileToUse });
 		const response = await generator.generate(
 			buildPrompt(SYSTEM_PROMPT, userPrompt, 'TrackerConsistencyCheck'),
 			{

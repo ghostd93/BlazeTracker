@@ -58,6 +58,8 @@ export interface V2Settings {
 	v2MaxConcurrentRequests: number;
 	/** Include worldinfo (lorebook) data in extractor prompts */
 	v2IncludeWorldinfo: boolean;
+	/** LLM profile used when running the consistency check (leave empty to match extraction) */
+	v2ConsistencyProfileId: string;
 	/** Enable the consistency check control in Advanced Settings */
 	v2EnableConsistencyCheck: boolean;
 
@@ -136,6 +138,8 @@ export function isV2Settings(obj: unknown): obj is V2Settings {
 		(typeof s.v2MaxConcurrentRequests === 'number' ||
 			s.v2MaxConcurrentRequests === undefined) &&
 		(typeof s.v2IncludeWorldinfo === 'boolean' || s.v2IncludeWorldinfo === undefined) &&
+		(typeof s.v2ConsistencyProfileId === 'string' ||
+			s.v2ConsistencyProfileId === undefined) &&
 		(typeof s.v2EnableConsistencyCheck === 'boolean' ||
 			s.v2EnableConsistencyCheck === undefined) &&
 		typeof s.v2DebugLogging === 'boolean' &&

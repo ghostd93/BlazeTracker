@@ -44,6 +44,7 @@ export function createDefaultV2Settings(): V2Settings {
 		v2MaxReqsPerMinute: 0, // disabled by default
 		v2MaxConcurrentRequests: 1, // sequential by default
 		v2IncludeWorldinfo: true, // include lorebook data in extractors
+		v2ConsistencyProfileId: '',
 		v2EnableConsistencyCheck: false,
 
 		// Debug & Display
@@ -103,6 +104,8 @@ export function mergeV2WithDefaults(partial: Partial<V2Settings>): V2Settings {
 		v2MaxConcurrentRequests:
 			partial.v2MaxConcurrentRequests ?? defaults.v2MaxConcurrentRequests,
 		v2IncludeWorldinfo: partial.v2IncludeWorldinfo ?? defaults.v2IncludeWorldinfo,
+		v2ConsistencyProfileId:
+			partial.v2ConsistencyProfileId ?? defaults.v2ConsistencyProfileId,
 		v2EnableConsistencyCheck:
 			partial.v2EnableConsistencyCheck ?? defaults.v2EnableConsistencyCheck,
 

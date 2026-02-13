@@ -2620,3 +2620,86 @@
 	padding: 16px;
 	overflow-y: auto;
 }
+.bt-consistency-panel {
+    margin-top: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.bt-consistency-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.bt-consistency-btn {
+    padding: 0.4rem 0.95rem;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: var(--SmartAccentColor, #6c5ce7);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bt-consistency-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);
+}
+
+.bt-consistency-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.bt-consistency-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.bt-consistency-profile-label {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.bt-consistency-disclaimer {
+    font-size: 0.75rem;
+    opacity: 0.75;
+    color: #e5e7eb;
+}
+
+.bt-consistency-status {
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+
+.bt-consistency-result {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    padding: 0.5rem;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Menlo, monospace;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.bt-consistency-error {
+    color: #f87171;
+    font-size: 0.8rem;
+}
+
+.bt-consistency-timestamp {
+    font-size: 0.75rem;
+    opacity: 0.6;
+}
