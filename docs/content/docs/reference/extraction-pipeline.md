@@ -52,13 +52,13 @@ Runs on every subsequent message. Organized in phases.
 
 ### Phase 3: Per-Character State
 
-Runs once **per present character**:
+Runs as **batched multi-character calls** (one call per extractor type):
 
 | Extractor | Category | LLM Call? | Notes |
 |-----------|----------|-----------|-------|
-| Position/Activity Change | `characters` | Yes | Combined in one call |
-| Mood Change | `characters` | Yes | |
-| Outfit Change | `characters` | Yes | |
+| Position/Activity Change | `characters` | Yes | Batched across present characters |
+| Mood Change | `characters` | Yes | Batched across present characters |
+| Outfit Change | `characters` | Yes | Batched across present characters |
 
 ### Phase 4: Props
 
@@ -97,25 +97,25 @@ Runs once **per character pair**:
 
 ### Total LLM Calls per Message
 
-With all modules enabled, N characters, and P pairs (P = N×(N-1)/2):
+With all modules enabled and P pairs (P = N*(N-1)/2):
 
 ```
 Core:           4  (time + location + topic/tone + tension)
 Presence:       1
-Per-character:  3N (position/activity + mood + outfit per character)
+Per-character:  3  (batched position/activity + mood + outfit)
 Props:          2  (change + confirmation)
 Subjects:       1
 Per-pair:       P
 Narrative:      1-2 (description + optional milestone)
 Chapters:       1-2 (detection + optional description)
 ────────────────────
-Total:          10 + 3N + P  (minimum, all modules on)
+Total:          10 + P  (minimum, all modules on)
 ```
 
 Examples:
-- 2 characters, 1 pair: 10 + 6 + 1 = **17 calls**
-- 3 characters, 3 pairs: 10 + 9 + 3 = **22 calls**
-- 4 characters, 6 pairs: 10 + 12 + 6 = **28 calls**
+- 2 characters, 1 pair: 10 + 1 = **11 calls**
+- 3 characters, 3 pairs: 10 + 3 = **13 calls**
+- 4 characters, 6 pairs: 10 + 6 = **16 calls**
 
 ### Reducing Call Count
 
@@ -127,7 +127,7 @@ Disable modules you don't need:
 | `scene` (topic/tone + tension) | 2 per message |
 | `narrative` (events + chapters) | 2-4 per message |
 | `relationships` | 1 + P per message |
-| `characters` | 1 + 3N per message |
+| `characters` | 4 per message |
 
 ## shouldRun Logic
 
@@ -149,3 +149,4 @@ Some state is computed locally rather than extracted by the LLM:
 | Indoor temperature | Computed from outdoor temp + building type |
 | Narrative event witnesses | Derived from projection state at each message |
 | Chapter boundaries (partial) | Detected from location changes + time jumps |
+

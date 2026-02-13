@@ -155,6 +155,43 @@ export async function extractEvents(
 		const characters = projection.charactersPresent;
 		const maxConcurrent = Math.max(1, settings.maxConcurrentRequests ?? 1);
 
+		// If extractor supports batch mode, prefer one call for all present characters
+		if (extractor.runBatch && characters.length > 1) {
+			const strategyContext = buildContext(extractor as any);
+			if (!extractor.shouldRun(strategyContext)) {
+				return false;
+			}
+
+			const label = `Extracting ${extractor.displayName} for ${characters.length} characters...`;
+			updateSectionLabel(label);
+			setStatus?.(label);
+
+			try {
+				const events = await extractor.runBatch(
+					generator,
+					context,
+					settings,
+					store,
+					currentMessage,
+					turnEvents,
+					characters,
+					abortSignal,
+				);
+				turnEvents.push(...events);
+			} catch (error) {
+				errorLog(`${extractor.name} (batch) failed:`, error);
+				errors.push({
+					extractor: `${extractor.name}:batch`,
+					error: error instanceof Error ? error : new Error(String(error)),
+				});
+			}
+
+			if (abortSignal?.aborted) {
+				return true;
+			}
+			return false;
+		}
+
 		if (maxConcurrent <= 1) {
 			for (const character of characters) {
 				// Check if aborted before each character

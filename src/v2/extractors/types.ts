@@ -265,6 +265,17 @@ export interface PerCharacterExtractor<T = unknown> extends Omit<EventExtractor<
 		targetCharacter: string,
 		abortSignal?: AbortSignal,
 	): Promise<Event[]>;
+	/** Optional batch run for multiple characters in a single extraction call */
+	runBatch?(
+		generator: Generator,
+		context: ExtractionContext,
+		settings: ExtractionSettings,
+		store: EventStore,
+		currentMessage: MessageAndSwipe,
+		turnEvents: Event[],
+		targetCharacters: string[],
+		abortSignal?: AbortSignal,
+	): Promise<Event[]>;
 }
 
 /**

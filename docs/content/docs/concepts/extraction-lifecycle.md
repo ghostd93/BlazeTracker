@@ -59,10 +59,10 @@ Detects characters entering or leaving the scene.
 
 ### Phase 3: Per-Character State
 ```
-For each present character:
-  Position/Activity Change → Mood Change → Outfit Change
+Batched across all present characters:
+  Position/Activity Change -> Mood Change -> Outfit Change
 ```
-These run **per character** — if 3 characters are present, that's 3 rounds of LLM calls for each extractor type.
+These run as **batched multi-character calls** (one call per extractor type), then map results back to each character.
 
 ### Phase 4: Props
 ```
@@ -112,3 +112,4 @@ Not every extractor runs on every message. Each extractor has a `shouldRun` chec
 - **Dependencies** — If a required extractor produced no results, dependent extractors may skip
 
 This means the actual number of LLM calls per message varies depending on your configuration and what changed in the narrative.
+

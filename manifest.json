@@ -6,6 +6,6 @@
 	"js": "dist/index.js",
 	"auto_update": true,
 	"author": "Lunar Blaze (ghostd93 fork)",
-	"version": "2.3.3",
+	"version": "2.3.4",
 	"homePage": "https://github.com/ghostd93/BlazeTracker"
 }

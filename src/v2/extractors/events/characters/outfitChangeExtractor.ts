@@ -14,6 +14,8 @@ import type {
 } from '../../types';
 import type { Event, MessageAndSwipe, ExtractedOutfitChange, OutfitSlot } from '../../../types';
 import { outfitChangePrompt } from '../../../prompts/events/outfitChangePrompt';
+import type { PromptTemplate } from '../../../prompts/types';
+import { PLACEHOLDERS } from '../../../prompts/placeholders';
 import {
 	buildExtractorPrompt,
 	generateAndParse,
@@ -26,9 +28,98 @@ import {
 	getExtractorTemperature,
 	limitMessageRange,
 	getMaxMessages,
+	formatCharacterState,
 } from '../../utils';
 import type { EventStore } from '../../../store';
 import { debugWarn } from '../../../../utils/debug';
+import { parseJsonResponse } from '../../../../utils/json';
+
+interface ExtractedBatchOutfitChange {
+	reasoning: string;
+	characters: ExtractedOutfitChange[];
+}
+
+const batchOutfitChangePrompt: PromptTemplate<ExtractedBatchOutfitChange> = {
+	name: 'outfit_change_batch',
+	description: 'Extract outfit changes for multiple characters in one call',
+	placeholders: [
+		PLACEHOLDERS.messages,
+		PLACEHOLDERS.targetCharacter,
+		{
+			name: 'targetCharacters',
+			description: 'Comma-separated list of target characters',
+			example: 'Elena, Marcus',
+		},
+		{
+			name: 'targetCharacterStates',
+			description: 'Current states for all target characters',
+			example: '## Elena\\nOutfit: ...',
+		},
+	],
+	systemPrompt: `Detect outfit slot changes for MULTIPLE target characters.
+
+Return strict JSON:
+{
+  "reasoning": "short summary",
+  "characters": [
+    {
+      "character": "Name",
+      "removed": ["slotName"],
+      "added": {
+        "torso": "item",
+        "footwear": "item"
+      }
+    }
+  ]
+}
+
+Rules:
+- Include one object per target character.
+- Use empty arrays/objects when no change.
+- Slots must be one of: head, neck, jacket, back, torso, legs, footwear, socks, underwear.
+- Do not include non-target characters.`,
+	userTemplate: `Target characters: {{targetCharacters}}
+
+Current states:
+{{targetCharacterStates}}
+
+Messages:
+{{messages}}
+
+Return JSON only.`,
+	responseSchema: {
+		type: 'object',
+		properties: {
+			reasoning: { type: 'string' },
+			characters: {
+				type: 'array',
+				items: {
+					type: 'object',
+					properties: {
+						character: { type: 'string' },
+						removed: { type: 'array', items: { type: 'string' } },
+						added: { type: 'object', additionalProperties: { type: 'string' } },
+					},
+					required: ['character', 'removed', 'added'],
+				},
+			},
+		},
+		required: ['reasoning', 'characters'],
+	},
+	defaultTemperature: 0.5,
+	parseResponse(response: string): ExtractedBatchOutfitChange | null {
+		try {
+			const parsed = parseJsonResponse<ExtractedBatchOutfitChange>(response, {
+				shape: 'object',
+				moduleName: 'outfit_change_batch',
+			});
+			if (!parsed || !Array.isArray(parsed.characters)) return null;
+			return parsed;
+		} catch {
+			return null;
+		}
+	},
+};
 
 /**
  * Outfit change event extractor.
@@ -199,6 +290,141 @@ export const outfitChangeExtractor: PerCharacterExtractor<ExtractedOutfitChange>
 		};
 
 		const events = mapOutfitChange(validatedExtraction, currentMessage);
+
+		return events;
+	},
+	async runBatch(
+		generator: Generator,
+		context: ExtractionContext,
+		settings: ExtractionSettings,
+		store: EventStore,
+		currentMessage: MessageAndSwipe,
+		turnEvents: Event[],
+		targetCharacters: string[],
+		abortSignal?: AbortSignal,
+	): Promise<Event[]> {
+		const customPromptOverride = settings.customPrompts[this.prompt.name];
+		if (
+			customPromptOverride?.systemPrompt ||
+			customPromptOverride?.userTemplate
+		) {
+			const fallbackEvents: Event[] = [];
+			for (const character of targetCharacters) {
+				const events = await this.run(
+					generator,
+					context,
+					settings,
+					store,
+					currentMessage,
+					turnEvents,
+					character,
+					abortSignal,
+				);
+				fallbackEvents.push(...events);
+			}
+			return fallbackEvents;
+		}
+
+		const projection = projectWithTurnEvents(
+			store,
+			turnEvents,
+			currentMessage.messageId,
+			context,
+		);
+		const priorProjection = getPriorProjection(store, currentMessage, context);
+
+		const messageCount = 2;
+		let messageStart = Math.max(0, currentMessage.messageId - messageCount + 1);
+		let messageEnd = currentMessage.messageId;
+		const maxMessages = getMaxMessages(settings, this.name);
+		({ messageStart, messageEnd } = limitMessageRange(
+			messageStart,
+			messageEnd,
+			maxMessages,
+		));
+
+		const targetCharacterStates = targetCharacters
+			.map(name => `## ${name}\n${formatCharacterState(projection, name)}`)
+			.join('\n\n');
+
+		const builtPrompt = buildExtractorPrompt(
+			batchOutfitChangePrompt,
+			context,
+			projection,
+			settings,
+			messageStart,
+			messageEnd,
+			{
+				targetCharacter: targetCharacters[0] ?? '',
+				additionalValues: {
+					targetCharacters: targetCharacters.join(', '),
+					targetCharacterStates,
+				},
+			},
+		);
+
+		const temperature = getExtractorTemperature(
+			settings,
+			this.prompt.name,
+			'characters',
+			this.defaultTemperature,
+		);
+
+		const result = await generateAndParse(
+			generator,
+			batchOutfitChangePrompt,
+			builtPrompt,
+			temperature,
+			{ abortSignal },
+		);
+
+		if (!result.success || !result.data) {
+			debugWarn('outfitChange batch extraction failed, falling back');
+			const fallbackEvents: Event[] = [];
+			for (const character of targetCharacters) {
+				const events = await this.run(
+					generator,
+					context,
+					settings,
+					store,
+					currentMessage,
+					turnEvents,
+					character,
+					abortSignal,
+				);
+				fallbackEvents.push(...events);
+			}
+			return fallbackEvents;
+		}
+
+		const targetSet = new Set(targetCharacters.map(c => c.toLowerCase()));
+		const events: Event[] = [];
+
+		for (const extracted of result.data.characters) {
+			if (!targetSet.has(extracted.character.toLowerCase())) continue;
+			const priorCharacterState = priorProjection?.characters[extracted.character];
+
+			const validatedRemoved = filterOutfitSlotsToRemove(
+				extracted.removed,
+				priorCharacterState,
+			);
+			const validatedAdded = filterOutfitSlotsToAdd(
+				extracted.added,
+				priorCharacterState,
+			);
+
+			if (validatedRemoved.length === 0 && Object.keys(validatedAdded).length === 0) {
+				continue;
+			}
+
+			const validatedExtraction: ExtractedOutfitChange = {
+				...extracted,
+				removed: validatedRemoved,
+				added: validatedAdded,
+			};
+
+			events.push(...mapOutfitChange(validatedExtraction, currentMessage));
+		}
 
 		return events;
 	},
