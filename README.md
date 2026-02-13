@@ -12,7 +12,6 @@ This fork adds performance-oriented extraction improvements while keeping the or
 
 - Maximum Concurrent Requests setting in BlazeTracker Advanced Settings
 - Batched per-character extraction for position/activity, mood/physical, and outfit (fewer LLM calls per turn)
-- Manifest metadata and release updates for the ghostd93/BlazeTracker fork
 
 
 ![Compact view](./img/compact_block.png)
