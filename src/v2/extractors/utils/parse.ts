@@ -32,6 +32,35 @@ function toStringIfPresent(value: unknown): string | undefined {
 	return undefined;
 }
 
+function snapshotObject(
+	value: unknown,
+	depth: number = 0,
+	seen: WeakSet<object> = new WeakSet(),
+): unknown {
+	if (value === null || value === undefined) return value;
+	if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+		return value;
+	if (typeof value === 'bigint') return value.toString();
+	if (typeof value === 'function') return '[Function]';
+	if (typeof value !== 'object') return String(value);
+	if (seen.has(value as object)) return '[Circular]';
+	if (depth >= 2) return '[MaxDepth]';
+
+	seen.add(value as object);
+	if (Array.isArray(value)) {
+		return value.slice(0, 20).map(item => snapshotObject(item, depth + 1, seen));
+	}
+
+	const out: Record<string, unknown> = {};
+	const obj = value as Record<string, unknown>;
+	for (const key of Object.getOwnPropertyNames(obj)) {
+		const field = obj[key];
+		if (typeof field === 'function') continue;
+		out[key] = snapshotObject(field, depth + 1, seen);
+	}
+	return out;
+}
+
 function simplifyError(error: unknown): FailureDetails {
 	if (error instanceof Error) {
 		const baseDetails: Record<string, unknown> = {
@@ -52,6 +81,12 @@ function simplifyError(error: unknown): FailureDetails {
 			baseDetails.statusText = errorObj.statusText;
 		if (errorObj.code !== undefined) baseDetails.code = errorObj.code;
 		if (errorObj.type !== undefined) baseDetails.type = errorObj.type;
+		if ('details' in errorObj) {
+			baseDetails.details = snapshotObject(
+				(errorObj as Error & { details?: unknown }).details,
+			);
+		}
+		baseDetails.raw = snapshotObject(errorObj);
 
 		const causeObj = errorObj.cause as
 			| {
@@ -62,6 +97,8 @@ function simplifyError(error: unknown): FailureDetails {
 					code?: unknown;
 					type?: unknown;
 					responseText?: unknown;
+					response?: unknown;
+					details?: unknown;
 			  }
 			| undefined;
 		const causeMessage = causeObj ? toStringIfPresent(causeObj.message) : undefined;
@@ -82,6 +119,9 @@ function simplifyError(error: unknown): FailureDetails {
 				statusText: causeObj.statusText,
 				code: causeObj.code,
 				type: causeObj.type,
+				response: snapshotObject(causeObj.response),
+				details: snapshotObject(causeObj.details),
+				raw: snapshotObject(causeObj),
 			};
 		}
 

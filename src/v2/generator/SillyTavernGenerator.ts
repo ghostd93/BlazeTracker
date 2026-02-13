@@ -16,6 +16,77 @@ import { getV2Settings } from '../settings';
 let rateLimiter: RateLimiter | null = null;
 let lastMaxReqsPerMinute: number | null = null;
 
+function toStringIfPresent(value: unknown): string | undefined {
+	if (typeof value === 'string' && value.trim().length > 0) {
+		return value;
+	}
+	return undefined;
+}
+
+function copyOwnFields(error: unknown): Record<string, unknown> {
+	if (!error || typeof error !== 'object') {
+		return {};
+	}
+	const source = error as Record<string, unknown>;
+	const out: Record<string, unknown> = {};
+	for (const key of Object.getOwnPropertyNames(source)) {
+		const value = source[key];
+		if (typeof value === 'function') continue;
+		out[key] = value;
+	}
+	return out;
+}
+
+function summarizeGeneratorError(error: unknown): string {
+	if (!error || typeof error !== 'object') {
+		return String(error);
+	}
+	const source = error as Record<string, unknown>;
+	const response = source.response as Record<string, unknown> | undefined;
+	const nestedError = source.error as Record<string, unknown> | undefined;
+	const cause = source.cause as Record<string, unknown> | undefined;
+
+	const msg = toStringIfPresent(source.message);
+	const code = toStringIfPresent(source.code);
+	const type = toStringIfPresent(source.type);
+	const status =
+		typeof source.status === 'number'
+			? source.status
+			: typeof response?.status === 'number'
+				? response.status
+				: undefined;
+	const statusText =
+		toStringIfPresent(source.statusText) ??
+		toStringIfPresent(response?.statusText) ??
+		toStringIfPresent(response?.status_message);
+	const providerMessage =
+		toStringIfPresent(source.responseText) ??
+		toStringIfPresent(source.body) ??
+		toStringIfPresent(source.reason) ??
+		toStringIfPresent(response?.message) ??
+		toStringIfPresent(response?.error as unknown) ??
+		toStringIfPresent((response?.data as Record<string, unknown> | undefined)?.message) ??
+		toStringIfPresent(
+			((response?.data as Record<string, unknown> | undefined)?.error as Record<
+				string,
+				unknown
+			>)?.message,
+		) ??
+		toStringIfPresent(nestedError?.message) ??
+		toStringIfPresent(cause?.message);
+
+	const parts = [
+		status ? `HTTP ${status}` : undefined,
+		statusText,
+		code,
+		type,
+		msg,
+		providerMessage,
+	].filter(Boolean);
+
+	return parts.length > 0 ? parts.join(' | ') : 'API request failed';
+}
+
 /**
  * Get or create the rate limiter instance.
  * Re-creates if settings have changed.
@@ -99,10 +170,12 @@ export class SillyTavernGenerator implements Generator {
 									),
 								);
 							}
+							const details = copyOwnFields(error);
 							return reject(
 								new GeneratorError(
-									error.message,
+									summarizeGeneratorError(error),
 									error,
+									details,
 								),
 							);
 						}

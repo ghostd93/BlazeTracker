@@ -44,7 +44,8 @@ export class GeneratorAbortError extends Error {
 export class GeneratorError extends Error {
 	constructor(
 		message: string,
-		public readonly cause?: Error,
+		public readonly cause?: unknown,
+		public readonly details?: Record<string, unknown>,
 	) {
 		super(message);
 		this.name = 'GeneratorError';
