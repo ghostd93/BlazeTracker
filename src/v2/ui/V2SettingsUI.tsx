@@ -1000,6 +1000,45 @@ function V2SettingsPanel() {
 							/>
 						</div>
 
+						{/* Maximum Concurrent Requests */}
+						<div
+							className="flex-container flexFlowColumn"
+							style={{ marginBottom: '1em' }}
+						>
+							<label htmlFor="bt-v2-maxconcurrentreqs">
+								Maximum Concurrent Requests
+							</label>
+							<small>
+								Maximum simultaneous extraction calls in
+								parallelizable phases (1 = sequential)
+							</small>
+							<input
+								id="bt-v2-maxconcurrentreqs"
+								type="number"
+								className="text_pole"
+								min="1"
+								max="32"
+								step="1"
+								value={settings.v2MaxConcurrentRequests}
+								onChange={e => {
+									const value = parseInt(
+										e.target.value,
+										10,
+									);
+									if (
+										!isNaN(value) &&
+										value >= 1
+									) {
+										handleUpdate(
+											'v2MaxConcurrentRequests',
+											value,
+										);
+									}
+								}}
+								style={{ width: '120px' }}
+							/>
+						</div>
+
 						{/* Max Messages to Send */}
 						<div
 							className="flex-container flexFlowColumn"

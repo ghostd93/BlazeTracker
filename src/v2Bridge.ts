@@ -153,6 +153,7 @@ export function buildExtractionSettingsFromV2(settings: V2Settings): ExtractionS
 		promptTemperatures: settings.v2PromptTemperatures,
 		maxMessagesToSend: settings.v2MaxMessagesToSend,
 		maxChapterMessagesToSend: settings.v2MaxChapterMessagesToSend,
+		maxConcurrentRequests: settings.v2MaxConcurrentRequests,
 		promptPrefix: settings.v2PromptPrefix || undefined,
 		promptSuffix: settings.v2PromptSuffix || undefined,
 		includeWorldinfo: settings.v2IncludeWorldinfo,

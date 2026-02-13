@@ -93,6 +93,8 @@ export interface ExtractionSettings {
 	maxMessagesToSend: number;
 	/** Max messages to send to chapter description extractor (default 24) */
 	maxChapterMessagesToSend: number;
+	/** Maximum concurrent LLM requests for parallelizable extraction phases */
+	maxConcurrentRequests?: number;
 	/** String to prepend to the user part of all prompts (e.g., "/nothink") */
 	promptPrefix?: string;
 	/** String to append to the user part of all prompts */

@@ -32,6 +32,11 @@ describe('V2 Settings', () => {
 			expect(settings.v2MaxReqsPerMinute).toBe(0);
 		});
 
+		it('v2MaxConcurrentRequests defaults to 1', () => {
+			const settings = createDefaultV2Settings();
+			expect(settings.v2MaxConcurrentRequests).toBe(1);
+		});
+
 		it('creates a new object each time', () => {
 			const settings1 = createDefaultV2Settings();
 			const settings2 = createDefaultV2Settings();
@@ -92,6 +97,16 @@ describe('V2 Settings', () => {
 		it('uses default v2MaxReqsPerMinute when not provided', () => {
 			const merged = mergeV2WithDefaults({ v2ProfileId: 'test-profile' });
 			expect(merged.v2MaxReqsPerMinute).toBe(0);
+		});
+
+		it('preserves v2MaxConcurrentRequests when provided', () => {
+			const merged = mergeV2WithDefaults({ v2MaxConcurrentRequests: 4 });
+			expect(merged.v2MaxConcurrentRequests).toBe(4);
+		});
+
+		it('uses default v2MaxConcurrentRequests when not provided', () => {
+			const merged = mergeV2WithDefaults({ v2ProfileId: 'test-profile' });
+			expect(merged.v2MaxConcurrentRequests).toBe(1);
 		});
 
 		it('preserves all provided values', () => {
@@ -224,6 +239,28 @@ describe('V2 Settings', () => {
 				unknown
 			>;
 			settings.v2MaxReqsPerMinute = 'not a number';
+			expect(isV2Settings(settings)).toBe(false);
+		});
+
+		it('returns true when v2MaxConcurrentRequests is missing (allows upgrade)', () => {
+			const settings = createDefaultV2Settings();
+			const partial = { ...settings } as Record<string, unknown>;
+			delete partial.v2MaxConcurrentRequests;
+			expect(isV2Settings(partial)).toBe(true);
+		});
+
+		it('returns true when v2MaxConcurrentRequests is a number', () => {
+			const settings = createDefaultV2Settings();
+			settings.v2MaxConcurrentRequests = 3;
+			expect(isV2Settings(settings)).toBe(true);
+		});
+
+		it('returns false when v2MaxConcurrentRequests is wrong type', () => {
+			const settings = createDefaultV2Settings() as unknown as Record<
+				string,
+				unknown
+			>;
+			settings.v2MaxConcurrentRequests = 'not a number';
 			expect(isV2Settings(settings)).toBe(false);
 		});
 

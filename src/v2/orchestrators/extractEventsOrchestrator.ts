@@ -46,6 +46,32 @@ function getExtractorState(name: string): ExtractorState {
 }
 
 /**
+ * Run asynchronous work with a fixed concurrency limit while preserving result order.
+ */
+async function mapWithConcurrency<T, R>(
+	items: T[],
+	maxConcurrency: number,
+	worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+	if (items.length === 0) return [];
+
+	const concurrency = Math.min(Math.max(1, maxConcurrency), items.length);
+	const results = new Array<R>(items.length);
+	let nextIndex = 0;
+
+	const runWorker = async () => {
+		while (true) {
+			const current = nextIndex++;
+			if (current >= items.length) return;
+			results[current] = await worker(items[current], current);
+		}
+	};
+
+	await Promise.all(Array.from({ length: concurrency }, () => runWorker()));
+	return results;
+}
+
+/**
  * Run event extraction for a turn.
  */
 export async function extractEvents(
@@ -127,42 +153,98 @@ export async function extractEvents(
 			swipeContext,
 		);
 		const characters = projection.charactersPresent;
+		const maxConcurrent = Math.max(1, settings.maxConcurrentRequests ?? 1);
 
-		for (const character of characters) {
-			// Check if aborted before each character
-			if (abortSignal?.aborted) {
-				return true; // Signal that we aborted
+		if (maxConcurrent <= 1) {
+			for (const character of characters) {
+				// Check if aborted before each character
+				if (abortSignal?.aborted) {
+					return true; // Signal that we aborted
+				}
+
+				const strategyContext = buildContext(extractor as any);
+				if (!extractor.shouldRun(strategyContext)) continue;
+
+				const label = `Extracting ${extractor.displayName} for ${character}...`;
+				updateSectionLabel(label);
+				setStatus?.(label);
+
+				try {
+					const events = await extractor.run(
+						generator,
+						context,
+						settings,
+						store,
+						currentMessage,
+						turnEvents,
+						character,
+						abortSignal,
+					);
+					turnEvents.push(...events);
+				} catch (error) {
+					errorLog(`${extractor.name} (${character}) failed:`, error);
+					errors.push({
+						extractor: `${extractor.name}:${character}`,
+						error:
+							error instanceof Error
+								? error
+								: new Error(String(error)),
+					});
+				}
 			}
+			return false; // Not aborted
+		}
 
-			const strategyContext = buildContext(extractor as any);
-			if (!extractor.shouldRun(strategyContext)) continue;
+		const strategyContext = buildContext(extractor as any);
+		if (!extractor.shouldRun(strategyContext)) {
+			return false;
+		}
 
-			const label = `Extracting ${extractor.displayName} for ${character}...`;
-			updateSectionLabel(label);
-			setStatus?.(label);
+		const snapshotTurnEvents = [...turnEvents];
+		const results = await mapWithConcurrency(
+			characters,
+			maxConcurrent,
+			async character => {
+				const label = `Extracting ${extractor.displayName} for ${character}...`;
+				updateSectionLabel(label);
+				setStatus?.(label);
 
-			try {
-				const events = await extractor.run(
-					generator,
-					context,
-					settings,
-					store,
-					currentMessage,
-					turnEvents,
-					character,
-					abortSignal,
-				);
-				turnEvents.push(...events);
-			} catch (error) {
-				errorLog(`${extractor.name} (${character}) failed:`, error);
+				try {
+					const events = await extractor.run(
+						generator,
+						context,
+						settings,
+						store,
+						currentMessage,
+						snapshotTurnEvents,
+						character,
+						abortSignal,
+					);
+					return { character, events, error: null as Error | null };
+				} catch (error) {
+					return {
+						character,
+						events: [] as Event[],
+						error: error instanceof Error ? error : new Error(String(error)),
+					};
+				}
+			},
+		);
+
+		for (const result of results) {
+			if (result.error) {
+				errorLog(`${extractor.name} (${result.character}) failed:`, result.error);
 				errors.push({
-					extractor: `${extractor.name}:${character}`,
-					error:
-						error instanceof Error
-							? error
-							: new Error(String(error)),
+					extractor: `${extractor.name}:${result.character}`,
+					error: result.error,
 				});
+				continue;
 			}
+			turnEvents.push(...result.events);
+		}
+
+		if (abortSignal?.aborted) {
+			return true;
 		}
 		return false; // Not aborted
 	}
@@ -175,6 +257,7 @@ export async function extractEvents(
 			swipeContext,
 		);
 		const characters = projection.charactersPresent;
+		const maxConcurrent = Math.max(1, settings.maxConcurrentRequests ?? 1);
 
 		// Generate all pairs
 		const pairs: [string, string][] = [];
@@ -184,41 +267,96 @@ export async function extractEvents(
 			}
 		}
 
-		for (const pair of pairs) {
-			// Check if aborted before each pair
-			if (abortSignal?.aborted) {
-				return true; // Signal that we aborted
+		if (maxConcurrent <= 1) {
+			for (const pair of pairs) {
+				// Check if aborted before each pair
+				if (abortSignal?.aborted) {
+					return true; // Signal that we aborted
+				}
+
+				const strategyContext = buildContext(extractor as any);
+				if (!extractor.shouldRun(strategyContext)) continue;
+
+				const label = `Extracting ${extractor.displayName} for ${pair[0]} & ${pair[1]}...`;
+				updateSectionLabel(label);
+				setStatus?.(label);
+
+				try {
+					const events = await extractor.run(
+						generator,
+						context,
+						settings,
+						store,
+						currentMessage,
+						turnEvents,
+						pair,
+						abortSignal,
+					);
+					turnEvents.push(...events);
+				} catch (error) {
+					errorLog(`${extractor.name} (${pair.join('/')}) failed:`, error);
+					errors.push({
+						extractor: `${extractor.name}:${pair.join('/')}`,
+						error:
+							error instanceof Error
+								? error
+								: new Error(String(error)),
+					});
+				}
 			}
+			return false; // Not aborted
+		}
 
-			const strategyContext = buildContext(extractor as any);
-			if (!extractor.shouldRun(strategyContext)) continue;
+		const strategyContext = buildContext(extractor as any);
+		if (!extractor.shouldRun(strategyContext)) {
+			return false;
+		}
 
-			const label = `Extracting ${extractor.displayName} for ${pair[0]} & ${pair[1]}...`;
-			updateSectionLabel(label);
-			setStatus?.(label);
+		const snapshotTurnEvents = [...turnEvents];
+		const results = await mapWithConcurrency(
+			pairs,
+			maxConcurrent,
+			async pair => {
+				const label = `Extracting ${extractor.displayName} for ${pair[0]} & ${pair[1]}...`;
+				updateSectionLabel(label);
+				setStatus?.(label);
 
-			try {
-				const events = await extractor.run(
-					generator,
-					context,
-					settings,
-					store,
-					currentMessage,
-					turnEvents,
-					pair,
-					abortSignal,
-				);
-				turnEvents.push(...events);
-			} catch (error) {
-				errorLog(`${extractor.name} (${pair.join('/')}) failed:`, error);
+				try {
+					const events = await extractor.run(
+						generator,
+						context,
+						settings,
+						store,
+						currentMessage,
+						snapshotTurnEvents,
+						pair,
+						abortSignal,
+					);
+					return { pair, events, error: null as Error | null };
+				} catch (error) {
+					return {
+						pair,
+						events: [] as Event[],
+						error: error instanceof Error ? error : new Error(String(error)),
+					};
+				}
+			},
+		);
+
+		for (const result of results) {
+			if (result.error) {
+				errorLog(`${extractor.name} (${result.pair.join('/')}) failed:`, result.error);
 				errors.push({
-					extractor: `${extractor.name}:${pair.join('/')}`,
-					error:
-						error instanceof Error
-							? error
-							: new Error(String(error)),
+					extractor: `${extractor.name}:${result.pair.join('/')}`,
+					error: result.error,
 				});
+				continue;
 			}
+			turnEvents.push(...result.events);
+		}
+
+		if (abortSignal?.aborted) {
+			return true;
 		}
 		return false; // Not aborted
 	}

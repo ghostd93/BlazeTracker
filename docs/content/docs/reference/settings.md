@@ -61,6 +61,7 @@ Enable or disable extraction modules. Disabling modules reduces LLM calls per me
 |---------|------|---------|-------------|
 | Max Tokens | number | `500` | Maximum tokens for LLM responses. |
 | Max Requests/Min | number | `0` | Rate limit for LLM requests (0 = no limit). |
+| Max Concurrent Requests | number | `1` | Maximum simultaneous extraction requests in parallelizable phases (1 = sequential). |
 | Include World Info | boolean | `false` | Include lorebook entries in extractor prompts. |
 | Prompt Prefix | string | `''` | Prepended to user template of all prompts (e.g., `/nothink`). |
 | Prompt Suffix | string | `''` | Appended to user template of all prompts. |

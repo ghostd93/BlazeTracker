@@ -42,6 +42,7 @@ export function createDefaultV2Settings(): V2Settings {
 		v2AutoExtract: true,
 		v2MaxTokens: 4096,
 		v2MaxReqsPerMinute: 0, // disabled by default
+		v2MaxConcurrentRequests: 1, // sequential by default
 		v2IncludeWorldinfo: true, // include lorebook data in extractors
 
 		// Debug & Display
@@ -98,6 +99,8 @@ export function mergeV2WithDefaults(partial: Partial<V2Settings>): V2Settings {
 		v2AutoExtract: partial.v2AutoExtract ?? defaults.v2AutoExtract,
 		v2MaxTokens: partial.v2MaxTokens ?? defaults.v2MaxTokens,
 		v2MaxReqsPerMinute: partial.v2MaxReqsPerMinute ?? defaults.v2MaxReqsPerMinute,
+		v2MaxConcurrentRequests:
+			partial.v2MaxConcurrentRequests ?? defaults.v2MaxConcurrentRequests,
 		v2IncludeWorldinfo: partial.v2IncludeWorldinfo ?? defaults.v2IncludeWorldinfo,
 
 		// Debug & Display
