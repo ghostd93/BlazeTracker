@@ -10,3 +10,4 @@ This fork keeps BlazeTracker's core tracking behavior and adds focused performan
 - API failure reason logging (error type/status/code details in logs + telemetry prompt reasons)
 - Per-prompt cooldown/backoff for unstable prompts (currently `topic_tone_change`)
 - Prompt-result cache for unchanged prompt windows (skips duplicate extractor calls)
+- Conservative token caps for short-response event prompts (`location_change`, `tension_change`, `presence_change`, `chapter_ended`)

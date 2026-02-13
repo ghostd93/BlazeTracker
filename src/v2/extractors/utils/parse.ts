@@ -20,6 +20,21 @@ const isVitestEnv =
 	typeof process.env !== 'undefined' &&
 	process.env.VITEST === 'true';
 
+const PROMPT_MAX_TOKEN_CAPS: Record<string, number> = {
+	location_change: 320,
+	tension_change: 384,
+	presence_change: 384,
+	chapter_ended: 320,
+};
+
+function resolveMaxTokens(promptName: string, defaultMaxTokens: number): number {
+	const cap = PROMPT_MAX_TOKEN_CAPS[promptName];
+	if (typeof cap !== 'number' || cap <= 0) {
+		return defaultMaxTokens;
+	}
+	return Math.min(defaultMaxTokens, cap);
+}
+
 interface FailureDetails {
 	summary: string;
 	details?: Record<string, unknown>;
@@ -278,7 +293,7 @@ export async function generateAndParse<T>(
 
 			const response = await generator.generate(generatorPrompt, {
 				temperature: currentTemp,
-				maxTokens: settings.v2MaxTokens,
+				maxTokens: resolveMaxTokens(prompt.name, settings.v2MaxTokens),
 				abortSignal,
 			});
 
