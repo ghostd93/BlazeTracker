@@ -30,6 +30,8 @@ interface PromptTelemetry {
 	retries: number;
 	successes: number;
 	failures: number;
+	lastFailureReason?: string;
+	failureReasons?: Record<string, number>;
 }
 
 export interface V2ExtractionTelemetry {
@@ -339,7 +341,13 @@ export function completeExtractionRun(): void {
 
 function ensurePromptTelemetry(promptName: string): PromptTelemetry {
 	if (!currentTelemetry) {
-		return { attempts: 0, retries: 0, successes: 0, failures: 0 };
+		return {
+			attempts: 0,
+			retries: 0,
+			successes: 0,
+			failures: 0,
+			failureReasons: {},
+		};
 	}
 	if (!currentTelemetry.prompts[promptName]) {
 		currentTelemetry.prompts[promptName] = {
@@ -347,6 +355,7 @@ function ensurePromptTelemetry(promptName: string): PromptTelemetry {
 			retries: 0,
 			successes: 0,
 			failures: 0,
+			failureReasons: {},
 		};
 	}
 	return currentTelemetry.prompts[promptName];
@@ -371,7 +380,11 @@ export function recordLlmAttempt(promptName: string, isRetry: boolean): void {
 /**
  * Record result for a prompt generation pipeline.
  */
-export function recordLlmResult(promptName: string, success: boolean): void {
+export function recordLlmResult(
+	promptName: string,
+	success: boolean,
+	failureReason?: string,
+): void {
 	if (!currentTelemetry) return;
 	const prompt = ensurePromptTelemetry(promptName);
 	if (success) {
@@ -380,6 +393,14 @@ export function recordLlmResult(promptName: string, success: boolean): void {
 	} else {
 		currentTelemetry.llmFailures += 1;
 		prompt.failures += 1;
+		if (failureReason) {
+			prompt.lastFailureReason = failureReason;
+			if (!prompt.failureReasons) {
+				prompt.failureReasons = {};
+			}
+			prompt.failureReasons[failureReason] =
+				(prompt.failureReasons[failureReason] ?? 0) + 1;
+		}
 	}
 }
 

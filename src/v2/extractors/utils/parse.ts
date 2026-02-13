@@ -20,6 +20,99 @@ const isVitestEnv =
 	typeof process.env !== 'undefined' &&
 	process.env.VITEST === 'true';
 
+interface FailureDetails {
+	summary: string;
+	details?: Record<string, unknown>;
+}
+
+function toStringIfPresent(value: unknown): string | undefined {
+	if (typeof value === 'string' && value.trim().length > 0) {
+		return value;
+	}
+	return undefined;
+}
+
+function simplifyError(error: unknown): FailureDetails {
+	if (error instanceof Error) {
+		const baseDetails: Record<string, unknown> = {
+			name: error.name,
+			message: error.message,
+		};
+
+		const errorObj = error as Error & {
+			status?: unknown;
+			statusText?: unknown;
+			code?: unknown;
+			type?: unknown;
+			cause?: unknown;
+		};
+
+		if (errorObj.status !== undefined) baseDetails.status = errorObj.status;
+		if (errorObj.statusText !== undefined)
+			baseDetails.statusText = errorObj.statusText;
+		if (errorObj.code !== undefined) baseDetails.code = errorObj.code;
+		if (errorObj.type !== undefined) baseDetails.type = errorObj.type;
+
+		const causeObj = errorObj.cause as
+			| {
+					message?: unknown;
+					name?: unknown;
+					status?: unknown;
+					statusText?: unknown;
+					code?: unknown;
+					type?: unknown;
+					responseText?: unknown;
+			  }
+			| undefined;
+		const causeMessage = causeObj ? toStringIfPresent(causeObj.message) : undefined;
+		const causeCode = causeObj ? toStringIfPresent(causeObj.code) : undefined;
+		const causeStatus =
+			causeObj && typeof causeObj.status === 'number'
+				? causeObj.status
+				: undefined;
+		const causeStatusText = causeObj
+			? toStringIfPresent(causeObj.statusText)
+			: undefined;
+
+		if (causeObj) {
+			baseDetails.cause = {
+				name: causeObj.name,
+				message: causeObj.message,
+				status: causeObj.status,
+				statusText: causeObj.statusText,
+				code: causeObj.code,
+				type: causeObj.type,
+			};
+		}
+
+		const statusText = toStringIfPresent(errorObj.statusText);
+		const code = toStringIfPresent(errorObj.code);
+		const status =
+			typeof errorObj.status === 'number' ? errorObj.status : undefined;
+		const parts = [
+			error.name,
+			status ? `HTTP ${status}` : undefined,
+			statusText,
+			code,
+			error.message,
+			causeStatus ? `cause HTTP ${causeStatus}` : undefined,
+			causeStatusText,
+			causeCode,
+			causeMessage,
+		].filter(Boolean);
+
+		return {
+			summary: parts.join(' | '),
+			details: baseDetails,
+		};
+	}
+
+	return {
+		summary: String(error),
+		details: { value: error },
+	};
+}
+
 /**
  * Options for parsing with retry.
  */
@@ -129,6 +222,7 @@ export async function generateAndParse<T>(
 	}
 
 	let lastError: string | undefined;
+	let lastErrorDetails: Record<string, unknown> | undefined;
 	let lastResponse: string | undefined;
 
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -182,7 +276,9 @@ export async function generateAndParse<T>(
 					aborted: true,
 				};
 			}
-			lastError = error instanceof Error ? error.message : String(error);
+			const simplified = simplifyError(error);
+			lastError = simplified.summary;
+			lastErrorDetails = simplified.details;
 		}
 
 		// Check if aborted between retries
@@ -198,13 +294,19 @@ export async function generateAndParse<T>(
 			debugWarn(
 				`${prompt.name} parse failed (attempt ${attempt + 1}/${maxRetries + 1}): ${lastError}`,
 			);
+			if (lastErrorDetails) {
+				debugWarn(`${prompt.name} failure details:`, lastErrorDetails);
+			}
 		}
 	}
 
 	// All attempts failed
 	errorLog(`${prompt.name} failed after ${maxRetries + 1} attempts:`, lastError);
-	recordLlmResult(prompt.name, false);
+	recordLlmResult(prompt.name, false, lastError);
 	recordPromptBackoffFailure(prompt.name);
+	if (lastErrorDetails) {
+		errorLog(`${prompt.name} last failure details:`, lastErrorDetails);
+	}
 	if (lastResponse) {
 		errorLog(`Last response:`, lastResponse.substring(0, 500));
 	}
